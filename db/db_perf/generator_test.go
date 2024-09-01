@@ -129,6 +129,22 @@ func TestMassDataGenerator_GenerateDataSetRange(t *testing.T) {
 	t.Log("success")
 }
 
+var valGens = map[string]valueGenerator{
+	"extra": func() any {
+		score := rand.Intn(700) + 1
+		degree := []string{"小学", "初中", "高中", "本科", "硕士", "博士"}[rand.Intn(6)]
+		weight := float64(rand.Intn(150)+50) + rand.Float64()
+		extra := PerfTestExtra{
+			Score:  score,
+			Degree: degree,
+			Weight: weight,
+		}
+
+		eb, _ := json.Marshal(extra)
+		return string(eb)
+	},
+}
+
 func TestMassDataGenerator_GenerateDataSetValueGenerator(t *testing.T) {
 	db := initDB()
 	tx := db.Begin()
@@ -144,21 +160,6 @@ func TestMassDataGenerator_GenerateDataSetValueGenerator(t *testing.T) {
 	}
 
 	// insert data
-	valGens := map[string]valueGenerator{
-		"extra": func() any {
-			score := rand.Intn(700) + 1
-			degree := []string{"小学", "初中", "高中", "本科", "硕士", "博士"}[rand.Intn(6)]
-			weight := float64(rand.Intn(150)+50) + rand.Float64()
-			extra := PerfTestExtra{
-				Score:  score,
-				Degree: degree,
-				Weight: weight,
-			}
-
-			eb, _ := json.Marshal(extra)
-			return string(eb)
-		},
-	}
 	g := NewMassDataGenerator(tx, WithValueGenerators(valGens))
 	err = g.InsertMassData(&PerfTest{}, count)
 	if err != nil {
@@ -206,5 +207,47 @@ func TestMassDataGenerator_GenerateDataSetValueGenerator(t *testing.T) {
 		return
 	}
 
+	t.Log("success")
+}
+
+func TestImportMassData(t *testing.T) {
+	db := initDB()
+	tx := db.Begin()
+
+	count := 1000_000
+	// get data len before insert
+	var startCount int64
+	err := tx.Model(&PerfTest{}).Count(&startCount).Error
+	if err != nil {
+		tx.Rollback()
+		t.Error(err)
+		return
+	}
+
+	// insert data
+	g := NewMassDataGenerator(tx, WithValueGenerators(valGens))
+	err = g.InsertMassData(&PerfTest{}, count)
+	if err != nil {
+		tx.Rollback()
+		t.Error(err)
+		return
+	}
+
+	// get data len after insert
+	var endCount int64
+	err = tx.Model(&PerfTest{}).Count(&endCount).Error
+	if err != nil {
+		tx.Rollback()
+		t.Error(err)
+		return
+	}
+
+	if endCount != startCount+int64(count) {
+		tx.Rollback()
+		t.Errorf("expect %d, got %d", startCount+int64(count), endCount)
+		return
+	}
+
+	tx.Commit()
 	t.Log("success")
 }

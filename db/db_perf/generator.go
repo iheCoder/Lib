@@ -49,6 +49,11 @@ func parseGormTag(tag string) *gormTag {
 	}
 
 	t := gormTag{}
+	// search for primary key
+	if strings.Contains(tag, "primaryKey") {
+		t.PrimaryKey = true
+	}
+
 	tags := strings.Split(tag, ";")
 	for _, tag := range tags {
 		parts := strings.Split(tag, ":")
@@ -56,8 +61,6 @@ func parseGormTag(tag string) *gormTag {
 			continue
 		}
 		switch parts[0] {
-		case "primaryKey":
-			t.PrimaryKey = true
 		case "size":
 			t.Size, _ = strconv.Atoi(parts[1])
 		case "type":
@@ -148,6 +151,7 @@ func (g *MassDataGenerator) generateValuesForModel(model any) error {
 		// 检查是否为主键，主键跳过，并设置零值
 		gt := parseGormTag(fieldType.Tag.Get("gorm"))
 		if gt != nil && gt.PrimaryKey {
+			field.Set(reflect.Zero(field.Type()))
 			continue
 		}
 
