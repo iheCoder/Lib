@@ -3,6 +3,7 @@ module Lib
 go 1.22.4
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/pquerna/ffjson v0.0.0-20190930134022-aa0246cd15f7
 	github.com/redis/go-redis/v9 v9.6.1
 	gorm.io/driver/mysql v1.5.7
