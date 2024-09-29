@@ -4,6 +4,7 @@ go 1.22.4
 
 require (
 	github.com/go-resty/resty/v2 v2.15.1
+	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/mysql v1.5.7
 	gorm.io/gorm v1.25.11
 )
