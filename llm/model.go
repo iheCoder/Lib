@@ -9,6 +9,12 @@ const (
 	GPTRoleUser GPTRole = "user"
 )
 
+type GPTError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Type    string `json:"type"`
+}
+
 type GPTRequest struct {
 	Model       GPTModel  `json:"model"`
 	Message     []Message `json:"messages"`
@@ -24,11 +30,12 @@ type Message struct {
 }
 
 type GPTResponse struct {
-	ID      string   `json:"id"`
-	Object  string   `json:"object"`
-	Created int64    `json:"created"`
-	Model   GPTModel `json:"model"`
-	Choices []Choice `json:"choices"`
+	ID      string    `json:"id"`
+	Object  string    `json:"object"`
+	Created int64     `json:"created"`
+	Model   GPTModel  `json:"model"`
+	Choices []Choice  `json:"choices"`
+	Err     *GPTError `json:"error"`
 }
 
 type Choice struct {
