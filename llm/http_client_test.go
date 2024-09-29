@@ -8,7 +8,7 @@ func TestHttpClient_Request(t *testing.T) {
 	client.SetProxy(proxy)
 
 	// request google
-	resp, err := client.Request("GET", "https://www.google.com", nil, nil)
+	resp, err := client.request("GET", "https://www.google.com", nil, nil)
 	if err != nil {
 		t.Errorf("request error: %v", err)
 		return
