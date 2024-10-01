@@ -1,6 +1,7 @@
 package retry
 
 import (
+	"context"
 	"errors"
 	"math/rand/v2"
 	"time"
@@ -19,36 +20,42 @@ var (
 	ErrExceededMaxRetryAttempts = errors.New("exceeded max retry attempts")
 )
 
-func Retry(operation func() error, options RetryOptions) error {
+func Retry(ctx context.Context, operation func() error, options RetryOptions) error {
 	var err error
 	backoff := options.InitialBackoff
 	for i := 0; i < options.MaxRetries; i++ {
-		err = operation()
-		// if no error, return nil
-		if err == nil {
-			return nil
-		}
+		select {
+		// if context is done, return context error
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			err = operation()
+			// if no error, return nil
+			if err == nil {
+				return nil
+			}
 
-		// if last retry, return error
-		if i == options.MaxRetries {
-			return err
-		}
+			// if last retry, return error
+			if i == options.MaxRetries {
+				return err
+			}
 
-		// exponential backoff
-		backoff = jitterBackoff(i, time.Duration(backoff))
-		if backoff > options.MaxBackoff {
-			backoff = options.MaxBackoff
-		}
+			// exponential backoff
+			backoff = jitterBackoff(i, time.Duration(backoff))
+			if backoff > options.MaxBackoff {
+				backoff = options.MaxBackoff
+			}
 
-		// sleep
-		time.Sleep(backoff)
+			// sleep
+			time.Sleep(backoff)
+		}
 	}
 
 	return ErrExceededMaxRetryAttempts
 }
 
-func RetryDefault(operation func() error) error {
-	return Retry(operation, RetryOptions{
+func RetryDefault(ctx context.Context, operation func() error) error {
+	return Retry(ctx, operation, RetryOptions{
 		MaxRetries:     3,
 		InitialBackoff: time.Second,
 		MaxBackoff:     time.Minute,
