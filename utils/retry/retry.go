@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// RetryConditionFunc type is for the retry condition function
+type RetryConditionFunc func(error) bool
+
 type RetryOptions struct {
 	// MaxRetries the maximum number of retries
 	MaxRetries int
@@ -14,6 +17,8 @@ type RetryOptions struct {
 	InitialBackoff time.Duration
 	// MaxBackoff the maximum backoff interval
 	MaxBackoff time.Duration
+	// RetryConditions the retry conditions
+	retryConditions []RetryConditionFunc
 }
 
 var (
@@ -48,6 +53,19 @@ func Retry(ctx context.Context, operation func() error, options RetryOptions) er
 
 			// sleep
 			time.Sleep(backoff)
+		}
+
+		// retry conditions
+		needRetry := true
+		for _, condition := range options.retryConditions {
+			if condition(err) {
+				needRetry = false
+				break
+			}
+		}
+
+		if !needRetry {
+			return err
 		}
 	}
 
