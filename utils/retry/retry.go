@@ -30,7 +30,7 @@ func Retry(operation func() error, options RetryOptions) error {
 		}
 
 		// if last retry, return error
-		if i == options.MaxRetries-1 {
+		if i == options.MaxRetries {
 			return err
 		}
 
@@ -45,6 +45,14 @@ func Retry(operation func() error, options RetryOptions) error {
 	}
 
 	return ErrExceededMaxRetryAttempts
+}
+
+func RetryDefault(operation func() error) error {
+	return Retry(operation, RetryOptions{
+		MaxRetries:     3,
+		InitialBackoff: time.Second,
+		MaxBackoff:     time.Minute,
+	})
 }
 
 func jitterBackoff(attempt int, base time.Duration) time.Duration {
