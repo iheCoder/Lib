@@ -56,8 +56,7 @@ func RetryDefault(operation func() error) error {
 }
 
 func jitterBackoff(attempt int, base time.Duration) time.Duration {
-	backoff := base * time.Duration(1<<uint(attempt))
-	jitter := time.Duration(rand.Int64N(int64(backoff)))
-
-	return backoff + jitter
+	backoff := float64(base * time.Duration(1<<uint(attempt)))
+	jitter := time.Duration(backoff * (0.5 + rand.Float64()))
+	return jitter
 }
