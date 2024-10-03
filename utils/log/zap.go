@@ -9,7 +9,6 @@ import (
 
 var (
 	globalLogger *zap.Logger
-	logFilePath  = "default.log"
 )
 
 func init() {
@@ -18,16 +17,10 @@ func init() {
 	encoderConfig := zap.NewProductionEncoderConfig()
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 
-	// log file
-	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		panic(err)
-	}
-
 	// new logger with core
 	core := zapcore.NewCore(
 		zapcore.NewJSONEncoder(encoderConfig),
-		zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), zapcore.AddSync(logFile)),
+		zapcore.NewMultiWriteSyncer(zapcore.AddSync(os.Stdout), zapcore.AddSync(&jarkLog)),
 		zapcore.InfoLevel,
 	)
 	logger := zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1))
