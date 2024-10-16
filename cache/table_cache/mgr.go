@@ -47,10 +47,8 @@ func (mgr *TableCacheMgr) AcquireCacheOp(config TablePullConfig) (*TableCacheOp,
 
 	// construct cache op
 	data := mgr.data[key]
-	op := &TableCacheOp{
-		data:   data,
-		config: &config,
-	}
+	op := NewTableCacheOp(&config)
+	op.SetData(data)
 
 	// add to ops
 	mgr.ops[key] = op
