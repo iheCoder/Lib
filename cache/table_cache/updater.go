@@ -25,4 +25,7 @@ func (mgr *TableCacheMgr) startUpdateOpsData() {
 			mgr.pullTableData(*op.config, key)
 		})
 	}
+
+	// wait for kill signal
+	<-mgr.cancelSignal
 }

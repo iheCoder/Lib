@@ -15,16 +15,18 @@ type TablePullConfig struct {
 }
 
 type TableCacheMgr struct {
-	data map[string]any
-	db   *gorm.DB
-	ops  map[string]*TableCacheOp
+	data         map[string]any
+	db           *gorm.DB
+	ops          map[string]*TableCacheOp
+	cancelSignal chan struct{}
 }
 
 func NewTableCacheMgr(db *gorm.DB) *TableCacheMgr {
 	return &TableCacheMgr{
-		data: make(map[string]any),
-		db:   db,
-		ops:  make(map[string]*TableCacheOp),
+		data:         make(map[string]any),
+		db:           db,
+		ops:          make(map[string]*TableCacheOp),
+		cancelSignal: make(chan struct{}),
 	}
 }
 
@@ -89,4 +91,8 @@ func generateItemKey(tableName string, conditions map[string]string) string {
 
 	// remove the last "&"
 	return sb.String()[:sb.Len()-1]
+}
+
+func (mgr *TableCacheMgr) Close() {
+	close(mgr.cancelSignal)
 }
