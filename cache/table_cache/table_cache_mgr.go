@@ -25,6 +25,24 @@ func NewTableCacheMgr(db *gorm.DB) *TableCacheMgr {
 	}
 }
 
+func (mgr *TableCacheMgr) AcquireCacheOp(config TablePullConfig) (*TableCacheOp, error) {
+	// check if the data is already in cache
+	// if not, pull data
+	key := generateItemKey(config.TableName, config.Condition)
+	if _, ok := mgr.data[key]; !ok {
+		err := mgr.pullTableData(config, key)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// return cache op
+	data := mgr.data[key]
+	return &TableCacheOp{
+		data: data,
+	}, nil
+}
+
 func (mgr *TableCacheMgr) WithTablePullConfigs(configs ...TablePullConfig) {
 	mgr.configs = configs
 }
