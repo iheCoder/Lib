@@ -15,12 +15,14 @@ type TablePullConfig struct {
 type TableCacheMgr struct {
 	data map[string]any
 	db   *gorm.DB
+	ops  []*TableCacheOp
 }
 
 func NewTableCacheMgr(db *gorm.DB) *TableCacheMgr {
 	return &TableCacheMgr{
 		data: make(map[string]any),
 		db:   db,
+		ops:  make([]*TableCacheOp, 0),
 	}
 }
 
@@ -35,12 +37,17 @@ func (mgr *TableCacheMgr) AcquireCacheOp(config TablePullConfig) (*TableCacheOp,
 		}
 	}
 
-	// return cache op
+	// construct cache op
 	data := mgr.data[key]
-	return &TableCacheOp{
+	op := &TableCacheOp{
 		data:   data,
 		config: &config,
-	}, nil
+	}
+
+	// add to ops
+	mgr.ops = append(mgr.ops, op)
+
+	return op, nil
 }
 
 func (mgr *TableCacheMgr) pullTableData(config TablePullConfig, key string) error {
