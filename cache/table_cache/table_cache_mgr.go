@@ -39,7 +39,8 @@ func (mgr *TableCacheMgr) AcquireCacheOp(config TablePullConfig) (*TableCacheOp,
 	// return cache op
 	data := mgr.data[key]
 	return &TableCacheOp{
-		data: data,
+		data:   data,
+		config: &config,
 	}, nil
 }
 
@@ -74,6 +75,9 @@ func (mgr *TableCacheMgr) pullTableData(config TablePullConfig, key string) erro
 
 	// fill data
 	mgr.data[key] = config.TableModels
+
+	// clean config data
+	config.TableModels = nil
 
 	return nil
 }

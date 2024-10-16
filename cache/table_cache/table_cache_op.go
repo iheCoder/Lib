@@ -3,6 +3,7 @@ package table_cache
 type TableCacheOp struct {
 	IDxData map[string]any
 	data    any
+	config  *TablePullConfig
 }
 
 func (i *TableCacheOp) GetModelByID(id string) any {
