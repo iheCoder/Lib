@@ -4,25 +4,27 @@ import (
 	"gorm.io/gorm"
 	"sort"
 	"strings"
+	"time"
 )
 
 type TablePullConfig struct {
-	TableName   string
-	Condition   map[string]string
-	TableModels []any
+	TableName      string
+	Condition      map[string]string
+	TableModels    []any
+	UpdateInterval time.Duration
 }
 
 type TableCacheMgr struct {
 	data map[string]any
 	db   *gorm.DB
-	ops  []*TableCacheOp
+	ops  map[string]*TableCacheOp
 }
 
 func NewTableCacheMgr(db *gorm.DB) *TableCacheMgr {
 	return &TableCacheMgr{
 		data: make(map[string]any),
 		db:   db,
-		ops:  make([]*TableCacheOp, 0),
+		ops:  make(map[string]*TableCacheOp),
 	}
 }
 
@@ -45,7 +47,7 @@ func (mgr *TableCacheMgr) AcquireCacheOp(config TablePullConfig) (*TableCacheOp,
 	}
 
 	// add to ops
-	mgr.ops = append(mgr.ops, op)
+	mgr.ops[key] = op
 
 	return op, nil
 }
