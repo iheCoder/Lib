@@ -3,11 +3,13 @@ module Lib
 go 1.22.4
 
 require (
+	github.com/RussellLuo/timingwheel v0.0.0-20220218152713-54845bda3108
 	github.com/go-resty/resty/v2 v2.15.1
 	github.com/google/uuid v1.6.0
 	github.com/pquerna/ffjson v0.0.0-20190930134022-aa0246cd15f7
 	github.com/redis/go-redis/v9 v9.6.1
 	go.uber.org/zap v1.27.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/mysql v1.5.7
 	gorm.io/gorm v1.25.11

@@ -26,6 +26,11 @@ func (mgr *TableCacheMgr) startUpdateOpsData() {
 
 	// add update ops to timing wheel
 	for key, op := range mgr.ops {
+		// if no update interval, skip
+		if op.config.UpdateInterval <= 0 {
+			continue
+		}
+
 		// add random interval to avoid thundering herd
 		interval := getRandomInterval(op.config.UpdateInterval)
 		tw.ScheduleFunc(&tableOpScheduler{interval}, func() {

@@ -8,11 +8,20 @@ import (
 )
 
 type TablePullConfig struct {
-	TableName      string
-	Condition      map[string]string
-	TableModels    []any
+	// TableName is the table name
+	TableName string
+	// Condition is the where condition
+	Condition map[string]string
+	// TableModels is the models to store the data
+	TableModels []any
+	// UpdateInterval is the interval to update the data
+	// if not set, the data will not be updated
+	// the real update interval will add a random time
 	UpdateInterval time.Duration
-	Selects        []string
+	// Selects is the columns to be selected
+	// if not set, all columns will be selected
+	// pay attention that if same table and conditions, the last op will overwrite the previous one
+	Selects []string
 }
 
 type TableCacheMgr struct {
