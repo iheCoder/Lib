@@ -12,6 +12,7 @@ type TablePullConfig struct {
 	Condition      map[string]string
 	TableModels    []any
 	UpdateInterval time.Duration
+	Selects        []string
 }
 
 type TableCacheMgr struct {
@@ -58,7 +59,10 @@ func (mgr *TableCacheMgr) AcquireCacheOp(config TablePullConfig) (*TableCacheOp,
 
 func (mgr *TableCacheMgr) pullTableData(config TablePullConfig, key string) error {
 	// query all data
-	err := mgr.db.Where(config.Condition).Find(config.TableModels).Error
+	if len(config.Selects) == 0 {
+		config.Selects = []string{"*"}
+	}
+	err := mgr.db.Select(config.Selects).Where(config.Condition).Find(config.TableModels).Error
 	if err != nil {
 		return err
 	}
