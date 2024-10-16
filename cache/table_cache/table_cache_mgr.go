@@ -4,11 +4,18 @@ import (
 	"gorm.io/gorm"
 )
 
+type TablePullConfig struct {
+	TableName   string
+	Condition   map[string]string
+	TableModels []any
+}
+
 type TableCacheMgr struct {
 	data       map[string]any
 	tableModel []any
 	tableName  string
 	db         *gorm.DB
+	configs    []TablePullConfig
 }
 
 func NewTableCacheMgr(db *gorm.DB, tableModel []any, tableName string) *TableCacheMgr {
@@ -18,6 +25,10 @@ func NewTableCacheMgr(db *gorm.DB, tableModel []any, tableName string) *TableCac
 		db:         db,
 		tableName:  tableName,
 	}
+}
+
+func (mgr *TableCacheMgr) WithTablePullConfigs(configs ...TablePullConfig) {
+	mgr.configs = configs
 }
 
 func (mgr *TableCacheMgr) PullData() error {
