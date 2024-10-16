@@ -22,12 +22,16 @@ type TableCacheMgr struct {
 }
 
 func NewTableCacheMgr(db *gorm.DB) *TableCacheMgr {
-	return &TableCacheMgr{
+	mgr := &TableCacheMgr{
 		data:         make(map[string]any),
 		db:           db,
 		ops:          make(map[string]*TableCacheOp),
 		cancelSignal: make(chan struct{}),
 	}
+
+	go mgr.startUpdateOpsData()
+
+	return mgr
 }
 
 func (mgr *TableCacheMgr) AcquireCacheOp(config TablePullConfig) (*TableCacheOp, error) {
