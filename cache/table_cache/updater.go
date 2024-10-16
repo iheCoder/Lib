@@ -2,7 +2,12 @@ package table_cache
 
 import (
 	"github.com/RussellLuo/timingwheel"
+	"math/rand/v2"
 	"time"
+)
+
+const (
+	defaultWheelInterval = time.Second
 )
 
 type tableOpScheduler struct {
@@ -15,17 +20,24 @@ func (s *tableOpScheduler) Next(prev time.Time) time.Time {
 
 func (mgr *TableCacheMgr) startUpdateOpsData() {
 	// start a timing wheel
-	tw := timingwheel.NewTimingWheel(time.Second, 60)
+	tw := timingwheel.NewTimingWheel(defaultWheelInterval, 60)
 	tw.Start()
 	defer tw.Stop()
 
 	// add update ops to timing wheel
 	for key, op := range mgr.ops {
-		tw.ScheduleFunc(&tableOpScheduler{op.config.UpdateInterval}, func() {
+		// add random interval to avoid thundering herd
+		interval := getRandomInterval(op.config.UpdateInterval)
+		tw.ScheduleFunc(&tableOpScheduler{interval}, func() {
 			mgr.pullTableData(*op.config, key)
 		})
 	}
 
 	// wait for kill signal
 	<-mgr.cancelSignal
+}
+
+func getRandomInterval(base time.Duration) time.Duration {
+	elapse := time.Duration(rand.Int64N(int64(defaultWheelInterval*2))) - defaultWheelInterval
+	return base + elapse
 }
