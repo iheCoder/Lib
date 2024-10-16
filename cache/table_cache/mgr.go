@@ -16,7 +16,6 @@ type TablePullConfig struct {
 }
 
 type TableCacheMgr struct {
-	data         map[string]any
 	db           *gorm.DB
 	ops          map[string]*TableCacheOp
 	cancelSignal chan struct{}
@@ -24,7 +23,6 @@ type TableCacheMgr struct {
 
 func NewTableCacheMgr(db *gorm.DB) *TableCacheMgr {
 	mgr := &TableCacheMgr{
-		data:         make(map[string]any),
 		db:           db,
 		ops:          make(map[string]*TableCacheOp),
 		cancelSignal: make(chan struct{}),
@@ -39,21 +37,15 @@ func (mgr *TableCacheMgr) AcquireCacheOp(config TablePullConfig) (*TableCacheOp,
 	// check if the data is already in cache
 	// if not, pull data
 	key := generateItemKey(config.TableName, config.Condition)
-	if _, ok := mgr.data[key]; !ok {
+	if _, ok := mgr.ops[key]; !ok {
 		err := mgr.pullTableData(config, key)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	// construct cache op
-	data := mgr.data[key]
-	op := NewTableCacheOp(&config)
-	op.SetData(data)
-
-	// add to ops
-	mgr.ops[key] = op
-
+	// return cache op
+	op := mgr.ops[key]
 	return op, nil
 }
 
@@ -67,8 +59,10 @@ func (mgr *TableCacheMgr) pullTableData(config TablePullConfig, key string) erro
 		return err
 	}
 
-	// fill data
-	mgr.data[key] = config.TableModels
+	// fill op
+	op := NewTableCacheOp(&config)
+	op.SetData(config.TableModels)
+	mgr.ops[key] = op
 
 	// clean config data
 	config.TableModels = nil
