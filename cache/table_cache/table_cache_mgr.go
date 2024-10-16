@@ -13,9 +13,8 @@ type TablePullConfig struct {
 }
 
 type TableCacheMgr struct {
-	data    map[string]any
-	db      *gorm.DB
-	configs []TablePullConfig
+	data map[string]any
+	db   *gorm.DB
 }
 
 func NewTableCacheMgr(db *gorm.DB) *TableCacheMgr {
@@ -42,28 +41,6 @@ func (mgr *TableCacheMgr) AcquireCacheOp(config TablePullConfig) (*TableCacheOp,
 		data:   data,
 		config: &config,
 	}, nil
-}
-
-func (mgr *TableCacheMgr) WithTablePullConfigs(configs ...TablePullConfig) {
-	mgr.configs = configs
-}
-
-func (mgr *TableCacheMgr) PullData() error {
-	for _, config := range mgr.configs {
-		// check if the data is already in cache
-		key := generateItemKey(config.TableName, config.Condition)
-		if _, ok := mgr.data[key]; ok {
-			continue
-		}
-
-		// pull data
-		err := mgr.pullTableData(config, key)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (mgr *TableCacheMgr) pullTableData(config TablePullConfig, key string) error {
