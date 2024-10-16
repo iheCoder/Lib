@@ -2,6 +2,8 @@ package table_cache
 
 import (
 	"gorm.io/gorm"
+	"sort"
+	"strings"
 )
 
 type TablePullConfig struct {
@@ -11,19 +13,15 @@ type TablePullConfig struct {
 }
 
 type TableCacheMgr struct {
-	data       map[string]any
-	tableModel []any
-	tableName  string
-	db         *gorm.DB
-	configs    []TablePullConfig
+	data    map[string]any
+	db      *gorm.DB
+	configs []TablePullConfig
 }
 
-func NewTableCacheMgr(db *gorm.DB, tableModel []any, tableName string) *TableCacheMgr {
+func NewTableCacheMgr(db *gorm.DB) *TableCacheMgr {
 	return &TableCacheMgr{
-		data:       make(map[string]any),
-		tableModel: tableModel,
-		db:         db,
-		tableName:  tableName,
+		data: make(map[string]any),
+		db:   db,
 	}
 }
 
@@ -32,18 +30,55 @@ func (mgr *TableCacheMgr) WithTablePullConfigs(configs ...TablePullConfig) {
 }
 
 func (mgr *TableCacheMgr) PullData() error {
+	for _, config := range mgr.configs {
+		// check if the data is already in cache
+		key := generateItemKey(config.TableName, config.Condition)
+		if _, ok := mgr.data[key]; ok {
+			continue
+		}
+
+		// pull data
+		err := mgr.pullTableData(config, key)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (mgr *TableCacheMgr) pullTableData(config TablePullConfig, key string) error {
 	// query all data
-	err := mgr.db.Find(mgr.tableModel).Error
+	err := mgr.db.Where(config.Condition).Find(config.TableModels).Error
 	if err != nil {
 		return err
 	}
 
 	// fill data
-	mgr.data = make(map[string]any)
-	key := mgr.tableName
-	for _, item := range mgr.tableModel {
-		mgr.data[key] = item
-	}
+	mgr.data[key] = config.TableModels
 
 	return nil
+}
+
+func generateItemKey(tableName string, conditions map[string]string) string {
+	// acquire all keys and sort them
+	keys := make([]string, 0, len(conditions))
+	for key := range conditions {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	// generate key
+	key := tableName
+	var sb strings.Builder
+	sb.WriteString(key + ":")
+	for _, k := range keys {
+		sb.WriteString(k)
+		sb.WriteString("=")
+		sb.WriteString(conditions[k])
+		sb.WriteString("&")
+	}
+
+	// remove the last "&"
+	return sb.String()[:sb.Len()-1]
 }
