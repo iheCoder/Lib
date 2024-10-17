@@ -5,15 +5,17 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/RussellLuo/timingwheel"
 )
+
+type ModelsGenerator func() any
 
 type TablePullConfig struct {
 	// TableName is the table name
 	TableName string
 	// Condition is the where condition
 	Condition map[string]string
-	// TableModels is the models to store the data
-	TableModels any
 	// UpdateInterval is the interval to update the data
 	// if not set, the data will not be updated
 	// the real update interval will add a random time
@@ -22,12 +24,15 @@ type TablePullConfig struct {
 	// if not set, all columns will be selected
 	// pay attention that if same table and conditions, the last op will overwrite the previous one
 	Selects []string
+	// ModelGen is the models generator
+	ModelGen ModelsGenerator
 }
 
 type TableCacheMgr struct {
 	db           *gorm.DB
 	ops          map[string]*TableCacheOp
 	cancelSignal chan struct{}
+	tw           *timingwheel.TimingWheel
 }
 
 func NewTableCacheMgr(db *gorm.DB) *TableCacheMgr {
@@ -35,6 +40,7 @@ func NewTableCacheMgr(db *gorm.DB) *TableCacheMgr {
 		db:           db,
 		ops:          make(map[string]*TableCacheOp),
 		cancelSignal: make(chan struct{}),
+		tw:           timingwheel.NewTimingWheel(defaultWheelInterval, 60),
 	}
 
 	go mgr.startUpdateOpsData()
@@ -43,40 +49,56 @@ func NewTableCacheMgr(db *gorm.DB) *TableCacheMgr {
 }
 
 func (mgr *TableCacheMgr) AcquireCacheOp(config TablePullConfig) (*TableCacheOp, error) {
-	// check if the data is already in cache
-	// if not, pull data
+	// check if the op exists
+	// if not exists, create a new one
 	key := generateItemKey(config.TableName, config.Condition)
-	if _, ok := mgr.ops[key]; !ok {
-		err := mgr.pullTableData(config, key)
-		if err != nil {
-			return nil, err
-		}
+	op, ok := mgr.ops[key]
+	if !ok {
+		// create new op
+		op = NewTableCacheOp(&config)
+		mgr.ops[key] = op
+
+		// add op to timing wheel
+		mgr.addToUpdateWheel(op)
 	}
 
-	// return cache op
-	op := mgr.ops[key]
+	// update data
+	if err := mgr.updateOpData(op); err != nil {
+		return nil, err
+	}
+
 	return op, nil
 }
 
-func (mgr *TableCacheMgr) pullTableData(config TablePullConfig, key string) error {
-	// query all data
-	if len(config.Selects) == 0 {
-		config.Selects = []string{"*"}
-	}
-	err := mgr.db.Select(config.Selects).Where(config.Condition).Find(config.TableModels).Error
+func (mgr *TableCacheMgr) updateOpData(op *TableCacheOp) error {
+	// pull data
+	data, err := mgr.pullTableData(*op.config)
 	if err != nil {
 		return err
 	}
 
-	// fill op
-	op := NewTableCacheOp(&config)
-	op.SetData(config.TableModels)
-	mgr.ops[key] = op
-
-	// clean config data
-	config.TableModels = nil
+	// set data
+	op.SetData(data)
 
 	return nil
+}
+
+func (mgr *TableCacheMgr) pullTableData(config TablePullConfig) (any, error) {
+	// check if selects is empty, set to "*"
+	if len(config.Selects) == 0 {
+		config.Selects = []string{"*"}
+	}
+
+	// create models
+	models := config.ModelGen()
+
+	// query data
+	err := mgr.db.Select(config.Selects).Where(config.Condition).Find(models).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return models, nil
 }
 
 func generateItemKey(tableName string, conditions map[string]string) string {
