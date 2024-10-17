@@ -2,6 +2,7 @@ package table_cache
 
 import (
 	"gorm.io/gorm"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -68,6 +69,26 @@ func (mgr *TableCacheMgr) AcquireCacheOp(config TablePullConfig) (*TableCacheOp,
 	}
 
 	return op, nil
+}
+
+func checkPullConfigValid(cfg TablePullConfig) error {
+	if len(cfg.TableName) == 0 {
+		return ErrEmptyTableName
+	}
+	if cfg.ModelGen == nil {
+		return ErrEmptyModelGen
+	}
+
+	models := cfg.ModelGen()
+	if models == nil {
+		return ErrEmptyModelGen
+	}
+	// check if models is a pointer of struct slice
+	if reflect.TypeOf(models).Kind() != reflect.Ptr || reflect.TypeOf(models).Elem().Kind() != reflect.Slice {
+		return ErrModelGenUnexpectedVar
+	}
+
+	return nil
 }
 
 func (mgr *TableCacheMgr) updateOpData(op *TableCacheOp) error {

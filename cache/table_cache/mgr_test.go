@@ -1,6 +1,7 @@
 package table_cache
 
 import (
+	"errors"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"testing"
@@ -166,5 +167,71 @@ func TestTableCacheMgr_AcquireCacheOpWithUpdateInterval(t *testing.T) {
 	}
 	if len(*resources2) != 5 {
 		t.Fatalf("cache data length is not 5")
+	}
+}
+
+func TestCheckPullConfigValid(t *testing.T) {
+	type testData struct {
+		cfg         TablePullConfig
+		ExpectedErr error
+	}
+
+	tests := []testData{
+		{
+			cfg: TablePullConfig{
+				TableName: "resource",
+				ModelGen:  GenResourcesModel,
+			},
+			ExpectedErr: nil,
+		},
+		{
+			cfg: TablePullConfig{
+				TableName: "",
+				ModelGen:  GenResourcesModel,
+			},
+			ExpectedErr: ErrEmptyTableName,
+		},
+		{
+			cfg: TablePullConfig{
+				TableName: "resource",
+				ModelGen:  nil,
+			},
+			ExpectedErr: ErrEmptyModelGen,
+		},
+		{
+			cfg: TablePullConfig{
+				TableName: "resource",
+				ModelGen:  func() any { return nil },
+			},
+			ExpectedErr: ErrEmptyModelGen,
+		},
+		{
+			cfg: TablePullConfig{
+				TableName: "resource",
+				ModelGen:  func() any { return 1 },
+			},
+			ExpectedErr: ErrModelGenUnexpectedVar,
+		},
+		{
+			cfg: TablePullConfig{
+				TableName: "resource",
+				ModelGen:  func() any { return &[]int{} },
+			},
+			ExpectedErr: nil,
+		},
+		{
+			cfg: TablePullConfig{
+				TableName: "resource",
+				ModelGen:  func() any { x := 1; return &x },
+			},
+			ExpectedErr: ErrModelGenUnexpectedVar,
+		},
+	}
+
+	for _, test := range tests {
+		err := checkPullConfigValid(test.cfg)
+		if !errors.Is(err, test.ExpectedErr) {
+			t.Fatalf("check pull config valid failed, expected %v, got %v", test.ExpectedErr, err)
+		}
 	}
 }
