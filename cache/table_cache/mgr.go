@@ -13,7 +13,7 @@ type TablePullConfig struct {
 	// Condition is the where condition
 	Condition map[string]string
 	// TableModels is the models to store the data
-	TableModels []any
+	TableModels any
 	// UpdateInterval is the interval to update the data
 	// if not set, the data will not be updated
 	// the real update interval will add a random time
