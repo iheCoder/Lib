@@ -50,6 +50,11 @@ func NewTableCacheMgr(db *gorm.DB) *TableCacheMgr {
 }
 
 func (mgr *TableCacheMgr) AcquireCacheOp(config TablePullConfig) (*TableCacheOp, error) {
+	// check config
+	if err := checkPullConfigValid(config); err != nil {
+		return nil, err
+	}
+
 	// check if the op exists
 	// if not exists, create a new one
 	key := generateItemKey(config.TableName, config.Condition)
