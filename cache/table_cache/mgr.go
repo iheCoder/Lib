@@ -27,6 +27,8 @@ type TablePullConfig struct {
 	Selects []string
 	// ModelGen is the models generator
 	ModelGen ModelsGenerator
+	// ReviseFunc is the function to revise the data
+	ReviseFunc DataReviseFunc
 }
 
 type TableCacheMgr struct {

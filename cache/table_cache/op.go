@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 )
 
+type DataReviseFunc func(data any) (any, error)
+
 type TableCacheOp struct {
 	IDxData map[string]any
 	data    any
@@ -20,15 +22,17 @@ func NewTableCacheOp(config *TablePullConfig) *TableCacheOp {
 	}
 }
 
-func (i *TableCacheOp) SetData(data any) {
-	newHash := genKey(data)
+func (i *TableCacheOp) SetData(rawData any) error {
+	newHash := genKey(rawData)
 	if newHash == i.hash {
-		return
+		return nil
 	}
 
-	i.data = data
+	i.data = rawData
 	i.version++
 	i.hash = newHash
+
+	return i.reviseData()
 }
 
 func (i *TableCacheOp) GetModelByID(id string) any {
@@ -48,4 +52,16 @@ func genKey(data any) string {
 	hash := md5.New()
 	hash.Write(ds)
 	return string(hash.Sum(nil))
+}
+
+func (i *TableCacheOp) reviseData() error {
+	if i.config.ReviseFunc != nil {
+		rd, err := i.config.ReviseFunc(i.data)
+		if err != nil {
+			return err
+		}
+		i.data = rd
+	}
+
+	return nil
 }
