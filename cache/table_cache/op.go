@@ -1,8 +1,8 @@
 package table_cache
 
 import (
-	"crypto/md5"
-	"encoding/json"
+	"github.com/bytedance/sonic"
+	"github.com/cespare/xxhash/v2"
 )
 
 type DataReviseFunc func(data any) (any, error)
@@ -12,7 +12,7 @@ type TableCacheOp struct {
 	data    any
 	config  *TablePullConfig
 	version int64
-	hash    string
+	hash    uint64
 	size    int
 }
 
@@ -54,11 +54,9 @@ func (i *TableCacheOp) CheckDataUpdated(version int64) bool {
 	return i.version != version
 }
 
-func (i *TableCacheOp) genKey(data any) (string, int) {
-	ds, _ := json.Marshal(data)
-	hash := md5.New()
-	hash.Write(ds)
-	return string(hash.Sum(nil)), len(ds)
+func (i *TableCacheOp) genKey(data any) (uint64, int) {
+	ds, _ := sonic.Marshal(data)
+	return xxhash.Sum64(ds), len(ds)
 }
 
 func (i *TableCacheOp) reviseData() error {
