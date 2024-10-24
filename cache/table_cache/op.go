@@ -45,6 +45,11 @@ func (i *TableCacheOp) GetData() (any, int64) {
 	return i.data, i.version
 }
 
+// GetDataSize returns the size of the data in bytes.
+func (i *TableCacheOp) GetDataSize() int {
+	return i.size
+}
+
 func (i *TableCacheOp) CheckDataUpdated(version int64) bool {
 	return i.version != version
 }

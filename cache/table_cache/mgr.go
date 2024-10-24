@@ -36,6 +36,7 @@ type TableCacheMgr struct {
 	ops          map[string]*TableCacheOp
 	cancelSignal chan struct{}
 	tw           *timingwheel.TimingWheel
+	totalSize    int
 }
 
 func NewTableCacheMgr(db *gorm.DB) *TableCacheMgr {
@@ -105,8 +106,13 @@ func (mgr *TableCacheMgr) updateOpData(op *TableCacheOp) error {
 		return err
 	}
 
+	oldSize := op.GetDataSize()
 	// set data
 	op.SetData(data)
+
+	// update total size
+	diffSize := op.GetDataSize() - oldSize
+	mgr.totalSize += diffSize
 
 	return nil
 }
