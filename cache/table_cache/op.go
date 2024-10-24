@@ -13,6 +13,7 @@ type TableCacheOp struct {
 	config  *TablePullConfig
 	version int64
 	hash    string
+	size    int
 }
 
 func NewTableCacheOp(config *TablePullConfig) *TableCacheOp {
@@ -23,7 +24,7 @@ func NewTableCacheOp(config *TablePullConfig) *TableCacheOp {
 }
 
 func (i *TableCacheOp) SetData(rawData any) error {
-	newHash := genKey(rawData)
+	newHash, size := i.genKey(rawData)
 	if newHash == i.hash {
 		return nil
 	}
@@ -31,6 +32,7 @@ func (i *TableCacheOp) SetData(rawData any) error {
 	i.data = rawData
 	i.version++
 	i.hash = newHash
+	i.size = size
 
 	return i.reviseData()
 }
@@ -47,11 +49,11 @@ func (i *TableCacheOp) CheckDataUpdated(version int64) bool {
 	return i.version != version
 }
 
-func genKey(data any) string {
+func (i *TableCacheOp) genKey(data any) (string, int) {
 	ds, _ := json.Marshal(data)
 	hash := md5.New()
 	hash.Write(ds)
-	return string(hash.Sum(nil))
+	return string(hash.Sum(nil)), len(ds)
 }
 
 func (i *TableCacheOp) reviseData() error {
