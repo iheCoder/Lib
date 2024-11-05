@@ -3,17 +3,19 @@ package table_cache
 import (
 	"github.com/bytedance/sonic"
 	"github.com/cespare/xxhash/v2"
+	"time"
 )
 
 type DataReviseFunc func(data any) (any, error)
 
 type TableCacheOp struct {
-	IDxData map[string]any
-	data    any
-	config  *TablePullConfig
-	version int64
-	hash    uint64
-	size    int
+	IDxData  map[string]any
+	data     any
+	config   *TablePullConfig
+	version  int64
+	hash     uint64
+	size     int
+	pullTime time.Time
 }
 
 func NewTableCacheOp(config *TablePullConfig) *TableCacheOp {
@@ -29,6 +31,7 @@ func (i *TableCacheOp) SetData(rawData any) error {
 		return nil
 	}
 
+	i.pullTime = time.Now()
 	i.data = rawData
 	i.version++
 	i.hash = newHash
@@ -43,6 +46,10 @@ func (i *TableCacheOp) GetModelByID(id string) any {
 
 func (i *TableCacheOp) GetData() (any, int64) {
 	return i.data, i.version
+}
+
+func (i *TableCacheOp) GetPullTime() time.Time {
+	return i.pullTime
 }
 
 // GetDataSize returns the size of the data in bytes.
