@@ -17,10 +17,11 @@ const (
 )
 
 type RedisLock struct {
-	client     *redis.Client
-	ttl        time.Duration
-	key, value string
-	ctx        context.Context
+	client      *redis.Client
+	ttl         time.Duration
+	key, value  string
+	ctx         context.Context
+	stopRenewCh chan struct{}
 }
 
 func (l *RedisLock) Lock() error {
@@ -34,6 +35,8 @@ func (l *RedisLock) Lock() error {
 }
 
 func (l *RedisLock) Unlock() error {
+	defer l.cleanup()
+
 	return l.client.Eval(l.ctx, delLuaScript, []string{l.key}, l.value).Err()
 }
 
@@ -43,10 +46,14 @@ func (l *RedisLock) renew() {
 
 	for {
 		select {
-		case <-l.ctx.Done():
+		case <-l.stopRenewCh:
 			return
 		case <-ticker.C:
 			l.client.Expire(l.ctx, l.key, l.ttl)
 		}
 	}
+}
+
+func (l *RedisLock) cleanup() {
+	close(l.stopRenewCh)
 }
