@@ -38,10 +38,12 @@ func NewRedisLock(client *redis.Client, key string, ttl time.Duration) *RedisLoc
 }
 
 func (l *RedisLock) Lock() error {
+	// retry to lock
 	if err := retry.Retry(l.ctx, l.lock, l.retryOptions); err != nil {
 		return err
 	}
 
+	// renew lock background
 	go l.renew()
 	return nil
 }
@@ -51,8 +53,10 @@ func (l *RedisLock) lock() error {
 }
 
 func (l *RedisLock) Unlock() error {
+	// cleanup renew goroutine
 	defer l.cleanup()
 
+	// try to unlock
 	return l.client.Eval(l.ctx, delLuaScript, []string{l.key}, l.value).Err()
 }
 
@@ -62,12 +66,19 @@ func (l *RedisLock) renew() {
 
 	for {
 		select {
+		// stop renew when unlock
 		case <-l.stopRenewCh:
 			return
+
+		// renew lock
 		case <-ticker.C:
-			l.client.Expire(l.ctx, l.key, l.ttl)
+			l.doRenew()
 		}
 	}
+}
+
+func (l *RedisLock) doRenew() error {
+	return l.client.Expire(l.ctx, l.key, l.ttl).Err()
 }
 
 func (l *RedisLock) cleanup() {
