@@ -1,6 +1,7 @@
 package redis_lock
 
 import (
+	"Lib/utils/retry"
 	"context"
 	"github.com/redis/go-redis/v9"
 	"time"
@@ -17,11 +18,12 @@ const (
 )
 
 type RedisLock struct {
-	client      *redis.Client
-	ttl         time.Duration
-	key, value  string
-	ctx         context.Context
-	stopRenewCh chan struct{}
+	client       *redis.Client
+	ttl          time.Duration
+	key, value   string
+	ctx          context.Context
+	stopRenewCh  chan struct{}
+	retryOptions retry.RetryOptions
 }
 
 func NewRedisLock(client *redis.Client, key string, ttl time.Duration) *RedisLock {
@@ -36,13 +38,16 @@ func NewRedisLock(client *redis.Client, key string, ttl time.Duration) *RedisLoc
 }
 
 func (l *RedisLock) Lock() error {
-	err := l.client.SetNX(l.ctx, l.key, l.value, l.ttl).Err()
-	if err != nil {
+	if err := retry.Retry(l.ctx, l.lock, l.retryOptions); err != nil {
 		return err
 	}
 
 	go l.renew()
 	return nil
+}
+
+func (l *RedisLock) lock() error {
+	return l.client.SetNX(l.ctx, l.key, l.value, l.ttl).Err()
 }
 
 func (l *RedisLock) Unlock() error {
