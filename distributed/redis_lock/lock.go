@@ -24,6 +24,17 @@ type RedisLock struct {
 	stopRenewCh chan struct{}
 }
 
+func NewRedisLock(client *redis.Client, key string, ttl time.Duration) *RedisLock {
+	return &RedisLock{
+		client:      client,
+		ttl:         ttl,
+		key:         key,
+		value:       GenerateUniqueKey(),
+		ctx:         context.Background(),
+		stopRenewCh: make(chan struct{}),
+	}
+}
+
 func (l *RedisLock) Lock() error {
 	err := l.client.SetNX(l.ctx, l.key, l.value, l.ttl).Err()
 	if err != nil {
