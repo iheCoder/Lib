@@ -7,16 +7,21 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+const (
+	defaultRenewCount = 10
+)
+
 type LockFac struct {
-	client       *redis.Client
-	ttl          time.Duration
-	tw           *timingwheel.TimingWheel
-	cancelSignal chan struct{}
+	client        *redis.Client
+	ttl           time.Duration
+	tw            *timingwheel.TimingWheel
+	cancelSignal  chan struct{}
+	maxRenewCount int
 }
 
 func (f *LockFac) NewLock(key string) *RedisLock {
 	// create a new lock
-	lock := newRedisLock(f.client, key, f.ttl)
+	lock := newRedisLock(f.client, key, f.ttl, f.maxRenewCount)
 
 	// add to renew wheel
 	timer := f.addToRenewWheel(lock)
