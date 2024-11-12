@@ -84,7 +84,13 @@ func (f *LockFac) renew() {
 }
 
 func (f *LockFac) addToRenewWheel(l *RedisLock) *timingwheel.Timer {
-	return f.tw.ScheduleFunc(&lockExpireScheduler{ttl: l.ttl}, func() {
+	return f.tw.ScheduleFunc(&lockExpireScheduler{ttl: genRenewScanInterval(l.ttl)}, func() {
 		l.doRenew()
 	})
+}
+
+// genRenewScanInterval generates the interval for scanning the renew wheel.
+// It should be half of the lock's TTL.
+func genRenewScanInterval(ttl time.Duration) time.Duration {
+	return ttl / 2
 }
