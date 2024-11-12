@@ -3,6 +3,7 @@ package redis_lock
 import (
 	"Lib/utils/retry"
 	"context"
+	"github.com/RussellLuo/timingwheel"
 	"github.com/redis/go-redis/v9"
 	"time"
 )
@@ -22,19 +23,22 @@ type RedisLock struct {
 	ttl          time.Duration
 	key, value   string
 	ctx          context.Context
-	stopRenewCh  chan struct{}
+	timer        *timingwheel.Timer
 	retryOptions retry.RetryOptions
 }
 
-func NewRedisLock(client *redis.Client, key string, ttl time.Duration) *RedisLock {
+func newRedisLock(client *redis.Client, key string, ttl time.Duration) *RedisLock {
 	return &RedisLock{
-		client:      client,
-		ttl:         ttl,
-		key:         key,
-		value:       GenerateUniqueKey(),
-		ctx:         context.Background(),
-		stopRenewCh: make(chan struct{}),
+		client: client,
+		ttl:    ttl,
+		key:    key,
+		value:  GenerateUniqueKey(),
+		ctx:    context.Background(),
 	}
+}
+
+func (l *RedisLock) addStopTimer(timer *timingwheel.Timer) {
+	l.timer = timer
 }
 
 func (l *RedisLock) Lock() error {
@@ -43,8 +47,6 @@ func (l *RedisLock) Lock() error {
 		return err
 	}
 
-	// renew lock background
-	go l.renew()
 	return nil
 }
 
@@ -60,27 +62,10 @@ func (l *RedisLock) Unlock() error {
 	return l.client.Eval(l.ctx, delLuaScript, []string{l.key}, l.value).Err()
 }
 
-func (l *RedisLock) renew() {
-	ticker := time.NewTicker(l.ttl / 2)
-	defer ticker.Stop()
-
-	for {
-		select {
-		// stop renew when unlock
-		case <-l.stopRenewCh:
-			return
-
-		// renew lock
-		case <-ticker.C:
-			l.doRenew()
-		}
-	}
-}
-
 func (l *RedisLock) doRenew() error {
 	return l.client.Expire(l.ctx, l.key, l.ttl).Err()
 }
 
 func (l *RedisLock) cleanup() {
-	close(l.stopRenewCh)
+	l.timer.Stop()
 }

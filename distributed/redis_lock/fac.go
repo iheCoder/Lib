@@ -15,7 +15,14 @@ type LockFac struct {
 }
 
 func (f *LockFac) NewLock(key string) *RedisLock {
-	return NewRedisLock(f.client, key, f.ttl)
+	// create a new lock
+	lock := newRedisLock(f.client, key, f.ttl)
+
+	// add to renew wheel
+	timer := f.addToRenewWheel(lock)
+	lock.addStopTimer(timer)
+
+	return lock
 }
 
 func (f *LockFac) renew() {
@@ -27,8 +34,8 @@ func (f *LockFac) renew() {
 	<-f.cancelSignal
 }
 
-func (f *LockFac) addToRenewWheel(l *RedisLock) {
-	f.tw.ScheduleFunc(&lockExpireScheduler{ttl: l.ttl}, func() {
+func (f *LockFac) addToRenewWheel(l *RedisLock) *timingwheel.Timer {
+	return f.tw.ScheduleFunc(&lockExpireScheduler{ttl: l.ttl}, func() {
 		l.doRenew()
 	})
 }
