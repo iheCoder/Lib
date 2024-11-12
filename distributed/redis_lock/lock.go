@@ -24,16 +24,17 @@ type RedisLock struct {
 	key, value   string
 	ctx          context.Context
 	timer        *timingwheel.Timer
-	retryOptions retry.RetryOptions
+	retryOptions *retry.RetryOptions
 }
 
-func newRedisLock(client *redis.Client, key string, ttl time.Duration) *RedisLock {
+func newRedisLock(client *redis.Client, key string, ttl time.Duration, options *retry.RetryOptions) *RedisLock {
 	return &RedisLock{
-		client: client,
-		ttl:    ttl,
-		key:    key,
-		value:  GenerateUniqueKey(),
-		ctx:    context.Background(),
+		client:       client,
+		ttl:          ttl,
+		key:          key,
+		value:        GenerateUniqueKey(),
+		ctx:          context.Background(),
+		retryOptions: options,
 	}
 }
 
@@ -41,9 +42,13 @@ func (l *RedisLock) addStopTimer(timer *timingwheel.Timer) {
 	l.timer = timer
 }
 
+func (l *RedisLock) SetRetryOptions(options *retry.RetryOptions) {
+	l.retryOptions = options
+}
+
 func (l *RedisLock) Lock() error {
 	// retry to lock
-	if err := retry.Retry(l.ctx, l.lock, l.retryOptions); err != nil {
+	if err := retry.Retry(l.ctx, l.lock, *l.retryOptions); err != nil {
 		return err
 	}
 
