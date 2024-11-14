@@ -26,6 +26,7 @@ type RedisLock struct {
 	ctx          context.Context
 	timer        *timingwheel.Timer
 	retryOptions *retry.RetryOptions
+	fac          *LockFac
 
 	maxRenewCount int
 	renewCount    int
@@ -35,7 +36,7 @@ type RedisLock struct {
 	once            sync.Once
 }
 
-func newRedisLock(client *redis.Client, key string, ttl time.Duration, options *retry.RetryOptions, maxRenewCount int, enableLocalLock bool) *RedisLock {
+func newRedisLock(client *redis.Client, key string, ttl time.Duration, options *retry.RetryOptions, maxRenewCount int, enableLocalLock bool, fac *LockFac) *RedisLock {
 	lock := &RedisLock{
 		client:        client,
 		ttl:           ttl,
@@ -44,6 +45,7 @@ func newRedisLock(client *redis.Client, key string, ttl time.Duration, options *
 		ctx:           context.Background(),
 		retryOptions:  options,
 		maxRenewCount: maxRenewCount,
+		fac:           fac,
 	}
 
 	if enableLocalLock {
@@ -52,10 +54,6 @@ func newRedisLock(client *redis.Client, key string, ttl time.Duration, options *
 	}
 
 	return lock
-}
-
-func (l *RedisLock) addStopTimer(timer *timingwheel.Timer) {
-	l.timer = timer
 }
 
 func (l *RedisLock) SetRetryOptions(options *retry.RetryOptions) {
@@ -76,6 +74,10 @@ func (l *RedisLock) Lock() error {
 	if err := retry.Retry(l.ctx, l.lock, *l.retryOptions); err != nil {
 		return err
 	}
+
+	// add to renew wheel
+	timer := l.fac.addToRenewWheel(l)
+	l.timer = timer
 
 	return nil
 }

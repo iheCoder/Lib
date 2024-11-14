@@ -76,29 +76,15 @@ func NewLockFac(client *redis.Client, options ...FacOption) *LockFac {
 }
 
 func (f *LockFac) NewLock(key string) *RedisLock {
-	// create a new lock
-	lock := f.newLock(key, false)
-
-	// add to renew wheel
-	timer := f.addToRenewWheel(lock)
-	lock.addStopTimer(timer)
-
-	return lock
+	return f.newLock(key, false)
 }
 
 func (f *LockFac) NewLockWithLocal(key string) *RedisLock {
-	// create a new lock
-	lock := f.newLock(key, true)
-
-	// add to renew wheel
-	timer := f.addToRenewWheel(lock)
-	lock.addStopTimer(timer)
-
-	return lock
+	return f.newLock(key, true)
 }
 
 func (f *LockFac) newLock(key string, enableLocalLock bool) *RedisLock {
-	return newRedisLock(f.client, key, f.ttl, f.retryOptions, f.maxRenewCount, enableLocalLock)
+	return newRedisLock(f.client, key, f.ttl, f.retryOptions, f.maxRenewCount, enableLocalLock, f)
 }
 
 func (f *LockFac) renew() {
