@@ -49,6 +49,10 @@ func (l *RedisLock) SetRetryOptions(options *retry.RetryOptions) {
 	l.retryOptions = options
 }
 
+func (l *RedisLock) SetMaxRenewCount(count int) {
+	l.maxRenewCount = count
+}
+
 func (l *RedisLock) Lock() error {
 	// retry to lock
 	if err := retry.Retry(l.ctx, l.lock, *l.retryOptions); err != nil {

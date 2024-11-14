@@ -51,13 +51,20 @@ func WithTimingWheel(tw *timingwheel.TimingWheel) FacOption {
 	}
 }
 
+func WithMaxRenewCount(count int) FacOption {
+	return func(f *LockFac) {
+		f.maxRenewCount = count
+	}
+}
+
 func NewLockFac(client *redis.Client, options ...FacOption) *LockFac {
 	fac := &LockFac{
-		client:       client,
-		cancelSignal: make(chan struct{}),
-		tw:           defaultTW,
-		retryOptions: &defaultRetryOption,
-		ttl:          defaultTTL,
+		client:        client,
+		cancelSignal:  make(chan struct{}),
+		tw:            defaultTW,
+		retryOptions:  &defaultRetryOption,
+		ttl:           defaultTTL,
+		maxRenewCount: defaultRenewCount,
 	}
 
 	// apply options
