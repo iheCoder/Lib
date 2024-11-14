@@ -19,22 +19,25 @@ const (
 )
 
 type RedisLock struct {
-	client       *redis.Client
-	ttl          time.Duration
-	key, value   string
-	ctx          context.Context
-	timer        *timingwheel.Timer
-	retryOptions *retry.RetryOptions
+	client        *redis.Client
+	ttl           time.Duration
+	key, value    string
+	ctx           context.Context
+	timer         *timingwheel.Timer
+	retryOptions  *retry.RetryOptions
+	maxRenewCount int
+	renewCount    int
 }
 
-func newRedisLock(client *redis.Client, key string, ttl time.Duration, options *retry.RetryOptions) *RedisLock {
+func newRedisLock(client *redis.Client, key string, ttl time.Duration, options *retry.RetryOptions, maxRenewCount int) *RedisLock {
 	return &RedisLock{
-		client:       client,
-		ttl:          ttl,
-		key:          key,
-		value:        GenerateUniqueKey(),
-		ctx:          context.Background(),
-		retryOptions: options,
+		client:        client,
+		ttl:           ttl,
+		key:           key,
+		value:         GenerateUniqueKey(),
+		ctx:           context.Background(),
+		retryOptions:  options,
+		maxRenewCount: maxRenewCount,
 	}
 }
 
@@ -68,9 +71,21 @@ func (l *RedisLock) Unlock() error {
 }
 
 func (l *RedisLock) doRenew() error {
+	// cleanup renew goroutine if renew count exceeds max renew
+	defer func() {
+		l.renewCount++
+		if l.renewCount > l.maxRenewCount {
+			l.cleanup()
+		}
+	}()
+
+	// try to renew
 	return l.client.Expire(l.ctx, l.key, l.ttl).Err()
 }
 
 func (l *RedisLock) cleanup() {
-	l.timer.Stop()
+	// stop renew timer
+	if l.timer != nil {
+		l.timer.Stop()
+	}
 }

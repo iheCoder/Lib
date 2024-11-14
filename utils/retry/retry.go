@@ -46,9 +46,9 @@ func Retry(ctx context.Context, operation func() error, options RetryOptions) er
 			}
 
 			// exponential backoff
-			backoff = jitterBackoff(i, time.Duration(backoff))
+			backoff = jitterBackoff(i, backoff)
 			if backoff > options.MaxBackoff {
-				backoff = options.MaxBackoff
+				backoff = randomLowerDuration(options.MaxBackoff)
 			}
 
 			// sleep
@@ -84,4 +84,9 @@ func jitterBackoff(attempt int, base time.Duration) time.Duration {
 	backoff := float64(base * time.Duration(1<<uint(attempt)))
 	jitter := time.Duration(backoff * (0.5 + rand.Float64()))
 	return jitter
+}
+
+// randomLowerDuration returns a random duration between 0.5d and d
+func randomLowerDuration(d time.Duration) time.Duration {
+	return time.Duration(rand.Int64N(int64(d/2)) + int64(d/2))
 }

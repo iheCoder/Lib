@@ -20,12 +20,17 @@ var (
 
 type FacOption func(f *LockFac)
 
+const (
+	defaultRenewCount = 10
+)
+
 type LockFac struct {
-	client       *redis.Client
-	ttl          time.Duration
-	tw           *timingwheel.TimingWheel
-	cancelSignal chan struct{}
-	retryOptions *retry.RetryOptions
+	client        *redis.Client
+	ttl           time.Duration
+	tw            *timingwheel.TimingWheel
+	cancelSignal  chan struct{}
+	retryOptions  *retry.RetryOptions
+	maxRenewCount int
 }
 
 func WithTTL(ttl time.Duration) FacOption {
@@ -65,7 +70,7 @@ func NewLockFac(client *redis.Client, options ...FacOption) *LockFac {
 
 func (f *LockFac) NewLock(key string) *RedisLock {
 	// create a new lock
-	lock := newRedisLock(f.client, key, f.ttl, f.retryOptions)
+	lock := newRedisLock(f.client, key, f.ttl, f.retryOptions, f.maxRenewCount)
 
 	// add to renew wheel
 	timer := f.addToRenewWheel(lock)
