@@ -5,6 +5,7 @@ import (
 	"context"
 	"github.com/RussellLuo/timingwheel"
 	"github.com/redis/go-redis/v9"
+	"sync"
 	"time"
 )
 
@@ -19,18 +20,23 @@ const (
 )
 
 type RedisLock struct {
-	client        *redis.Client
-	ttl           time.Duration
-	key, value    string
-	ctx           context.Context
-	timer         *timingwheel.Timer
-	retryOptions  *retry.RetryOptions
+	client       *redis.Client
+	ttl          time.Duration
+	key, value   string
+	ctx          context.Context
+	timer        *timingwheel.Timer
+	retryOptions *retry.RetryOptions
+
 	maxRenewCount int
 	renewCount    int
+
+	enableLocalLock bool
+	localLock       sync.Mutex
+	once            sync.Once
 }
 
-func newRedisLock(client *redis.Client, key string, ttl time.Duration, options *retry.RetryOptions, maxRenewCount int) *RedisLock {
-	return &RedisLock{
+func newRedisLock(client *redis.Client, key string, ttl time.Duration, options *retry.RetryOptions, maxRenewCount int, enableLocalLock bool) *RedisLock {
+	lock := &RedisLock{
 		client:        client,
 		ttl:           ttl,
 		key:           key,
@@ -39,6 +45,13 @@ func newRedisLock(client *redis.Client, key string, ttl time.Duration, options *
 		retryOptions:  options,
 		maxRenewCount: maxRenewCount,
 	}
+
+	if enableLocalLock {
+		lock.localLock = sync.Mutex{}
+		lock.once = sync.Once{}
+	}
+
+	return lock
 }
 
 func (l *RedisLock) addStopTimer(timer *timingwheel.Timer) {
@@ -54,6 +67,11 @@ func (l *RedisLock) SetMaxRenewCount(count int) {
 }
 
 func (l *RedisLock) Lock() error {
+	// lock locally to avoid unnecessary redis lock request
+	if l.enableLocalLock {
+		l.localLock.Lock()
+	}
+
 	// retry to lock
 	if err := retry.Retry(l.ctx, l.lock, *l.retryOptions); err != nil {
 		return err
@@ -88,8 +106,17 @@ func (l *RedisLock) doRenew() error {
 }
 
 func (l *RedisLock) cleanup() {
-	// stop renew timer
-	if l.timer != nil {
-		l.timer.Stop()
-	}
+	l.once.Do(
+		func() {
+			// unlock local lock
+			if l.enableLocalLock {
+				l.localLock.Unlock()
+			}
+
+			// stop renew timer
+			if l.timer != nil {
+				l.timer.Stop()
+			}
+		},
+	)
 }
