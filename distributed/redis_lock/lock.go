@@ -3,6 +3,7 @@ package redis_lock
 import (
 	"Lib/utils/retry"
 	"context"
+	"errors"
 	"github.com/RussellLuo/timingwheel"
 	"github.com/redis/go-redis/v9"
 	"sync"
@@ -80,6 +81,21 @@ func (l *RedisLock) Lock() error {
 	l.timer = timer
 
 	return nil
+}
+
+func (l *RedisLock) IsHoldLock() (bool, error) {
+	// get the current value of the lock from redis
+	val, err := l.client.Get(l.ctx, l.key).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return false, nil
+		}
+
+		return false, err
+	}
+
+	// check if the value is the same as the value of the lock
+	return val == l.value, nil
 }
 
 func (l *RedisLock) lock() error {
