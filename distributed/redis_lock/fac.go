@@ -72,6 +72,9 @@ func NewLockFac(client *redis.Client, options ...FacOption) *LockFac {
 		option(fac)
 	}
 
+	// start renew goroutine
+	go fac.renew()
+
 	return fac
 }
 
