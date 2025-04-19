@@ -8,6 +8,8 @@ import (
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/mark3labs/mcp-go/mcp"
+	"regexp"
+	"strings"
 )
 
 // Define the tool name
@@ -25,6 +27,7 @@ func initGlobalDB() error {
 	if err != nil {
 		return err
 	}
+
 	// 测试数据库连接
 	if err := db.Ping(); err != nil {
 		db.Close()
@@ -57,8 +60,8 @@ func querySqlTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 // 执行只读 MySQL 查询
 func executeReadOnlyQuery(db *sql.DB, query string) (*mcp.CallToolResult, error) {
 	// 检查查询是否为只读操作
-	if !isReadOnlyQuery(query) {
-		return nil, errors.New("only read-only queries are allowed")
+	if IsDestructiveSQL(query) {
+		return nil, errors.New("update, delete, drop, truncate, alter, replace, load data are not allowed contained in the query")
 	}
 
 	rows, err := db.Query(query)
@@ -108,11 +111,47 @@ func executeReadOnlyQuery(db *sql.DB, query string) (*mcp.CallToolResult, error)
 	return mcp.NewToolResultText(string(resultJSON)), nil
 }
 
-// 检查查询是否为只读操作
-func isReadOnlyQuery(query string) bool {
-	// 简单检查查询语句是否以 SELECT 开头
-	// 这里只是一个简单示例，实际应用中可能需要更复杂的检查
-	// 例如处理注释、大小写等情况
-	// 还可以使用 SQL 解析器来更准确地判断
-	return len(query) >= 6 && query[:6] == "SELECT"
+// destructiveSQLKeywords 是一个包含潜在破坏性SQL操作关键字的列表（小写）
+// 注意：这个列表可能需要根据具体需求调整
+var destructiveSQLKeywords = []string{
+	"update",
+	"delete",
+	"drop",      // 删库/删表/删索引等
+	"truncate",  // 清空表内容
+	"alter",     // 修改表结构
+	"replace",   // 插入或替换，可能覆盖数据
+	"load data", // 加载数据，可能覆盖或修改
+	// 可以根据需要添加更多关键字，例如 'grant', 'revoke', 'create user', 'set', etc.
+	// 但要注意 'create table'/'create database' 通常不被视为“破坏性”，除非目标已存在且没有 'IF NOT EXISTS'
+}
+
+// destructiveSQLPattern 是用于匹配破坏性关键字的预编译正则表达式
+// (?i) - 不区分大小写
+// \b   - 匹配单词边界，避免匹配像 'updates' 或 'fordelete' 这样的词
+// 使用 strings.Join 将关键字列表组合成 OR 模式
+var destructiveSQLPattern = regexp.MustCompile(`(?i)\b(` + strings.Join(destructiveSQLKeywords, "|") + `)\b`)
+
+// IsDestructiveSQL checks if a SQL query string contains potentially destructive keywords.
+//
+// 它使用正则表达式检查是否存在预定义的破坏性关键字（如 UPDATE, DELETE, DROP 等）。
+//
+// 注意：
+// 1. 这是基于关键字匹配的简单检查，不是完整的SQL解析。
+// 2. 可能会在 SQL 注释或字符串字面量中错误地匹配到关键字（False Positive）。
+// 3. 可能无法检测到通过存储过程或函数执行的破坏性操作。
+// 4. 检查区分单词边界（例如，不会将 'updates' 匹配为 'update'）。
+// 5. 检查不区分大小写。
+//
+// 对于需要更高安全性的场景，应考虑使用更健壮的SQL解析库或数据库用户权限控制。
+//
+// 参数:
+//
+//	query string - 要检查的 SQL 查询语句。
+//
+// 返回值:
+//
+//	bool - 如果查询包含任何破坏性关键字，则返回 true，否则返回 false。
+func IsDestructiveSQL(query string) bool {
+	// 使用预编译的正则表达式进行匹配
+	return destructiveSQLPattern.MatchString(query)
 }
