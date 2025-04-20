@@ -64,8 +64,9 @@ func querySqlTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 	if maxTokens > 0 {
 		resultLength := calculateTokenCount(result)
 		if resultLength > int(maxTokens) {
-			fmt.Printf("Query result exceeds max_tokens limit: %d > %d\n", resultLength, int(maxTokens))
-			return mcp.NewToolResultError("result exceeds max_tokens limit, please modify the query"), nil
+			errMsg := fmt.Sprintf("result exceeds max_tokens limit: actual %d > expected %d", resultLength, int(maxTokens))
+			fmt.Println(errMsg)
+			return mcp.NewToolResultError(errMsg), nil
 		}
 	}
 

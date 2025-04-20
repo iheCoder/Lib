@@ -18,7 +18,7 @@ func TestExecuteReadOnlyQuery(t *testing.T) {
 		t.Fatalf("failed to execute read-only query: %v", err)
 	}
 
-	fmt.Println("Query result:", result.Content)
+	fmt.Println("Query result:", result)
 }
 
 func TestIsDestructiveSQL(t *testing.T) {
