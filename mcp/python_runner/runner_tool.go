@@ -1,4 +1,4 @@
-package python_runner
+package main
 
 import (
 	"context"
