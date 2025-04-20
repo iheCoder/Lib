@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/mark3labs/mcp-go/mcp"
 	"regexp"
@@ -39,9 +38,6 @@ func initGlobalDB() error {
 }
 
 func querySqlTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// 打印请求参数
-	fmt.Printf("Received request: %v\n", request.Params.Arguments)
-
 	// 获取查询参数
 	query, ok := request.Params.Arguments["query"].(string)
 	if !ok || query == "" {

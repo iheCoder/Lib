@@ -23,6 +23,7 @@ func main() {
 		server.WithResourceCapabilities(true, true),
 		server.WithPromptCapabilities(true),
 		server.WithToolCapabilities(true),
+		server.WithToolHandlerMiddleware(loggingMiddleware),
 	)
 
 	// 添加查询mysql数据库数据的工具
