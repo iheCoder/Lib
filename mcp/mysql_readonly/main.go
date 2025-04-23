@@ -1,6 +1,7 @@
 package main
 
 import (
+	"Lib/mcp/middleware"
 	"fmt"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -23,7 +24,7 @@ func main() {
 		server.WithResourceCapabilities(true, true),
 		server.WithPromptCapabilities(true),
 		server.WithToolCapabilities(true),
-		server.WithToolHandlerMiddleware(loggingMiddleware),
+		server.WithToolHandlerMiddleware(middleware.LoggingMiddleware),
 	)
 
 	// 添加查询mysql数据库数据的工具
