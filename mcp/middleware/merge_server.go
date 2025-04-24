@@ -37,6 +37,15 @@ func NewMCPServer(name, version string, options ...server.ServerOption) *MCPServ
 		Version: version,
 	}
 
+	// 默认添加logging中间件
+	options = append(options, server.WithToolHandlerMiddleware(LoggingMiddleware))
+	// 默认添加资源能力
+	options = append(options, server.WithResourceCapabilities(true, true))
+	// 默认添加提示能力
+	options = append(options, server.WithPromptCapabilities(true))
+	// 默认添加工具能力
+	options = append(options, server.WithToolCapabilities(true))
+
 	ms.server = server.NewMCPServer(name, version, options...)
 	return ms
 }
@@ -58,16 +67,11 @@ func (ms *MCPServer) Run(baseURL, addr, sseEndpoint, messageEndpoint string) err
 	)
 
 	// 启动服务器
-	if err := sseServer.Start(addr); err != nil {
-		return err
-	}
-
-	// 处理系统信号
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 	go func() {
-		<-signalChan
-		sseServer.Shutdown(context.Background())
+		if err := sseServer.Start(addr); err != nil {
+			log.Printf("服务器启动失败: %v\n", err)
+			return
+		}
 	}()
 
 	// 等待服务器完全启动
@@ -75,6 +79,13 @@ func (ms *MCPServer) Run(baseURL, addr, sseEndpoint, messageEndpoint string) err
 	// 例如，等待一段时间或检查某个状态
 	time.Sleep(100 * time.Millisecond)
 	log.Printf("服务器已启动，可以通过 %s 访问\n", baseURL+sseEndpoint)
+
+	// 处理系统信号
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
+	<-signalChan
+	sseServer.Shutdown(context.Background())
+	log.Println("服务器已安全关闭")
 
 	return nil
 }
