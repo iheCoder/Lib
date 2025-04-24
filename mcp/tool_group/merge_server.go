@@ -1,6 +1,7 @@
-package middleware
+package tool_group
 
 import (
+	"Lib/mcp/middleware"
 	"context"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -38,7 +39,7 @@ func NewMCPServer(name, version string, options ...server.ServerOption) *MCPServ
 	}
 
 	// 默认添加logging中间件
-	options = append(options, server.WithToolHandlerMiddleware(LoggingMiddleware))
+	options = append(options, server.WithToolHandlerMiddleware(middleware.LoggingMiddleware))
 	// 默认添加资源能力
 	options = append(options, server.WithResourceCapabilities(true, true))
 	// 默认添加提示能力
