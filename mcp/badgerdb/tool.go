@@ -1,7 +1,7 @@
 package main
 
 import (
-	"Lib/mcp/middleware"
+	"Lib/mcp/tool_group"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -20,7 +20,18 @@ func init() {
 	}
 }
 
-var addKeyValueTool = middleware.MCPToolItem{
+// BadgerDBToolGroup is a group of tools for interacting with BadgerDB.
+var BadgerDBToolGroup = tool_group.ToolGroup{
+	Name: "BadgerDB Tools",
+	Items: []tool_group.MCPToolItem{
+		addKeyValueTool,
+		getValueByKeyTool,
+		listKeysAndValuesTool,
+		searchKeysAndValuesTool,
+	},
+}
+
+var addKeyValueTool = tool_group.MCPToolItem{
 	Tool: mcp.NewTool("add_key_value",
 		mcp.WithDescription("Add a key-value pair to the BadgerDB"),
 		mcp.WithString("key", mcp.Required(), mcp.Description("The key")),
@@ -37,7 +48,7 @@ var addKeyValueTool = middleware.MCPToolItem{
 	},
 }
 
-var getValueByKeyTool = middleware.MCPToolItem{
+var getValueByKeyTool = tool_group.MCPToolItem{
 	Tool: mcp.NewTool("get_value_by_key",
 		mcp.WithDescription("Get a value by key from the BadgerDB"),
 		mcp.WithString("key", mcp.Required(), mcp.Description("The key")),
@@ -52,7 +63,7 @@ var getValueByKeyTool = middleware.MCPToolItem{
 	},
 }
 
-var listKeysAndValuesTool = middleware.MCPToolItem{
+var listKeysAndValuesTool = tool_group.MCPToolItem{
 	Tool: mcp.NewTool("list_keys_and_values",
 		mcp.WithDescription("List all key-value pairs in the BadgerDB"),
 	),
@@ -68,7 +79,7 @@ var listKeysAndValuesTool = middleware.MCPToolItem{
 	},
 }
 
-var searchKeysAndValuesTool = middleware.MCPToolItem{
+var searchKeysAndValuesTool = tool_group.MCPToolItem{
 	Tool: mcp.NewTool("search_keys_and_values",
 		mcp.WithDescription("Search key-value pairs by keyword with offset and limit"),
 		mcp.WithString("keyword", mcp.Required(), mcp.Description("Keyword to search")),
