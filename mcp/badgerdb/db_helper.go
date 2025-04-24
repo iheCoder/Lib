@@ -1,6 +1,9 @@
 package main
 
-import "github.com/dgraph-io/badger/v4"
+import (
+	"github.com/dgraph-io/badger/v4"
+	"strings"
+)
 
 type Database struct {
 	db *badger.DB
@@ -72,4 +75,46 @@ func (d *Database) Delete(key string) error {
 		err := txn.Delete([]byte(key))
 		return err
 	})
+}
+
+// SearchKeysAndValuesWithFilter searches key-value pairs containing the keyword, with offset and limit for pagination.
+func (d *Database) SearchKeysAndValuesWithFilter(keyword string, offset int, limit int) (map[string]string, error) {
+	results := make(map[string]string)
+	err := d.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchValues = true
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		count := 0
+		skipped := 0
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+			k := item.Key()
+			if !strings.Contains(string(k), keyword) {
+				continue
+			}
+
+			if skipped < offset {
+				skipped++
+				continue
+			}
+			if count >= limit {
+				break
+			}
+
+			v, err := item.ValueCopy(nil)
+			if err != nil {
+				return err
+			}
+			results[string(k)] = string(v)
+			count++
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
 }

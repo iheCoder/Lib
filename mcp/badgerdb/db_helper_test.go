@@ -77,3 +77,52 @@ func TestListAllKeysAndValues(t *testing.T) {
 		t.Logf("Key: %s, Value: %s", k, v)
 	}
 }
+
+func TestSearchKeyAndValuesWithFilter(t *testing.T) {
+	db, err := NewDatabase()
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer db.db.Close()
+
+	// 添加多个键值对
+	db.Add("alpha", "1")
+	db.Add("beta", "2")
+	db.Add("gamma", "3")
+
+	results, err := db.SearchKeysAndValuesWithFilter("a", 0, 1)
+	if err != nil {
+		t.Errorf("SearchKeysAndValuesWithFilter failed: %v", err)
+	}
+
+	if len(results) < 1 {
+		t.Errorf("Expected at least 1 entry, got %d", len(results))
+	}
+
+	for k, v := range results {
+		t.Logf("Key: %s, Value: %s", k, v)
+	}
+
+	// 测试没有匹配的键
+	results, err = db.SearchKeysAndValuesWithFilter("nonexistent", 0, 1)
+	if err != nil {
+		t.Errorf("SearchKeysAndValuesWithFilter failed: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("Expected 0 entries, got %d", len(results))
+	}
+
+	// 删除测试数据
+	err = db.Delete("alpha")
+	if err != nil {
+		t.Errorf("Delete failed: %v", err)
+	}
+	err = db.Delete("beta")
+	if err != nil {
+		t.Errorf("Delete failed: %v", err)
+	}
+	err = db.Delete("gamma")
+	if err != nil {
+		t.Errorf("Delete failed: %v", err)
+	}
+}
