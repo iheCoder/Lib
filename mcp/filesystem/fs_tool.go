@@ -1,4 +1,4 @@
-package main
+package filesystem
 
 import (
 	"Lib/mcp/tool_group"

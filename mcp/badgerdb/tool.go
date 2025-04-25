@@ -1,4 +1,4 @@
-package main
+package badgerdb
 
 import (
 	"Lib/mcp/tool_group"
