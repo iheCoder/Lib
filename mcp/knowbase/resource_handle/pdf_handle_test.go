@@ -1,10 +1,10 @@
-package knowbase
+package resource_handle
 
 import "testing"
 
 func TestPdfToChunks(t *testing.T) {
-	pdfPath := "./testdata/redbook-5th-edition.pdf"
-	chunks, err := ExtractPDFTextIntoChunks(pdfPath, 10)
+	pdfPath := "../testdata/redbook-5th-edition.pdf"
+	chunks, err := ExtractPDFTextIntoChunks(pdfPath, 1000, HandleModeByChars)
 	if err != nil {
 		t.Errorf("error: %v", err)
 		return
