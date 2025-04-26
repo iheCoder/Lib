@@ -122,6 +122,14 @@ func toPayload(m map[string]interface{}) map[string]*qdrant.Value {
 			payload[k] = &qdrant.Value{Kind: &qdrant.Value_StringValue{StringValue: val}}
 		case float64:
 			payload[k] = &qdrant.Value{Kind: &qdrant.Value_DoubleValue{DoubleValue: val}}
+		case int:
+			payload[k] = &qdrant.Value{Kind: &qdrant.Value_IntegerValue{IntegerValue: int64(val)}}
+		case int64:
+			payload[k] = &qdrant.Value{Kind: &qdrant.Value_IntegerValue{IntegerValue: val}}
+		case bool:
+			payload[k] = &qdrant.Value{Kind: &qdrant.Value_BoolValue{BoolValue: val}}
+		default:
+			// 忽略未知类型
 		}
 	}
 	return payload
