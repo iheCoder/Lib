@@ -1,7 +1,12 @@
 package resource_handle
 
 import (
-	"github.com/ledongthuc/pdf"
+	"errors"
+	"github.com/pdfcpu/pdfcpu/pkg/api"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
+	"io"
+	"os"
 	"strings"
 )
 
@@ -15,7 +20,7 @@ const (
 )
 
 // ExtractPDFTextIntoChunks extracts text from a PDF and splits it into chunks,
-// either by lines or by characters depending on mode ("lines" or "chars").
+// either by lines or by characters depending on mode.
 func ExtractPDFTextIntoChunks(filepath string, sizePerChunk int, mode HandleMode) ([]string, error) {
 	text, err := extractTextFromPDF(filepath)
 	if err != nil {
@@ -32,30 +37,68 @@ func ExtractPDFTextIntoChunks(filepath string, sizePerChunk int, mode HandleMode
 	}
 }
 
+// extractTextFromPDF 从指定的 PDF 文件中提取文本内容
 func extractTextFromPDF(filePath string) (string, error) {
-	f, r, err := pdf.Open(filePath)
+	// 检查文件是否存在
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return "", errors.New("文件不存在")
+	}
+
+	// 打开文件
+	file, err := os.Open(filePath)
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer file.Close()
 
-	var textBuilder strings.Builder
-	totalPage := r.NumPage()
-	for pageIndex := 1; pageIndex <= totalPage; pageIndex++ {
-		p := r.Page(pageIndex)
-		if p.V.IsNull() {
+	// 创建默认配置
+	conf := model.NewDefaultConfiguration()
+	conf.Cmd = model.EXTRACTCONTENT
+
+	// 读取、验证和优化 PDF 文件
+	ctx, err := api.ReadValidateAndOptimize(file, conf)
+	if err != nil {
+		return "", err
+	}
+
+	// 获取所有页面
+	pages, err := api.PagesForPageSelection(ctx.PageCount, nil, true, true)
+	if err != nil {
+		return "", err
+	}
+
+	// 用于存储提取的文本
+	var text string
+
+	// 遍历所有页面
+	for p, v := range pages {
+		if !v {
 			continue
 		}
-		content, err := p.GetPlainText(nil)
+
+		// 提取页面内容
+		r, err := pdfcpu.ExtractPageContent(ctx, p)
 		if err != nil {
 			return "", err
 		}
-		textBuilder.WriteString(content)
+		if r == nil {
+			continue
+		}
+
+		// 读取页面内容
+		content, err := io.ReadAll(r)
+		if err != nil {
+			return "", err
+		}
+
+		// 将页面内容添加到文本中
+		text += string(content)
 	}
 
-	return textBuilder.String(), nil
+	return text, nil
 }
 
+// splitTextIntoChunksByLines 按行分块
 func splitTextIntoChunksByLines(text string, linesPerChunk int) []string {
 	lines := strings.Split(text, "\n")
 	var chunks []string
@@ -71,7 +114,7 @@ func splitTextIntoChunksByLines(text string, linesPerChunk int) []string {
 	return chunks
 }
 
-// splitTextIntoChunksByChars splits text into chunks of n characters (runes).
+// splitTextIntoChunksByChars 按字符分块
 func splitTextIntoChunksByChars(text string, charsPerChunk int) []string {
 	var chunks []string
 	runes := []rune(text)
