@@ -16,7 +16,7 @@ type EmbedResponse struct {
 	Embeddings [][]float64 `json:"embeddings"`
 }
 
-func generateLocalEmbedding(texts []string) ([][]float64, error) {
+func GenerateLocalEmbedding(texts []string) ([][]float64, error) {
 	url := "http://localhost:8000/embed"
 
 	reqBody := EmbedRequest{

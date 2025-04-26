@@ -1,4 +1,6 @@
 import fitz  # PyMuPDF
+import sys
+import json
 
 class HandleMode:
     BY_LINES = 0
@@ -38,11 +40,16 @@ def split_text_into_chunks_by_chars(text, chars_per_chunk):
         chunks.append(chunk)
     return chunks
 
+
 if __name__ == "__main__":
-    filepath = "../testdata/redbook-5th-edition.pdf"
+    if len(sys.argv) < 4:
+        print("Usage: python pdf_handle.py <pdf_path> <size_per_chunk> <mode>")
+        sys.exit(1)
 
-    # 按字符切片
-    chunks = extract_pdf_text_into_chunks(filepath, 1000, HandleMode.BY_CHARS)
+    pdf_path = sys.argv[1]
+    size_per_chunk = int(sys.argv[2])
+    mode = int(sys.argv[3])
 
-    for idx, chunk in enumerate(chunks):
-        print(f"Chunk {idx+1}:\n{chunk}\n{'='*40}")
+    chunks = extract_pdf_text_into_chunks(pdf_path, size_per_chunk, mode)
+
+    print(json.dumps(chunks, ensure_ascii=False))

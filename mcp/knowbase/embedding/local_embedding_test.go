@@ -8,7 +8,7 @@ import (
 func TestLocalEmbedding(t *testing.T) {
 	texts := []string{"你好，世界", "hello, world"}
 
-	embeddings, err := generateLocalEmbedding(texts)
+	embeddings, err := GenerateLocalEmbedding(texts)
 	if err != nil {
 		t.Errorf("Embedding error: %v\n", err)
 		return

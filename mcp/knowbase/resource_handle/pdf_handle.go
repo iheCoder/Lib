@@ -1,14 +1,33 @@
 package resource_handle
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 )
+
+func ExtractPDFChunksByPython(pdfPath string, sizePerChunk int, mode HandleMode) ([]string, error) {
+	cmd := exec.Command("python3", "pdf_handle.py", pdfPath, fmt.Sprintf("%d", sizePerChunk), fmt.Sprintf("%d", mode))
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	var chunks []string
+	err = json.Unmarshal(out, &chunks)
+	if err != nil {
+		return nil, err
+	}
+
+	return chunks, nil
+}
 
 type HandleMode int32
 
