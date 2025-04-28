@@ -57,6 +57,13 @@ func main() {
 		mcp.WithNumber("size", mcp.Description("The number of bytes to read, default is all remaining bytes")),
 	), handleReadFileContent)
 
+	// 添加获取视频信息的工具
+	mcpServer.AddTool(mcp.NewTool(
+		ToolGetVideoInfo,
+		mcp.WithDescription("Get information about a video file"),
+		mcp.WithString("path", mcp.Description("The path of the video file"), mcp.Required()),
+	), handleGetVideoInfo)
+
 	// 创建 SSE 服务器
 	sseServer := server.NewSSEServer(mcpServer,
 		server.WithBaseURL("http://localhost:8080"),
