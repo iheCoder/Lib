@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"github.com/mark3labs/mcp-go/mcp"
 	"math/big"
@@ -81,6 +82,11 @@ func runPythonCode(code string) (string, error) {
 	cmd := exec.Command("python3", tmpFile.Name())
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		if len(output) > 0 {
+			return "", errors.New(string(output))
+		}
+
+		// If there is no output, return the error
 		return "", err
 	}
 
