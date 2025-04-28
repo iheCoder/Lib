@@ -1,6 +1,9 @@
-package main
+package badgerdb
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestAddGetDelete(t *testing.T) {
 	db, err := NewDatabase()
@@ -125,4 +128,15 @@ func TestSearchKeyAndValuesWithFilter(t *testing.T) {
 	if err != nil {
 		t.Errorf("Delete failed: %v", err)
 	}
+}
+
+func TestListKeysAndValues(t *testing.T) {
+	// 查询所有键值对
+	results, err := db.ListKeysAndValues()
+	if err != nil {
+		t.Errorf("ListKeysAndValues failed: %v", err)
+		return
+	}
+
+	fmt.Printf("Keys and Values: %+v\n", results)
 }
