@@ -3,6 +3,7 @@ package filesystem
 import (
 	"Lib/mcp/tool_group"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -78,6 +79,15 @@ var readFileByDelimiterTool = tool_group.MCPToolItem{
 	Handler: handleReadFileByDelimiter,
 }
 
+// 文件系统工具：获取视频信息
+var getVideoInfoTool = tool_group.MCPToolItem{
+	Tool: mcp.NewTool(
+		ToolGetVideoInfo,
+		mcp.WithString("path", mcp.Description("The dir of the video file to read"), mcp.Required()),
+	),
+	Handler: handleGetVideoInfo,
+}
+
 // FileSystemToolGroup 组合成工具组
 var FileSystemToolGroup = tool_group.ToolGroup{
 	Name: "filesystem",
@@ -88,7 +98,67 @@ var FileSystemToolGroup = tool_group.ToolGroup{
 		writeToFileTool,
 		readFileTool,
 		readFileByDelimiterTool,
+		getVideoInfoTool,
 	},
+}
+
+func handleGetVideoInfo(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	documentsPath, ok := request.Params.Arguments["path"].(string)
+	if !ok {
+		return nil, errors.New("missing 'path' parameter")
+	}
+
+	files, err := ioutil.ReadDir(documentsPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var videoInfos []map[string]interface{}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		// 判断是否是视频文件
+		ext := strings.ToLower(filepath.Ext(file.Name()))
+		if ext != ".mp4" && ext != ".mkv" && ext != ".avi" && ext != ".mov" {
+			continue
+		}
+
+		fullPath := filepath.Join(documentsPath, file.Name())
+		fileInfo, err := os.Stat(fullPath)
+		if err != nil {
+			continue
+		}
+
+		// 调用 ffprobe 获取时长和分辨率
+		duration, width, height, err := getVideoMetadata(fullPath)
+		if err != nil {
+			continue
+		}
+
+		videoInfos = append(videoInfos, map[string]interface{}{
+			"name":        file.Name(),
+			"size_bytes":  fileInfo.Size(),
+			"created_at":  fileInfo.ModTime().Format("2006-01-02 15:04:05"), // macOS 无法直接拿创建时间
+			"modified_at": fileInfo.ModTime().Format("2006-01-02 15:04:05"),
+			"duration":    duration,
+			"width":       width,
+			"height":      height,
+		})
+	}
+
+	videoInfosJSON, _ := json.Marshal(videoInfos)
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "json",
+				Text: string(videoInfosJSON),
+			},
+		},
+	}, nil
 }
 
 // 定义工具名称
@@ -99,6 +169,7 @@ const (
 	ToolWriteToFile         = "write_to_file"
 	ToolReadFile            = "read_file"
 	ToolReadFileByDelimiter = "read_file_by_delimiter"
+	ToolGetVideoInfo        = "get_video_info"
 )
 
 // handleReadFileByDelimiter 处理读取根据分隔符读取文件的工具请求
