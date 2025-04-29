@@ -1,19 +1,28 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"testing"
 )
 
-func TestExecuteReadOnlyQuery(t *testing.T) {
+func initDBForTest() *sql.DB {
 	// 初始化mysql连接
 	if err := initGlobalDB(); err != nil {
-		t.Fatalf("failed to initialize MySQL: %v", err)
+		panic(fmt.Sprintf("failed to initialize MySQL: %v", err))
 	}
+
+	// 这里可以返回一个特定的数据库连接，或者使用全局的 dbSources
+	return dbSources["learn"]
+}
+
+func TestExecuteReadOnlyQuery(t *testing.T) {
+	// 初始化mysql连接
+	testDB := initDBForTest()
 
 	// 测试查询语句
 	query := "SELECT * FROM sales LIMIT 10"
-	result, err := executeReadOnlyQuery(globalDB, query)
+	result, err := executeReadOnlyQuery(testDB, query)
 	if err != nil {
 		t.Fatalf("failed to execute read-only query: %v", err)
 	}

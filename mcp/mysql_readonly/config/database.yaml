@@ -1,3 +1,2 @@
 databases:
   learn: root:123456@tcp(127.0.0.1:3306)/learn
-  report: user:password@tcp(127.0.0.1:3306)/report

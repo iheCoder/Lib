@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"gopkg.in/yaml.v3"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -28,7 +29,9 @@ type DatabaseConfig struct {
 
 // 连接 MySQL 数据库
 func initGlobalDB() error {
-	data, err := os.ReadFile("config/database.yaml")
+	cwd, _ := os.Getwd()
+	filePath := filepath.Join(cwd, "mcp/mysql_readonly/config/database.yaml")
+	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("读取数据库配置文件失败: %v", err)
 	}
