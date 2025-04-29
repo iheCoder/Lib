@@ -8,6 +8,8 @@ import (
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/mark3labs/mcp-go/mcp"
+	"gopkg.in/yaml.v3"
+	"os"
 	"regexp"
 	"strings"
 )
@@ -20,15 +22,23 @@ const (
 
 var dbSources = make(map[string]*sql.DB)
 
+type DatabaseConfig struct {
+	Databases map[string]string `yaml:"databases"`
+}
+
 // 连接 MySQL 数据库
 func initGlobalDB() error {
-	// 这里假设使用硬编码的 map，可以改为读取 JSON 或 YAML 配置文件
-	configs := map[string]string{
-		"learn":  "root:123456@tcp(127.0.0.1:3306)/learn",
-		"report": "user:password@tcp(127.0.0.1:3306)/report",
+	data, err := os.ReadFile("config/database.yaml")
+	if err != nil {
+		return fmt.Errorf("读取数据库配置文件失败: %v", err)
 	}
 
-	for name, dsn := range configs {
+	var config DatabaseConfig
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("解析数据库配置文件失败: %v", err)
+	}
+
+	for name, dsn := range config.Databases {
 		db, err := sql.Open("mysql", dsn)
 		if err != nil {
 			return fmt.Errorf("连接数据库 %s 失败: %v", name, err)
@@ -38,6 +48,7 @@ func initGlobalDB() error {
 		}
 		dbSources[name] = db
 	}
+
 	return nil
 }
 
