@@ -52,6 +52,15 @@ func initGlobalDB() error {
 	return nil
 }
 
+// getAvailableSources 返回当前已加载的数据库源名称列表
+func getAvailableSources() []string {
+	sources := make([]string, 0, len(dbSources))
+	for name := range dbSources {
+		sources = append(sources, name)
+	}
+	return sources
+}
+
 func querySqlTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	// 获取查询参数
 	query, ok := request.Params.Arguments["query"].(string)
