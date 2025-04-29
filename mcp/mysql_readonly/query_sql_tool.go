@@ -18,24 +18,26 @@ const (
 	defaultMaxTokens      = 60000 // 默认最大tokens数量
 )
 
-var globalDB *sql.DB
+var dbSources = make(map[string]*sql.DB)
 
 // 连接 MySQL 数据库
 func initGlobalDB() error {
-	// 请根据实际情况修改数据库连接信息
-	dsn := "root:123456@tcp(127.0.0.1:3306)/learn"
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		return err
+	// 这里假设使用硬编码的 map，可以改为读取 JSON 或 YAML 配置文件
+	configs := map[string]string{
+		"learn":  "root:123456@tcp(127.0.0.1:3306)/learn",
+		"report": "user:password@tcp(127.0.0.1:3306)/report",
 	}
 
-	// 测试数据库连接
-	if err := db.Ping(); err != nil {
-		db.Close()
-		return err
+	for name, dsn := range configs {
+		db, err := sql.Open("mysql", dsn)
+		if err != nil {
+			return fmt.Errorf("连接数据库 %s 失败: %v", name, err)
+		}
+		if err := db.Ping(); err != nil {
+			return fmt.Errorf("ping 数据库 %s 失败: %v", name, err)
+		}
+		dbSources[name] = db
 	}
-
-	globalDB = db
 	return nil
 }
 
@@ -47,6 +49,15 @@ func querySqlTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 		return mcp.NewToolResultError("missing or invalid 'query' parameter"), nil
 	}
 
+	source := "learn"
+	if val, ok := request.Params.Arguments["source"].(string); ok && val != "" {
+		source = val
+	}
+	db, ok := dbSources[source]
+	if !ok {
+		return mcp.NewToolResultError(fmt.Sprintf("未知的数据源: %s", source)), nil
+	}
+
 	// 获取最大tokens数量，若未提供，则不限制
 	maxTokens, ok := request.Params.Arguments["max_tokens"].(float64)
 	if !ok {
@@ -54,7 +65,7 @@ func querySqlTool(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallTo
 	}
 
 	// 执行只读 MySQL 查询
-	result, err := executeReadOnlyQuery(globalDB, query)
+	result, err := executeReadOnlyQuery(db, query)
 	if err != nil {
 		fmt.Printf("Error executing query %s error %v\n", query, err)
 		return mcp.NewToolResultError(err.Error()), nil

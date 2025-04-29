@@ -33,6 +33,7 @@ func main() {
 		mcp.WithDescription("查询mysql数据库数据"),
 		mcp.WithString("query", mcp.Description("mysql查询语句"), mcp.Required()),
 		mcp.WithNumber("max_tokens", mcp.Description("限制查询返回数据的最大token数量，请输入本模型的最大支持tokens数，默认为60000")),
+		mcp.WithString("source", mcp.Description("指定使用的数据源名称")),
 	), querySqlTool)
 
 	// 创建 SSE 服务器
