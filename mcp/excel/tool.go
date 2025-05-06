@@ -26,6 +26,20 @@ var ExcelToolGroup = tool_group.ToolGroup{
 	},
 }
 
+func getExcelFile(filename string) (*excelize.File, error) {
+	if f, ok := files[filename]; ok {
+		return f, nil
+	}
+
+	f, err := excelize.OpenFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("file not found and failed to open: %s", filename)
+	}
+	files[filename] = f
+
+	return f, nil
+}
+
 var newExcelTool = tool_group.MCPToolItem{
 	Tool: mcp.NewTool("new_excel_file",
 		mcp.WithDescription("Create a new Excel file with a given name"),
@@ -55,9 +69,9 @@ var readRowsTool = tool_group.MCPToolItem{
 		sheet := req.Params.Arguments["sheet"].(string)
 		rowsStr := req.Params.Arguments["rows"].(string)
 
-		f, ok := files[filename]
-		if !ok {
-			return nil, fmt.Errorf("file not found: %s", filename)
+		f, err := getExcelFile(filename)
+		if err != nil {
+			return nil, err
 		}
 
 		var result = map[string][]string{}
@@ -88,9 +102,9 @@ var readColsTool = tool_group.MCPToolItem{
 		sheet := req.Params.Arguments["sheet"].(string)
 		colsStr := req.Params.Arguments["columns"].(string)
 
-		f, ok := files[filename]
-		if !ok {
-			return nil, fmt.Errorf("file not found: %s", filename)
+		f, err := getExcelFile(filename)
+		if err != nil {
+			return nil, err
 		}
 
 		result := map[string][]string{}
@@ -122,9 +136,9 @@ var writeRowsTool = tool_group.MCPToolItem{
 		sheet := req.Params.Arguments["sheet"].(string)
 		rowsJSON := req.Params.Arguments["rows_data"].(string)
 
-		f, ok := files[filename]
-		if !ok {
-			return nil, fmt.Errorf("file not found: %s", filename)
+		f, err := getExcelFile(filename)
+		if err != nil {
+			return nil, err
 		}
 		var rows map[string][]string
 		if err := json.Unmarshal([]byte(rowsJSON), &rows); err != nil {
@@ -132,10 +146,15 @@ var writeRowsTool = tool_group.MCPToolItem{
 		}
 
 		for r, vals := range rows {
-			ridx, _ := parseInt(r)
+			ridx, err := parseInt(r)
+			if err != nil {
+				return nil, fmt.Errorf("invalid row number: %s", r)
+			}
 			for i, val := range vals {
 				cell, _ := excelize.CoordinatesToCellName(i+1, ridx)
-				f.SetCellValue(sheet, cell, val)
+				if err := f.SetCellValue(sheet, cell, val); err != nil {
+					return nil, err
+				}
 			}
 		}
 
@@ -159,21 +178,31 @@ var writeColsTool = tool_group.MCPToolItem{
 		sheet := req.Params.Arguments["sheet"].(string)
 		colsJSON := req.Params.Arguments["cols_data"].(string)
 
-		f, ok := files[filename]
-		if !ok {
-			return nil, fmt.Errorf("file not found: %s", filename)
+		f, err := getExcelFile(filename)
+		if err != nil {
+			return nil, err
 		}
 		var cols map[string][]string
 		if err := json.Unmarshal([]byte(colsJSON), &cols); err != nil {
 			return nil, err
 		}
 		for col, vals := range cols {
-			colIdx, _ := excelize.ColumnNameToNumber(col)
+			colIdx, err := excelize.ColumnNameToNumber(col)
+			if err != nil {
+				return nil, fmt.Errorf("invalid column letter: %s", col)
+			}
 			for i, val := range vals {
 				cell, _ := excelize.CoordinatesToCellName(colIdx, i+1)
-				f.SetCellValue(sheet, cell, val)
+				if err := f.SetCellValue(sheet, cell, val); err != nil {
+					return nil, err
+				}
 			}
 		}
+
+		if err := f.Save(); err != nil {
+			return nil, fmt.Errorf("failed to save Excel file: %v", err)
+		}
+
 		return mcp.NewToolResultText("Columns written successfully."), nil
 	},
 }
@@ -187,9 +216,9 @@ var addSheetTool = tool_group.MCPToolItem{
 	Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		filename := req.Params.Arguments["filename"].(string)
 		sheetName := req.Params.Arguments["sheet_name"].(string)
-		f, ok := files[filename]
-		if !ok {
-			return nil, fmt.Errorf("file not found: %s", filename)
+		f, err := getExcelFile(filename)
+		if err != nil {
+			return nil, err
 		}
 		f.NewSheet(sheetName)
 		return mcp.NewToolResultText("Sheet added successfully."), nil
@@ -205,9 +234,9 @@ var deleteSheetTool = tool_group.MCPToolItem{
 	Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		filename := req.Params.Arguments["filename"].(string)
 		sheetName := req.Params.Arguments["sheet_name"].(string)
-		f, ok := files[filename]
-		if !ok {
-			return nil, fmt.Errorf("file not found: %s", filename)
+		f, err := getExcelFile(filename)
+		if err != nil {
+			return nil, err
 		}
 		f.DeleteSheet(sheetName)
 		return mcp.NewToolResultText("Sheet deleted."), nil
@@ -225,9 +254,9 @@ var renameSheetTool = tool_group.MCPToolItem{
 		filename := req.Params.Arguments["filename"].(string)
 		oldName := req.Params.Arguments["old_name"].(string)
 		newName := req.Params.Arguments["new_name"].(string)
-		f, ok := files[filename]
-		if !ok {
-			return nil, fmt.Errorf("file not found: %s", filename)
+		f, err := getExcelFile(filename)
+		if err != nil {
+			return nil, err
 		}
 		f.SetSheetName(oldName, newName)
 		return mcp.NewToolResultText("Sheet renamed."), nil
