@@ -42,34 +42,34 @@ func getExcelFile(filename string) (*excelize.File, error) {
 
 var newExcelTool = tool_group.MCPToolItem{
 	Tool: mcp.NewTool("new_excel_file",
-		mcp.WithDescription("Create a new Excel file with a given name"),
-		mcp.WithString("filename", mcp.Required(), mcp.Description("Name of the Excel file")),
+		mcp.WithDescription("Create a new Excel file with a given path"),
+		mcp.WithString("filepath", mcp.Required(), mcp.Description("path of the Excel file")),
 	),
 	Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		filename := req.Params.Arguments["filename"].(string)
+		filepath := req.Params.Arguments["filepath"].(string)
 
-		files[filename] = excelize.NewFile()
-		if err := files[filename].SaveAs(filename); err != nil {
+		files[filepath] = excelize.NewFile()
+		if err := files[filepath].SaveAs(filepath); err != nil {
 			return nil, fmt.Errorf("failed to save Excel file: %v", err)
 		}
 
-		return mcp.NewToolResultText(fmt.Sprintf("Excel file %q created.", filename)), nil
+		return mcp.NewToolResultText(fmt.Sprintf("Excel file %q created.", filepath)), nil
 	},
 }
 
 var readRowsTool = tool_group.MCPToolItem{
 	Tool: mcp.NewTool("read_rows",
 		mcp.WithDescription("Read specific rows from a sheet"),
-		mcp.WithString("filename", mcp.Required(), mcp.Description("Excel filename")),
+		mcp.WithString("filepath", mcp.Required(), mcp.Description("path of the Excel file")),
 		mcp.WithString("sheet", mcp.Required(), mcp.Description("Sheet name")),
 		mcp.WithString("rows", mcp.Required(), mcp.Description("Comma-separated row numbers")),
 	),
 	Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		filename := req.Params.Arguments["filename"].(string)
+		filepath := req.Params.Arguments["filepath"].(string)
 		sheet := req.Params.Arguments["sheet"].(string)
 		rowsStr := req.Params.Arguments["rows"].(string)
 
-		f, err := getExcelFile(filename)
+		f, err := getExcelFile(filepath)
 		if err != nil {
 			return nil, err
 		}
@@ -93,16 +93,16 @@ var readRowsTool = tool_group.MCPToolItem{
 var readColsTool = tool_group.MCPToolItem{
 	Tool: mcp.NewTool("read_columns",
 		mcp.WithDescription("Read specific columns from a sheet"),
-		mcp.WithString("filename", mcp.Required()),
-		mcp.WithString("sheet", mcp.Required()),
+		mcp.WithString("filepath", mcp.Required(), mcp.Description("path of the Excel file")),
+		mcp.WithString("sheet", mcp.Required(), mcp.Description("sheet name")),
 		mcp.WithString("columns", mcp.Required(), mcp.Description("Comma-separated column letters")),
 	),
 	Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		filename := req.Params.Arguments["filename"].(string)
+		filepath := req.Params.Arguments["filepath"].(string)
 		sheet := req.Params.Arguments["sheet"].(string)
 		colsStr := req.Params.Arguments["columns"].(string)
 
-		f, err := getExcelFile(filename)
+		f, err := getExcelFile(filepath)
 		if err != nil {
 			return nil, err
 		}
@@ -127,16 +127,16 @@ var readColsTool = tool_group.MCPToolItem{
 var writeRowsTool = tool_group.MCPToolItem{
 	Tool: mcp.NewTool("write_rows",
 		mcp.WithDescription("Write content to specific rows"),
-		mcp.WithString("filename", mcp.Required()),
-		mcp.WithString("sheet", mcp.Required()),
+		mcp.WithString("filepath", mcp.Required(), mcp.Description("path of the Excel file")),
+		mcp.WithString("sheet", mcp.Required(), mcp.Description("sheet name")),
 		mcp.WithString("rows_data", mcp.Required(), mcp.Description("JSON of {row_number: [values]}")),
 	),
 	Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		filename := req.Params.Arguments["filename"].(string)
+		filepath := req.Params.Arguments["filepath"].(string)
 		sheet := req.Params.Arguments["sheet"].(string)
 		rowsJSON := req.Params.Arguments["rows_data"].(string)
 
-		f, err := getExcelFile(filename)
+		f, err := getExcelFile(filepath)
 		if err != nil {
 			return nil, err
 		}
@@ -169,16 +169,16 @@ var writeRowsTool = tool_group.MCPToolItem{
 var writeColsTool = tool_group.MCPToolItem{
 	Tool: mcp.NewTool("write_columns",
 		mcp.WithDescription("Write content to specific columns"),
-		mcp.WithString("filename", mcp.Required()),
-		mcp.WithString("sheet", mcp.Required()),
+		mcp.WithString("filepath", mcp.Required(), mcp.Description("path of the Excel file")),
+		mcp.WithString("sheet", mcp.Required(), mcp.Description("sheet name")),
 		mcp.WithString("cols_data", mcp.Required(), mcp.Description("JSON of {column_letter: [values]}")),
 	),
 	Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		filename := req.Params.Arguments["filename"].(string)
+		filepath := req.Params.Arguments["filepath"].(string)
 		sheet := req.Params.Arguments["sheet"].(string)
 		colsJSON := req.Params.Arguments["cols_data"].(string)
 
-		f, err := getExcelFile(filename)
+		f, err := getExcelFile(filepath)
 		if err != nil {
 			return nil, err
 		}
@@ -210,13 +210,13 @@ var writeColsTool = tool_group.MCPToolItem{
 var addSheetTool = tool_group.MCPToolItem{
 	Tool: mcp.NewTool("add_sheet",
 		mcp.WithDescription("Add a new sheet"),
-		mcp.WithString("filename", mcp.Required()),
-		mcp.WithString("sheet_name", mcp.Required()),
+		mcp.WithString("filepath", mcp.Required(), mcp.Description("path of the Excel file")),
+		mcp.WithString("sheet_name", mcp.Required(), mcp.Description("Name of the new sheet")),
 	),
 	Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		filename := req.Params.Arguments["filename"].(string)
+		filepath := req.Params.Arguments["filepath"].(string)
 		sheetName := req.Params.Arguments["sheet_name"].(string)
-		f, err := getExcelFile(filename)
+		f, err := getExcelFile(filepath)
 		if err != nil {
 			return nil, err
 		}
@@ -228,13 +228,13 @@ var addSheetTool = tool_group.MCPToolItem{
 var deleteSheetTool = tool_group.MCPToolItem{
 	Tool: mcp.NewTool("delete_sheet",
 		mcp.WithDescription("Delete a sheet"),
-		mcp.WithString("filename", mcp.Required()),
-		mcp.WithString("sheet_name", mcp.Required()),
+		mcp.WithString("filepath", mcp.Required(), mcp.Description("path of the Excel file")),
+		mcp.WithString("sheet_name", mcp.Required(), mcp.Description("Name of the sheet to delete")),
 	),
 	Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		filename := req.Params.Arguments["filename"].(string)
+		filepath := req.Params.Arguments["filepath"].(string)
 		sheetName := req.Params.Arguments["sheet_name"].(string)
-		f, err := getExcelFile(filename)
+		f, err := getExcelFile(filepath)
 		if err != nil {
 			return nil, err
 		}
@@ -246,15 +246,15 @@ var deleteSheetTool = tool_group.MCPToolItem{
 var renameSheetTool = tool_group.MCPToolItem{
 	Tool: mcp.NewTool("rename_sheet",
 		mcp.WithDescription("Rename a sheet"),
-		mcp.WithString("filename", mcp.Required()),
-		mcp.WithString("old_name", mcp.Required()),
-		mcp.WithString("new_name", mcp.Required()),
+		mcp.WithString("filepath", mcp.Required(), mcp.Description("path of the Excel file")),
+		mcp.WithString("old_name", mcp.Required(), mcp.Description("Old name of the sheet")),
+		mcp.WithString("new_name", mcp.Required(), mcp.Description("New name of the sheet")),
 	),
 	Handler: func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		filename := req.Params.Arguments["filename"].(string)
+		filepath := req.Params.Arguments["filepath"].(string)
 		oldName := req.Params.Arguments["old_name"].(string)
 		newName := req.Params.Arguments["new_name"].(string)
-		f, err := getExcelFile(filename)
+		f, err := getExcelFile(filepath)
 		if err != nil {
 			return nil, err
 		}

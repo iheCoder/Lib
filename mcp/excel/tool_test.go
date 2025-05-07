@@ -11,7 +11,7 @@ import (
 
 func TestNewExcelTool(t *testing.T) {
 	_, err := newExcelTool.Handler(context.TODO(), mockRequest(map[string]any{
-		"filename": "./testdata/test.xlsx",
+		"filepath": "./testdata/test.xlsx",
 	}))
 	if err != nil {
 		t.Fatalf("failed to create new excel file: %v", err)
@@ -23,7 +23,7 @@ func TestReadWriteRowsTool(t *testing.T) {
 	TestNewExcelTool(t)
 	fp := "./testdata/test.xlsx"
 	_, _ = addSheetTool.Handler(context.TODO(), mockRequest(map[string]any{
-		"filename":   fp,
+		"filepath":   fp,
 		"sheet_name": "Sheet2",
 	}))
 
@@ -31,7 +31,7 @@ func TestReadWriteRowsTool(t *testing.T) {
 	raw, _ := json.Marshal(data)
 
 	_, err := writeRowsTool.Handler(context.TODO(), mockRequest(map[string]any{
-		"filename":  fp,
+		"filepath":  fp,
 		"sheet":     "Sheet1",
 		"rows_data": string(raw),
 	}))
@@ -40,7 +40,7 @@ func TestReadWriteRowsTool(t *testing.T) {
 	}
 
 	res, err := readRowsTool.Handler(context.TODO(), mockRequest(map[string]any{
-		"filename": fp,
+		"filepath": fp,
 		"sheet":    "Sheet1",
 		"rows":     "1",
 	}))
