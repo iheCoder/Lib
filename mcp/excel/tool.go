@@ -31,8 +31,8 @@ var (
 	sheetToolOption    = mcp.WithString("sheet", mcp.Required(), mcp.Description("Sheet name (default is 'Sheet1')"))
 	rowsArgOption      = mcp.WithString("rows", mcp.Required(), mcp.Description("Comma-separated row numbers (e.g. '1,2,3')"))
 	colsArgOption      = mcp.WithString("columns", mcp.Required(), mcp.Description("Comma-separated column letters (e.g. 'A,B,C')"))
-	rowsDataArgOption  = mcp.WithString("rows_data", mcp.Required(), mcp.Description("JSON of {row_number: [values]} (e.g. '{\"1\": [\"A\", \"B\"]}')"))
-	colsDataArgOption  = mcp.WithString("cols_data", mcp.Required(), mcp.Description("JSON of {column_letter: [values]} (e.g. '{\"A\": [\"Name\", \"Tom\"]}')"))
+	rowsDataArgOption  = mcp.WithString("rows_data", mcp.Required(), mcp.Description("JSON of {row_number: [values]}, json will unmarshal into map[string][]string. (e.g. '{\"1\": [\"A\", \"B\"]}')"))
+	colsDataArgOption  = mcp.WithString("cols_data", mcp.Required(), mcp.Description("JSON of {column_letter: [values]}, json will unmarshal into map[string][]string. (e.g. '{\"A\": [\"Name\", \"Tom\"]}')"))
 )
 
 func getExcelFile(filename string) (*excelize.File, error) {
@@ -59,7 +59,7 @@ var newExcelTool = tool_group.MCPToolItem{
 
 		files[filepath] = excelize.NewFile()
 		if err := files[filepath].SaveAs(filepath); err != nil {
-			return nil, fmt.Errorf("failed to save Excel file: %v", err)
+			return mcp.NewToolResultError(fmt.Sprintf("failed to save Excel file: %v", err)), nil
 		}
 
 		return mcp.NewToolResultText(fmt.Sprintf("Excel file %q created.", filepath)), nil
@@ -80,7 +80,7 @@ var readRowsTool = tool_group.MCPToolItem{
 
 		f, err := getExcelFile(filepath)
 		if err != nil {
-			return nil, err
+			return mcp.NewToolResultError(fmt.Sprintf("failed to open Excel file: %v", err)), nil
 		}
 
 		var result = map[string][]string{}
@@ -88,8 +88,9 @@ var readRowsTool = tool_group.MCPToolItem{
 			rowIdx, _ := parseInt(r)
 			row, err := f.GetRows(sheet)
 			if err != nil {
-				return nil, err
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get rows: %v", err)), nil
 			}
+
 			if rowIdx-1 >= 0 && rowIdx-1 < len(row) {
 				result[r] = row[rowIdx-1]
 			}
@@ -113,7 +114,7 @@ var readColsTool = tool_group.MCPToolItem{
 
 		f, err := getExcelFile(filepath)
 		if err != nil {
-			return nil, err
+			return mcp.NewToolResultError(fmt.Sprintf("failed to open Excel file: %v", err)), nil
 		}
 
 		result := map[string][]string{}
@@ -121,7 +122,7 @@ var readColsTool = tool_group.MCPToolItem{
 			colIdx, _ := parseInt(col)
 			cols, err := f.GetCols(sheet)
 			if err != nil {
-				return nil, err
+				return mcp.NewToolResultError(fmt.Sprintf("failed to get columns: %v", err)), nil
 			}
 
 			if colIdx-1 >= 0 && colIdx-1 < len(cols) {
@@ -147,28 +148,30 @@ var writeRowsTool = tool_group.MCPToolItem{
 
 		f, err := getExcelFile(filepath)
 		if err != nil {
-			return nil, err
+			return mcp.NewToolResultError(fmt.Sprintf("failed to open Excel file: %v", err)), nil
 		}
+
 		var rows map[string][]string
 		if err := json.Unmarshal([]byte(rowsJSON), &rows); err != nil {
-			return nil, err
+			return mcp.NewToolResultError(fmt.Sprintf("failed to parse JSON: %v", err)), nil
 		}
 
 		for r, vals := range rows {
 			ridx, err := parseInt(r)
 			if err != nil {
-				return nil, fmt.Errorf("invalid row number: %s", r)
+				return mcp.NewToolResultError(fmt.Sprintf("invalid row number: %s", r)), nil
 			}
+
 			for i, val := range vals {
 				cell, _ := excelize.CoordinatesToCellName(i+1, ridx)
 				if err := f.SetCellValue(sheet, cell, val); err != nil {
-					return nil, err
+					return mcp.NewToolResultError(fmt.Sprintf("failed to set cell value: %v", err)), nil
 				}
 			}
 		}
 
 		if err := f.Save(); err != nil {
-			return nil, fmt.Errorf("failed to save Excel file: %v", err)
+			return mcp.NewToolResultError(fmt.Sprintf("failed to save Excel file: %v", err)), nil
 		}
 
 		return mcp.NewToolResultText("Rows written successfully."), nil
@@ -189,27 +192,30 @@ var writeColsTool = tool_group.MCPToolItem{
 
 		f, err := getExcelFile(filepath)
 		if err != nil {
-			return nil, err
+			return mcp.NewToolResultError(fmt.Sprintf("failed to open Excel file: %v", err)), nil
 		}
+
 		var cols map[string][]string
 		if err := json.Unmarshal([]byte(colsJSON), &cols); err != nil {
-			return nil, err
+			return mcp.NewToolResultError(fmt.Sprintf("failed to parse JSON: %v", err)), nil
 		}
+
 		for col, vals := range cols {
 			colIdx, err := excelize.ColumnNameToNumber(col)
 			if err != nil {
-				return nil, fmt.Errorf("invalid column letter: %s", col)
+				return mcp.NewToolResultError(fmt.Sprintf("invalid column letter: %s", col)), nil
 			}
+
 			for i, val := range vals {
 				cell, _ := excelize.CoordinatesToCellName(colIdx, i+1)
 				if err := f.SetCellValue(sheet, cell, val); err != nil {
-					return nil, err
+					return mcp.NewToolResultError(fmt.Sprintf("failed to set cell value: %v", err)), nil
 				}
 			}
 		}
 
 		if err := f.Save(); err != nil {
-			return nil, fmt.Errorf("failed to save Excel file: %v", err)
+			return mcp.NewToolResultError(fmt.Sprintf("failed to save Excel file: %v", err)), nil
 		}
 
 		return mcp.NewToolResultText("Columns written successfully."), nil
@@ -227,9 +233,13 @@ var addSheetTool = tool_group.MCPToolItem{
 		sheetName := req.Params.Arguments["sheet_name"].(string)
 		f, err := getExcelFile(filepath)
 		if err != nil {
-			return nil, err
+			return mcp.NewToolResultError(fmt.Sprintf("failed to open Excel file: %v", err)), nil
 		}
-		f.NewSheet(sheetName)
+
+		if _, err = f.NewSheet(sheetName); err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to add new sheet: %v", err)), nil
+		}
+
 		return mcp.NewToolResultText("Sheet added successfully."), nil
 	},
 }
@@ -245,9 +255,13 @@ var deleteSheetTool = tool_group.MCPToolItem{
 		sheetName := req.Params.Arguments["sheet_name"].(string)
 		f, err := getExcelFile(filepath)
 		if err != nil {
-			return nil, err
+			return mcp.NewToolResultError(fmt.Sprintf("failed to open Excel file: %v", err)), nil
 		}
-		f.DeleteSheet(sheetName)
+
+		if err := f.DeleteSheet(sheetName); err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to delete sheet: %v", err)), nil
+		}
+
 		return mcp.NewToolResultText("Sheet deleted."), nil
 	},
 }
@@ -265,9 +279,13 @@ var renameSheetTool = tool_group.MCPToolItem{
 		newName := req.Params.Arguments["new_name"].(string)
 		f, err := getExcelFile(filepath)
 		if err != nil {
-			return nil, err
+			return mcp.NewToolResultError(fmt.Sprintf("failed to open Excel file: %v", err)), nil
 		}
-		f.SetSheetName(oldName, newName)
+
+		if err := f.SetSheetName(oldName, newName); err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("failed to rename sheet: %v", err)), nil
+		}
+
 		return mcp.NewToolResultText("Sheet renamed."), nil
 	},
 }
