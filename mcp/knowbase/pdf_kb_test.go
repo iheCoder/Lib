@@ -50,3 +50,39 @@ func TestPDFKB(t *testing.T) {
 
 	t.Logf("Top result: %s", resp[0].Payload["chunk_text"])
 }
+
+func TestSearchQdrant(t *testing.T) {
+	helper, err := vector_db.NewQdrantHelper("localhost:6334")
+	if err != nil {
+		t.Fatalf("Failed to connect Qdrant: %v", err)
+	}
+
+	// 测试查询
+	query := "advanced analytics"
+	// 生成embedding
+	queryEmbedding, err := knowbase.GenerateLocalEmbedding([]string{query})
+	if err != nil {
+		t.Fatalf("GenerateLocalEmbedding failed: %v", err)
+	}
+
+	if len(queryEmbedding) == 0 {
+		t.Fatalf("Empty embedding returned")
+	}
+
+	// 把 []float64 转成 []float32
+	queryVec := make([]float32, len(queryEmbedding[0]))
+	for i, v := range queryEmbedding[0] {
+		queryVec[i] = float32(v)
+	}
+
+	resp, err := helper.Search("redbook_5th_edition_collection", queryVec, 5)
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	if len(resp) == 0 {
+		t.Fatalf("No results returned")
+	}
+
+	t.Logf("Top result: %s", resp[0].Payload["chunk_text"])
+}

@@ -28,7 +28,7 @@ func NewPDFToVectorImporter(chunkLines int, collectionName string, vectorSize in
 // Import 完成一整套流程
 func (p *PDFToVectorImporter) Import(pdfPath string) error {
 	// 1. 提取PDF文本切片
-	chunks, err := resource_handle.ExtractPDFTextIntoChunks(pdfPath, p.ChunkLines, resource_handle.HandleModeByChars)
+	chunks, err := resource_handle.ExtractPDFChunksByPython(pdfPath, p.ChunkLines, resource_handle.HandleModeByChars)
 	if err != nil {
 		return fmt.Errorf("failed to extract PDF text: %w", err)
 	}
