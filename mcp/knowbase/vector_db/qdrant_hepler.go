@@ -82,6 +82,11 @@ func (q *QdrantHelper) Search(collectionName string, vector []float32, topK int)
 		CollectionName: collectionName,
 		Vector:         vector,
 		Limit:          uint64(topK),
+		WithPayload: &qdrant.WithPayloadSelector{
+			SelectorOptions: &qdrant.WithPayloadSelector_Enable{
+				Enable: true,
+			},
+		},
 	})
 	if err != nil {
 		return nil, err
@@ -143,6 +148,10 @@ func fromPayload(p map[string]*qdrant.Value) map[string]interface{} {
 			payload[k] = val.StringValue
 		case *qdrant.Value_DoubleValue:
 			payload[k] = val.DoubleValue
+		case *qdrant.Value_IntegerValue:
+			payload[k] = val.IntegerValue
+		case *qdrant.Value_BoolValue:
+			payload[k] = val.BoolValue
 		}
 	}
 	return payload
