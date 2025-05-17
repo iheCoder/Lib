@@ -1,0 +1,755 @@
+package elk_assigner
+
+import (
+	"Lib/distributed/elk_assigner/data"
+	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/alicebob/miniredis/v2"
+	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"sync"
+	"testing"
+	"time"
+)
+
+// 模拟 TaskProcessor 实现
+type MockTaskProcessor struct {
+	mock.Mock
+}
+
+func (m *MockTaskProcessor) Process(ctx context.Context, minID, maxID int64, opts map[string]interface{}) (int64, int64, error) {
+	args := m.Called(ctx, minID, maxID, opts)
+	return args.Get(0).(int64), args.Get(1).(int64), args.Error(2)
+}
+
+func (m *MockTaskProcessor) GetMaxProcessedID(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockTaskProcessor) GetNextMaxID(ctx context.Context, currentMax int64, rangeSize int64) (int64, error) {
+	args := m.Called(ctx, currentMax, rangeSize)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+// 可选实现，用于测试 updateGlobalMaxID
+func (m *MockTaskProcessor) UpdateMaxProcessedID(ctx context.Context, newMaxID int64) error {
+	args := m.Called(ctx, newMaxID)
+	return args.Error(0)
+}
+
+// 模拟 Logger 实现
+type MockLogger struct {
+	mu     sync.Mutex
+	Logs   map[string][]string
+	silent bool
+}
+
+func NewMockLogger(silent bool) *MockLogger {
+	return &MockLogger{
+		Logs:   map[string][]string{"info": {}, "warn": {}, "error": {}, "debug": {}},
+		silent: silent,
+	}
+}
+
+func (l *MockLogger) Infof(format string, args ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	message := formatLog(format, args...)
+	l.Logs["info"] = append(l.Logs["info"], message)
+}
+
+func (l *MockLogger) Warnf(format string, args ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	message := formatLog(format, args...)
+	l.Logs["warn"] = append(l.Logs["warn"], message)
+}
+
+func (l *MockLogger) Errorf(format string, args ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	message := formatLog(format, args...)
+	l.Logs["error"] = append(l.Logs["error"], message)
+}
+
+func (l *MockLogger) Debugf(format string, args ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	message := formatLog(format, args...)
+	l.Logs["debug"] = append(l.Logs["debug"], message)
+}
+
+func formatLog(format string, args ...interface{}) string {
+	if len(args) == 0 {
+		return format
+	}
+	return fmt.Sprintf(format, args...)
+}
+
+// 测试辅助函数，设置测试环境
+func setupTest(t *testing.T) (*Worker, *MockTaskProcessor, *data.RedisDataStore, *miniredis.Miniredis, *MockLogger, func()) {
+	// 启动 miniredis
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("无法启动 miniredis: %v", err)
+	}
+
+	// 创建 Redis 客户端
+	client := redis.NewClient(&redis.Options{
+		Addr: mr.Addr(),
+	})
+
+	// 创建 RedisDataStore
+	opts := &data.Options{
+		KeyPrefix:     "test:",
+		DefaultExpiry: 5 * time.Second,
+		MaxRetries:    3,
+		RetryDelay:    10 * time.Millisecond,
+		MaxRetryDelay: 50 * time.Millisecond,
+	}
+	dataStore := data.NewRedisDataStore(client, opts)
+
+	// 创建 MockTaskProcessor
+	processor := new(MockTaskProcessor)
+
+	// 创建 MockLogger
+	logger := NewMockLogger(true)
+
+	// 创建 Worker
+	worker := NewWorker("test_namespace", dataStore, processor)
+	worker.SetLogger(logger)
+
+	// 设置较短的超时时间以加速测试
+	worker.SetTiming(
+		500*time.Millisecond, // LeaderLockExpiry
+		1*time.Second,        // PartitionLockExpiry
+		100*time.Millisecond, // HeartbeatInterval
+		200*time.Millisecond, // LeaderElectionInterval
+		300*time.Millisecond, // ConsolidationInterval
+	)
+
+	// 清理函数
+	cleanup := func() {
+		worker.Stop()
+		client.Close()
+		mr.Close()
+	}
+
+	return worker, processor, dataStore, mr, logger, cleanup
+}
+
+func TestWorker_NewWorker(t *testing.T) {
+	// 创建基本依赖
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("无法启动 miniredis: %v", err)
+	}
+	defer mr.Close()
+
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer client.Close()
+
+	dataStore := data.NewRedisDataStore(client, data.DefaultOptions())
+	processor := new(MockTaskProcessor)
+
+	// 测试 worker 创建
+	namespace := "test_worker"
+	worker := NewWorker(namespace, dataStore, processor)
+
+	// 验证默认值是否正确设置
+	assert.NotEmpty(t, worker.ID)
+	assert.Equal(t, namespace, worker.Namespace)
+	assert.Equal(t, dataStore, worker.DataStore)
+	assert.Equal(t, processor, worker.TaskProcessor)
+	assert.NotNil(t, worker.Logger)
+	assert.Equal(t, DefaultLeaderLockExpiry, worker.LeaderLockExpiry)
+	assert.Equal(t, DefaultPartitionLockExpiry, worker.PartitionLockExpiry)
+	assert.Equal(t, DefaultHeartbeatInterval, worker.HeartbeatInterval)
+	assert.Equal(t, DefaultLeaderElectionInterval, worker.LeaderElectionInterval)
+}
+
+func TestWorker_SetTiming(t *testing.T) {
+	worker, _, _, _, _, cleanup := setupTest(t)
+	defer cleanup()
+
+	// 设置自定义计时值
+	leaderExpiry := 1 * time.Minute
+	partitionExpiry := 2 * time.Minute
+	heartbeat := 3 * time.Second
+	leaderElection := 4 * time.Second
+	consolidation := 5 * time.Minute
+
+	worker.SetTiming(leaderExpiry, partitionExpiry, heartbeat, leaderElection, consolidation)
+
+	// 验证值是否正确设置
+	assert.Equal(t, leaderExpiry, worker.LeaderLockExpiry)
+	assert.Equal(t, partitionExpiry, worker.PartitionLockExpiry)
+	assert.Equal(t, heartbeat, worker.HeartbeatInterval)
+	assert.Equal(t, leaderElection, worker.LeaderElectionInterval)
+	assert.Equal(t, consolidation, worker.ConsolidationInterval)
+}
+
+func TestWorker_LeaderElection(t *testing.T) {
+	// 创建共享的 miniredis 实例，确保 worker1 和 worker2 使用相同的 Redis
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("无法启动 miniredis: %v", err)
+	}
+	defer mr.Close()
+
+	// 创建共享的 Redis 客户端和 DataStore
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer client.Close()
+
+	// 创建数据存储
+	dataStore := data.NewRedisDataStore(client, &data.Options{
+		KeyPrefix:     "test:",
+		DefaultExpiry: 5 * time.Second,
+	})
+
+	// 统一的命名空间，确保两个 worker 使用相同的锁
+	namespace := "test_leader_election"
+
+	// 创建第一个 worker
+	processor1 := new(MockTaskProcessor)
+	worker1 := NewWorker(namespace, dataStore, processor1)
+	worker1.SetTiming(
+		500*time.Millisecond, // LeaderLockExpiry
+		1*time.Second,        // PartitionLockExpiry
+		100*time.Millisecond, // HeartbeatInterval
+		200*time.Millisecond, // LeaderElectionInterval
+		300*time.Millisecond, // ConsolidationInterval
+	)
+	logger1 := NewMockLogger(true)
+	worker1.SetLogger(logger1)
+
+	// 配置 processor1 返回预期值
+	processor1.On("GetMaxProcessedID", mock.Anything).Return(int64(1000), nil)
+	processor1.On("GetNextMaxID", mock.Anything, mock.Anything, mock.Anything).Return(int64(2000), nil)
+	processor1.On("Process", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(int64(100), int64(1500), nil)
+	processor1.On("UpdateMaxProcessedID", mock.Anything, mock.Anything).Return(nil)
+
+	// 创建第二个 worker，使用相同的 dataStore
+	processor2 := new(MockTaskProcessor)
+	worker2 := NewWorker(namespace, dataStore, processor2)
+	worker2.SetTiming(
+		500*time.Millisecond, // LeaderLockExpiry
+		1*time.Second,        // PartitionLockExpiry
+		100*time.Millisecond, // HeartbeatInterval
+		200*time.Millisecond, // LeaderElectionInterval
+		300*time.Millisecond, // ConsolidationInterval
+	)
+	logger2 := NewMockLogger(true)
+	worker2.SetLogger(logger2)
+
+	// 配置 processor2 返回预期值
+	processor2.On("GetMaxProcessedID", mock.Anything).Return(int64(1000), nil)
+	processor2.On("GetNextMaxID", mock.Anything, mock.Anything, mock.Anything).Return(int64(2000), nil)
+	processor2.On("Process", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(int64(100), int64(1500), nil)
+	processor2.On("UpdateMaxProcessedID", mock.Anything, mock.Anything).Return(nil)
+
+	// 使用足够长的超时时间
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// 先验证当前没有 leader
+	leaderKey := fmt.Sprintf("test:%s:leader_lock", namespace) // 直接使用完整键名
+	initialValue, err := client.Get(ctx, leaderKey).Result()
+	assert.Equal(t, redis.Nil, err, "初始状态应该没有 leader")
+	assert.Empty(t, initialValue)
+
+	// 启动第一个 worker，并等待它成为 leader
+	go worker1.Start(ctx)
+	time.Sleep(1 * time.Second) // 等待 worker1 成为 leader
+
+	// 验证 worker1 成为了 leader
+	isLeader1 := worker1.IsLeader()
+	assert.True(t, isLeader1, "Worker1 应该成为 leader")
+
+	// 直接从 Redis 验证 leader 锁
+	leaderValue, err := client.Get(ctx, leaderKey).Result()
+	assert.NoError(t, err, "应该能够获取 leader 锁")
+	assert.Equal(t, worker1.ID, leaderValue, "Leader 锁应该包含 worker1 的 ID")
+
+	// 启动第二个 worker
+	go worker2.Start(ctx)
+	time.Sleep(1 * time.Second) // 等待 worker2 尝试获取 leader 锁
+
+	// worker2 不应该是 leader，因为 worker1 已经是 leader
+	isLeader2 := worker2.IsLeader()
+	assert.False(t, isLeader2, "Worker2 不应该是 leader，因为 worker1 已经是 leader")
+
+	// 再次验证 leader 锁仍然是 worker1
+	leaderValue, err = client.Get(ctx, leaderKey).Result()
+	assert.NoError(t, err)
+	assert.Equal(t, worker1.ID, leaderValue, "Leader 锁应该仍然是 worker1 的 ID")
+
+	// 停止 worker1，它应该释放 leader 锁
+	worker1.Stop()
+
+	// 等待足够长的时间确保 leader 锁过期
+	time.Sleep(1 * time.Second)
+
+	// 验证 leader 锁是否已过期或释放
+	_, err = client.Get(ctx, leaderKey).Result()
+	assert.Equal(t, redis.Nil, err, "Worker1 停止后，leader 锁应该已释放或过期")
+
+	// 重新启动 worker2，它应该成为新的 leader
+	// 如果之前的 worker2.Start 没有退出，这里先取消它
+	worker2.Stop()
+	time.Sleep(500 * time.Millisecond)
+
+	go worker2.Start(ctx)
+	time.Sleep(1 * time.Second) // 等待 worker2 成为 leader
+
+	// 验证 worker2 是否成为新的 leader
+	isLeader2 = worker2.IsLeader()
+	assert.True(t, isLeader2, "Worker2 现在应该成为 leader")
+
+	// 直接从 Redis 验证 leader 锁
+	leaderValue, err = client.Get(ctx, leaderKey).Result()
+	assert.NoError(t, err, "应该能够获取更新后的 leader 锁")
+	assert.Equal(t, worker2.ID, leaderValue, "Leader 锁现在应该包含 worker2 的 ID")
+
+	// 确保 worker2 被正确清理
+	worker2.Stop()
+}
+
+func TestWorker_HeartbeatRegistration(t *testing.T) {
+	worker, _, dataStore, _, _, cleanup := setupTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// 启动 worker
+	go worker.Start(ctx)
+	time.Sleep(300 * time.Millisecond)
+
+	// 检查 worker 是否正确注册
+	workers, err := dataStore.GetActiveWorkers(ctx, "test_namespace:workers")
+	assert.NoError(t, err)
+	assert.Contains(t, workers, worker.ID)
+
+	// 验证心跳存在
+	heartbeatKey := "test_namespace:heartbeat:" + worker.ID
+	isActive, err := dataStore.IsWorkerActive(ctx, heartbeatKey)
+	assert.NoError(t, err)
+	assert.True(t, isActive)
+
+	// 停止 worker
+	worker.Stop()
+	time.Sleep(200 * time.Millisecond)
+
+	// 验证 worker 已注销
+	workers, err = dataStore.GetActiveWorkers(ctx, "test_namespace:workers")
+	assert.NoError(t, err)
+	assert.NotContains(t, workers, worker.ID)
+
+	// 验证心跳不再存在
+	isActive, err = dataStore.IsWorkerActive(ctx, heartbeatKey)
+	assert.NoError(t, err)
+	assert.False(t, isActive)
+}
+
+func TestWorker_ProcessPartition(t *testing.T) {
+	worker, processor, dataStore, _, _, cleanup := setupTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// 设置 processor 行为
+	minID := int64(1000)
+	maxID := int64(2000)
+	processedCount := int64(500)
+	finalMaxID := int64(1500)
+
+	// 配置所有可能被调用的方法，避免未预期的调用
+	processor.On("GetMaxProcessedID", mock.Anything).Return(minID-100, nil)
+	processor.On("GetNextMaxID", mock.Anything, mock.Anything, mock.Anything).Return(maxID, nil)
+	processor.On("Process", mock.Anything, minID, maxID, mock.Anything).
+		Return(processedCount, finalMaxID, nil)
+
+	// 添加对UpdateMaxProcessedID方法的Mock预期，这是关键修复
+	processor.On("UpdateMaxProcessedID", mock.Anything, finalMaxID).Return(nil)
+
+	// 为防止其他场景的调用，添加更多可能的调用配置
+	processor.On("Process", mock.Anything, mock.Anything, mock.Anything, mock.MatchedBy(func(opts map[string]interface{}) bool {
+		// 匹配包含action=update_max_id的特殊调用
+		action, exists := opts["action"]
+		return exists && action == "update_max_id"
+	})).Return(int64(0), int64(0), nil)
+
+	// 创建测试分区数据
+	partitions := map[int]PartitionInfo{
+		0: {
+			PartitionID: 0,
+			MinID:       minID,
+			MaxID:       maxID,
+			WorkerID:    "",
+			Status:      "pending",
+			UpdatedAt:   time.Now(),
+			Options:     map[string]interface{}{},
+		},
+	}
+
+	// 保存分区数据到 Redis
+	partitionsData, err := json.Marshal(partitions)
+	assert.NoError(t, err)
+	err = dataStore.SetPartitions(ctx, "test_namespace:partitions", string(partitionsData))
+	assert.NoError(t, err)
+
+	// 启动 worker
+	go worker.Start(ctx)
+	time.Sleep(1 * time.Second)
+
+	// 验证分区是否已被处理
+	partitionsStr, err := dataStore.GetPartitions(ctx, "test_namespace:partitions")
+	assert.NoError(t, err)
+
+	var retrievedPartitions map[int]PartitionInfo
+	err = json.Unmarshal([]byte(partitionsStr), &retrievedPartitions)
+	assert.NoError(t, err)
+
+	// 检查分区状态是否更新为已完成
+	assert.Equal(t, "completed", retrievedPartitions[0].Status)
+	assert.Equal(t, worker.ID, retrievedPartitions[0].WorkerID)
+
+	// 验证处理器方法是否被调用
+	processor.AssertCalled(t, "Process", mock.Anything, minID, maxID, mock.Anything)
+	processor.AssertCalled(t, "UpdateMaxProcessedID", mock.Anything, finalMaxID)
+}
+
+func TestWorker_MultiWorkerPartitionHandling(t *testing.T) {
+	// 创建共享的 miniredis 实例
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("无法启动 miniredis: %v", err)
+	}
+	defer mr.Close()
+
+	// 创建共享的 Redis 客户端和 DataStore
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer client.Close()
+
+	opts := &data.Options{
+		KeyPrefix:     "test:",
+		DefaultExpiry: 5 * time.Second,
+		MaxRetries:    3,
+		RetryDelay:    10 * time.Millisecond,
+		MaxRetryDelay: 50 * time.Millisecond,
+	}
+	dataStore := data.NewRedisDataStore(client, opts)
+
+	// 创建 3 个 workers
+	namespace := "multi_test"
+	processor1 := new(MockTaskProcessor)
+	processor2 := new(MockTaskProcessor)
+	processor3 := new(MockTaskProcessor)
+
+	worker1 := NewWorker(namespace, dataStore, processor1)
+	worker2 := NewWorker(namespace, dataStore, processor2)
+	worker3 := NewWorker(namespace, dataStore, processor3)
+
+	// 配置更快的时间间隔
+	timing := func(w *Worker) {
+		w.SetTiming(
+			500*time.Millisecond, // LeaderLockExpiry
+			1*time.Second,        // PartitionLockExpiry
+			100*time.Millisecond, // HeartbeatInterval
+			200*time.Millisecond, // LeaderElectionInterval
+			300*time.Millisecond, // ConsolidationInterval
+		)
+	}
+
+	logger1 := NewMockLogger(true)
+	logger2 := NewMockLogger(true)
+	logger3 := NewMockLogger(true)
+
+	worker1.SetLogger(logger1)
+	worker2.SetLogger(logger2)
+	worker3.SetLogger(logger3)
+
+	timing(worker1)
+	timing(worker2)
+	timing(worker3)
+
+	// 配置处理器行为
+	mockBehavior := func(p *MockTaskProcessor) {
+		p.On("GetMaxProcessedID", mock.Anything).Return(int64(1000), nil)
+		p.On("GetNextMaxID", mock.Anything, mock.Anything, mock.Anything).Return(int64(4000), nil)
+		p.On("Process", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+			Return(int64(100), int64(2000), nil)
+		p.On("UpdateMaxProcessedID", mock.Anything, mock.Anything).Return(nil)
+	}
+
+	mockBehavior(processor1)
+	mockBehavior(processor2)
+	mockBehavior(processor3)
+
+	// 启动所有 workers
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	go worker1.Start(ctx)
+	time.Sleep(200 * time.Millisecond)
+	go worker2.Start(ctx)
+	time.Sleep(200 * time.Millisecond)
+	go worker3.Start(ctx)
+
+	// 等待处理完成
+	time.Sleep(3 * time.Second)
+
+	// 清理
+	worker1.Stop()
+	worker2.Stop()
+	worker3.Stop()
+
+	// 验证分区是否被划分和处理
+	partitionsStr, err := dataStore.GetPartitions(ctx, namespace+":partitions")
+	assert.NoError(t, err)
+
+	var retrievedPartitions map[int]PartitionInfo
+	err = json.Unmarshal([]byte(partitionsStr), &retrievedPartitions)
+	assert.NoError(t, err)
+
+	// 检查分区数量
+	assert.Equal(t, 3, len(retrievedPartitions))
+
+	// 检查分区是否全部完成
+	completedCount := 0
+	for _, partition := range retrievedPartitions {
+		if partition.Status == "completed" {
+			completedCount++
+		}
+	}
+	assert.Equal(t, 3, completedCount)
+
+	// 验证每个 worker 是否处理了任务
+	processor1.AssertCalled(t, "Process", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	processor2.AssertCalled(t, "Process", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	processor3.AssertCalled(t, "Process", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestWorker_ConsolidateGlobalState(t *testing.T) {
+	worker, processor, dataStore, _, _, cleanup := setupTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// 设置处理器行为
+	currentMaxID := int64(1000)
+	processor.On("GetMaxProcessedID", mock.Anything).Return(currentMaxID, nil)
+	processor.On("GetNextMaxID", mock.Anything, currentMaxID, mock.Anything).Return(int64(4000), nil)
+	processor.On("UpdateMaxProcessedID", mock.Anything, int64(3000)).Return(nil)
+
+	// 创建已完成的分区数据
+	partitions := map[int]PartitionInfo{
+		0: {
+			PartitionID: 0,
+			MinID:       1001, // 从 currentMaxID+1 开始
+			MaxID:       2000,
+			WorkerID:    "worker1",
+			Status:      "completed",
+			UpdatedAt:   time.Now(),
+		},
+		1: {
+			PartitionID: 1,
+			MinID:       2001,
+			MaxID:       3000,
+			WorkerID:    "worker2",
+			Status:      "completed",
+			UpdatedAt:   time.Now(),
+		},
+		2: {
+			PartitionID: 2,
+			MinID:       3001,
+			MaxID:       4000,
+			WorkerID:    "worker3",
+			Status:      "running", // 这个分区还在运行中
+			UpdatedAt:   time.Now(),
+		},
+	}
+
+	// 保存分区数据到 Redis
+	partitionsData, err := json.Marshal(partitions)
+	assert.NoError(t, err)
+	err = dataStore.SetPartitions(ctx, "test_namespace:partitions", string(partitionsData))
+	assert.NoError(t, err)
+
+	// 启动 worker，让它成为 leader
+	go worker.Start(ctx)
+	time.Sleep(1 * time.Second)
+
+	// 验证 consolidateMaxID 是否被调用
+	processor.AssertCalled(t, "UpdateMaxProcessedID", mock.Anything, int64(3000))
+}
+
+func TestWorker_FailureRecovery(t *testing.T) {
+	// 创建共享的 miniredis 实例
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("无法启动 miniredis: %v", err)
+	}
+	defer mr.Close()
+
+	// 创建共享的 Redis 客户端和 DataStore
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer client.Close()
+
+	dataStore := data.NewRedisDataStore(client, data.DefaultOptions())
+
+	// 设置初始状态：一个失败的分区
+	ctx := context.Background()
+	partitions := map[int]PartitionInfo{
+		0: {
+			PartitionID: 0,
+			MinID:       1000,
+			MaxID:       2000,
+			WorkerID:    "failed-worker",
+			Status:      "failed",
+			UpdatedAt:   time.Now().Add(-10 * time.Minute), // 很久以前失败的
+		},
+	}
+
+	partitionsData, err := json.Marshal(partitions)
+	assert.NoError(t, err)
+	err = dataStore.SetPartitions(ctx, "recovery_test:partitions", string(partitionsData))
+	assert.NoError(t, err)
+
+	// 创建新的 worker
+	processor := new(MockTaskProcessor)
+	processor.On("GetMaxProcessedID", mock.Anything).Return(int64(500), nil) // 之前处理到 500
+	processor.On("GetNextMaxID", mock.Anything, mock.Anything, mock.Anything).Return(int64(3000), nil)
+	processor.On("Process", mock.Anything, int64(1000), int64(2000), mock.Anything).
+		Return(int64(1000), int64(2000), nil)
+	processor.On("UpdateMaxProcessedID", mock.Anything, int64(2000)).Return(nil)
+
+	worker := NewWorker("recovery_test", dataStore, processor)
+	worker.SetTiming(
+		500*time.Millisecond, // LeaderLockExpiry
+		1*time.Second,        // PartitionLockExpiry
+		100*time.Millisecond, // HeartbeatInterval
+		200*time.Millisecond, // LeaderElectionInterval
+		300*time.Millisecond, // ConsolidationInterval
+	)
+	logger := NewMockLogger(true)
+	worker.SetLogger(logger)
+
+	// 启动 worker
+	go worker.Start(ctx)
+	time.Sleep(2 * time.Second)
+
+	// 验证分区是否被重新处理
+	partitionsStr, err := dataStore.GetPartitions(ctx, "recovery_test:partitions")
+	assert.NoError(t, err)
+
+	var retrievedPartitions map[int]PartitionInfo
+	err = json.Unmarshal([]byte(partitionsStr), &retrievedPartitions)
+	assert.NoError(t, err)
+
+	// 验证分区状态是否更新
+	assert.Equal(t, "completed", retrievedPartitions[0].Status)
+	assert.Equal(t, worker.ID, retrievedPartitions[0].WorkerID)
+
+	// 验证处理器方法是否被调用
+	processor.AssertCalled(t, "Process", mock.Anything, int64(1000), int64(2000), mock.Anything)
+	processor.AssertCalled(t, "UpdateMaxProcessedID", mock.Anything, int64(2000))
+
+	// 清理
+	worker.Stop()
+}
+
+func TestWorker_PartitionLockExpiry(t *testing.T) {
+	worker1, processor1, dataStore, mr, _, cleanup1 := setupTest(t)
+	defer cleanup1()
+
+	ctx := context.Background()
+
+	// 设置处理器行为 - worker1 的处理器会阻塞
+	processor1.On("GetMaxProcessedID", mock.Anything).Return(int64(1000), nil)
+	processor1.On("GetNextMaxID", mock.Anything, mock.Anything, mock.Anything).Return(int64(3000), nil)
+
+	// 设置一个永久阻塞的处理方法
+	blockCh := make(chan struct{})
+	processor1.On("Process", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Run(func(args mock.Arguments) {
+			// 永久阻塞
+			<-blockCh
+		}).Return(int64(0), int64(0), nil)
+
+	// 创建测试分区数据
+	partitions := map[int]PartitionInfo{
+		0: {
+			PartitionID: 0,
+			MinID:       1000,
+			MaxID:       2000,
+			WorkerID:    "",
+			Status:      "pending",
+			UpdatedAt:   time.Now(),
+		},
+	}
+
+	partitionsData, err := json.Marshal(partitions)
+	assert.NoError(t, err)
+	err = dataStore.SetPartitions(ctx, "test_namespace:partitions", string(partitionsData))
+	assert.NoError(t, err)
+
+	// 启动第一个 worker
+	go worker1.Start(ctx)
+	time.Sleep(500 * time.Millisecond) // 给 worker1 足够时间获取锁
+
+	// 创建第二个 worker
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	processor2 := new(MockTaskProcessor)
+	processor2.On("GetMaxProcessedID", mock.Anything).Return(int64(1000), nil)
+	processor2.On("GetNextMaxID", mock.Anything, mock.Anything, mock.Anything).Return(int64(3000), nil)
+	processor2.On("Process", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(int64(1000), int64(2000), nil)
+	processor2.On("UpdateMaxProcessedID", mock.Anything, int64(2000)).Return(nil)
+
+	worker2 := NewWorker("test_namespace", dataStore, processor2)
+	worker2.SetTiming(
+		500*time.Millisecond, // LeaderLockExpiry
+		1*time.Second,        // PartitionLockExpiry - 设置短的过期时间
+		100*time.Millisecond, // HeartbeatInterval
+		200*time.Millisecond, // LeaderElectionInterval
+		300*time.Millisecond, // ConsolidationInterval
+	)
+	logger2 := NewMockLogger(true)
+	worker2.SetLogger(logger2)
+
+	// 停止 worker1 而不释放锁
+	worker1.cancelWork() // 只取消工作上下文，但不释放锁
+
+	// 等待锁过期
+	time.Sleep(1500 * time.Millisecond)
+
+	// 启动第二个 worker
+	go worker2.Start(ctx)
+	time.Sleep(1 * time.Second)
+
+	// 验证第二个 worker 是否重新处理了分区
+	partitionsStr, err := dataStore.GetPartitions(ctx, "test_namespace:partitions")
+	assert.NoError(t, err)
+
+	var retrievedPartitions map[int]PartitionInfo
+	err = json.Unmarshal([]byte(partitionsStr), &retrievedPartitions)
+	assert.NoError(t, err)
+
+	// 验证分区状态是否更新为已完成
+	assert.Equal(t, "completed", retrievedPartitions[0].Status)
+	assert.Equal(t, worker2.ID, retrievedPartitions[0].WorkerID)
+
+	// 验证第二个处理器方法是否被调用
+	processor2.AssertCalled(t, "Process", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+
+	// 清理
+	close(blockCh)
+	worker2.Stop()
+	client.Close()
+}
