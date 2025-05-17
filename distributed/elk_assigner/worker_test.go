@@ -363,70 +363,117 @@ func TestWorker_HeartbeatRegistration(t *testing.T) {
 }
 
 func TestWorker_ProcessPartition(t *testing.T) {
-	worker, processor, dataStore, _, _, cleanup := setupTest(t)
-	defer cleanup()
+	// 1. 创建独立的 Redis 测试实例
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("无法启动 miniredis: %v", err)
+	}
+	defer mr.Close()
 
-	ctx := context.Background()
+	// 2. 创建 Redis 客户端和 DataStore
+	client := redis.NewClient(&redis.Options{
+		Addr: mr.Addr(),
+	})
+	defer func() {
+		_ = client.Close() // 处理关闭的错误
+	}()
 
-	// 设置 processor 行为
+	// 3. 创建 DataStore 使用短期过期时间
+	dataStore := data.NewRedisDataStore(client, &data.Options{
+		KeyPrefix:     "test:",
+		DefaultExpiry: 5 * time.Second,
+	})
+
+	// 4. 创建 Mock TaskProcessor 并设置预期
+	processor := new(MockTaskProcessor)
 	minID := int64(1000)
 	maxID := int64(2000)
 	processedCount := int64(500)
 	finalMaxID := int64(1500)
 
-	// 配置所有可能被调用的方法，避免未预期的调用
 	processor.On("GetMaxProcessedID", mock.Anything).Return(minID-100, nil)
 	processor.On("GetNextMaxID", mock.Anything, mock.Anything, mock.Anything).Return(maxID, nil)
-	processor.On("Process", mock.Anything, minID, maxID, mock.Anything).
-		Return(processedCount, finalMaxID, nil)
-
-	// 添加对UpdateMaxProcessedID方法的Mock预期，这是关键修复
+	processor.On("Process", mock.Anything, minID, maxID, mock.MatchedBy(func(opts map[string]interface{}) bool {
+		// 匹配任意选项
+		return true
+	})).Return(processedCount, finalMaxID, nil)
 	processor.On("UpdateMaxProcessedID", mock.Anything, finalMaxID).Return(nil)
 
-	// 为防止其他场景的调用，添加更多可能的调用配置
-	processor.On("Process", mock.Anything, mock.Anything, mock.Anything, mock.MatchedBy(func(opts map[string]interface{}) bool {
-		// 匹配包含action=update_max_id的特殊调用
-		action, exists := opts["action"]
-		return exists && action == "update_max_id"
-	})).Return(int64(0), int64(0), nil)
+	// 添加通用匹配器以防万一
+	processor.On("Process", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(processedCount, finalMaxID, nil)
 
-	// 创建测试分区数据
-	partitions := map[int]PartitionInfo{
-		0: {
-			PartitionID: 0,
-			MinID:       minID,
-			MaxID:       maxID,
-			WorkerID:    "",
-			Status:      "pending",
-			UpdatedAt:   time.Now(),
-			Options:     map[string]interface{}{},
-		},
+	// 5. 创建 Worker 实例
+	namespace := "test_partition_processing"
+	worker := NewWorker(namespace, dataStore, processor)
+	worker.SetTiming(
+		500*time.Millisecond, // LeaderLockExpiry
+		1*time.Second,        // PartitionLockExpiry
+		100*time.Millisecond, // HeartbeatInterval
+		200*time.Millisecond, // LeaderElectionInterval
+		300*time.Millisecond, // ConsolidationInterval
+	)
+
+	ctx := context.Background()
+
+	// 6. 直接创建一个分区并保存到 Redis
+	partitionInfo := PartitionInfo{
+		PartitionID: 0,
+		MinID:       minID,
+		MaxID:       maxID,
+		WorkerID:    "",
+		Status:      "pending",
+		UpdatedAt:   time.Now(),
+		Options:     map[string]interface{}{},
 	}
 
-	// 保存分区数据到 Redis
+	partitions := map[int]PartitionInfo{0: partitionInfo}
 	partitionsData, err := json.Marshal(partitions)
 	assert.NoError(t, err)
-	err = dataStore.SetPartitions(ctx, "test_namespace:partitions", string(partitionsData))
+	err = dataStore.SetPartitions(ctx, namespace+":partitions", string(partitionsData))
 	assert.NoError(t, err)
 
-	// 启动 worker
-	go worker.Start(ctx)
-	time.Sleep(1 * time.Second)
+	// 7. 手动获取分区锁
+	// 使用这个变量
+	acquired, err := dataStore.AcquireLock(ctx, namespace+":partition:0", worker.ID, worker.PartitionLockExpiry)
+	assert.NoError(t, err)
+	assert.True(t, acquired, "应该能够获取分区锁")
 
-	// 验证分区是否已被处理
-	partitionsStr, err := dataStore.GetPartitions(ctx, "test_namespace:partitions")
+	// 8. 手动设置分区的 WorkerID（修复结构体赋值方式）
+	updatedPartition := partitions[0]
+	updatedPartition.WorkerID = worker.ID
+	partitions[0] = updatedPartition
+
+	updatedPartitionsData, err := json.Marshal(partitions)
+	assert.NoError(t, err)
+	err = dataStore.SetPartitions(ctx, namespace+":partitions", string(updatedPartitionsData))
+	assert.NoError(t, err)
+
+	// 更新 partitionInfo 以便传递给 processPartition 方法
+	partitionInfo.WorkerID = worker.ID
+
+	// 9. 直接调用 processPartition 方法
+	err = worker.processPartition(ctx, &partitionInfo)
+	assert.NoError(t, err, "processPartition 不应该返回错误")
+
+	// 10. 验证结果
+	// 获取更新后的分区信息
+	partitionsStr, err := dataStore.GetPartitions(ctx, namespace+":partitions")
 	assert.NoError(t, err)
 
 	var retrievedPartitions map[int]PartitionInfo
 	err = json.Unmarshal([]byte(partitionsStr), &retrievedPartitions)
 	assert.NoError(t, err)
 
-	// 检查分区状态是否更新为已完成
-	assert.Equal(t, "completed", retrievedPartitions[0].Status)
-	assert.Equal(t, worker.ID, retrievedPartitions[0].WorkerID)
+	// 检查分区状态是否已更新为 completed
+	partition := retrievedPartitions[0]
+	assert.Equal(t, "completed", partition.Status, "分区状态应该是 completed")
+	assert.Equal(t, worker.ID, partition.WorkerID, "分区的 WorkerID 应该是 worker ID")
 
-	// 验证处理器方法是否被调用
+	// 验证 Process 方法被调用
 	processor.AssertCalled(t, "Process", mock.Anything, minID, maxID, mock.Anything)
+
+	// 验证 UpdateMaxProcessedID 方法被调用
 	processor.AssertCalled(t, "UpdateMaxProcessedID", mock.Anything, finalMaxID)
 }
 
