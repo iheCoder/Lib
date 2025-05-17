@@ -321,10 +321,16 @@ func TestWorker_LeaderElection(t *testing.T) {
 }
 
 func TestWorker_HeartbeatRegistration(t *testing.T) {
-	worker, _, dataStore, _, _, cleanup := setupTest(t)
+	worker, processor, dataStore, _, _, cleanup := setupTest(t)
 	defer cleanup()
 
 	ctx := context.Background()
+
+	// 为所有可能被调用的方法添加预期配置
+	processor.On("GetMaxProcessedID", mock.Anything).Return(int64(1000), nil)
+	processor.On("GetNextMaxID", mock.Anything, mock.Anything, mock.Anything).Return(int64(2000), nil)
+	processor.On("Process", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(int64(100), int64(1500), nil)
+	processor.On("UpdateMaxProcessedID", mock.Anything, mock.Anything).Return(nil)
 
 	// 启动 worker
 	go worker.Start(ctx)
