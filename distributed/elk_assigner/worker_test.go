@@ -477,115 +477,247 @@ func TestWorker_ProcessPartition(t *testing.T) {
 	processor.AssertCalled(t, "UpdateMaxProcessedID", mock.Anything, finalMaxID)
 }
 
+// TestWorker_MultiWorkerPartitionHandling 测试多个 worker 协同处理分区的场景
 func TestWorker_MultiWorkerPartitionHandling(t *testing.T) {
-	// 创建共享的 miniredis 实例
+	// 创建 miniredis 实例用于测试
 	mr, err := miniredis.Run()
 	if err != nil {
 		t.Fatalf("无法启动 miniredis: %v", err)
 	}
 	defer mr.Close()
 
-	// 创建共享的 Redis 客户端和 DataStore
-	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	// 创建 Redis 客户端
+	client := redis.NewClient(&redis.Options{
+		Addr: mr.Addr(),
+	})
 	defer client.Close()
 
-	opts := &data.Options{
+	// 使用较短的时间间隔加快测试
+	leaderExpiry := 1 * time.Second          // 减短领导锁过期时间
+	partitionExpiry := 2 * time.Second       // 减短分区锁过期时间
+	heartbeat := 200 * time.Millisecond      // 更快的心跳
+	leaderElection := 500 * time.Millisecond // 更快的领导选举
+	consolidation := 500 * time.Millisecond  // 更快的状态合并
+
+	// 创建一个实际的任务处理器，而不是使用接口的 mock
+	processor := &RealMockTaskProcessor{
+		CurrentMaxID:      500000,                // 初始设置一个合理的最大ID
+		ProcessDelay:      50 * time.Millisecond, // 减少处理延迟，加速测试
+		mu:                sync.Mutex{},
+		ProcessedRanges:   make(map[int64]struct{}),
+		ProcessedByWorker: make(map[string][]int64), // 记录每个worker处理的分区
+	}
+
+	// 创建数据存储
+	dataStore := data.NewRedisDataStore(client, &data.Options{
 		KeyPrefix:     "test:",
-		DefaultExpiry: 5 * time.Second,
-		MaxRetries:    3,
-		RetryDelay:    10 * time.Millisecond,
-		MaxRetryDelay: 50 * time.Millisecond,
-	}
-	dataStore := data.NewRedisDataStore(client, opts)
+		DefaultExpiry: 30 * time.Second,
+	})
 
-	// 创建 3 个 workers
-	namespace := "multi_test"
-	processor1 := new(MockTaskProcessor)
-	processor2 := new(MockTaskProcessor)
-	processor3 := new(MockTaskProcessor)
+	// 创建三个 worker，使用相同的共享处理器
+	workerCount := 3
+	workers := make([]*Worker, workerCount)
+	namespace := "test-namespace" // 使用相同的命名空间，让它们协同工作
 
-	worker1 := NewWorker(namespace, dataStore, processor1)
-	worker2 := NewWorker(namespace, dataStore, processor2)
-	worker3 := NewWorker(namespace, dataStore, processor3)
+	// 创建多个分区
+	partitionCount := 10 // 创建10个分区
+	partitions := make(map[int]PartitionInfo)
 
-	// 配置更快的时间间隔
-	timing := func(w *Worker) {
-		w.SetTiming(
-			500*time.Millisecond, // LeaderLockExpiry
-			1*time.Second,        // PartitionLockExpiry
-			100*time.Millisecond, // HeartbeatInterval
-			200*time.Millisecond, // LeaderElectionInterval
-			300*time.Millisecond, // ConsolidationInterval
-		)
-	}
-
-	logger1 := NewMockLogger(true)
-	logger2 := NewMockLogger(true)
-	logger3 := NewMockLogger(true)
-
-	worker1.SetLogger(logger1)
-	worker2.SetLogger(logger2)
-	worker3.SetLogger(logger3)
-
-	timing(worker1)
-	timing(worker2)
-	timing(worker3)
-
-	// 配置处理器行为
-	mockBehavior := func(p *MockTaskProcessor) {
-		p.On("GetMaxProcessedID", mock.Anything).Return(int64(1000), nil)
-		p.On("GetNextMaxID", mock.Anything, mock.Anything, mock.Anything).Return(int64(4000), nil)
-		p.On("Process", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-			Return(int64(100), int64(2000), nil)
-		p.On("UpdateMaxProcessedID", mock.Anything, mock.Anything).Return(nil)
-	}
-
-	mockBehavior(processor1)
-	mockBehavior(processor2)
-	mockBehavior(processor3)
-
-	// 启动所有 workers
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	go worker1.Start(ctx)
-	time.Sleep(200 * time.Millisecond)
-	go worker2.Start(ctx)
-	time.Sleep(200 * time.Millisecond)
-	go worker3.Start(ctx)
-
-	// 等待处理完成
-	time.Sleep(3 * time.Second)
-
-	// 清理
-	worker1.Stop()
-	worker2.Stop()
-	worker3.Stop()
-
-	// 验证分区是否被划分和处理
-	partitionsStr, err := dataStore.GetPartitions(ctx, namespace+":partitions")
-	assert.NoError(t, err)
-
-	var retrievedPartitions map[int]PartitionInfo
-	err = json.Unmarshal([]byte(partitionsStr), &retrievedPartitions)
-	assert.NoError(t, err)
-
-	// 检查分区数量
-	assert.Equal(t, 3, len(retrievedPartitions))
-
-	// 检查分区是否全部完成
-	completedCount := 0
-	for _, partition := range retrievedPartitions {
-		if partition.Status == "completed" {
-			completedCount++
+	// 为测试创建初始分区数据
+	for i := 0; i < partitionCount; i++ {
+		minID := int64(500000 + i*10000)
+		maxID := int64(500000 + (i+1)*10000)
+		partitions[i] = PartitionInfo{
+			PartitionID: i,
+			MinID:       minID,
+			MaxID:       maxID,
+			WorkerID:    "",
+			Status:      "pending",
+			UpdatedAt:   time.Now(),
+			Options:     map[string]interface{}{},
 		}
 	}
-	assert.Equal(t, 3, completedCount)
 
-	// 验证每个 worker 是否处理了任务
-	processor1.AssertCalled(t, "Process", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-	processor2.AssertCalled(t, "Process", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-	processor3.AssertCalled(t, "Process", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	// 保存分区数据到Redis
+	partitionsData, err := json.Marshal(partitions)
+	assert.NoError(t, err)
+	err = dataStore.SetPartitions(context.Background(), "test:"+namespace+":partitions", string(partitionsData))
+	assert.NoError(t, err)
+
+	// 创建所有worker实例
+	for i := 0; i < workerCount; i++ {
+		workers[i] = NewWorker(namespace, dataStore, processor)
+		workers[i].SetTiming(leaderExpiry, partitionExpiry, heartbeat, leaderElection, consolidation)
+	}
+
+	// 启动所有 worker
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	for i, worker := range workers {
+		wg.Add(1)
+		go func(w *Worker, idx int) {
+			defer wg.Done()
+			if err := w.Start(ctx); err != nil && err != context.Canceled && err != context.DeadlineExceeded {
+				t.Errorf("Worker %d 发生错误: %v", idx, err)
+			}
+		}(worker, i)
+	}
+
+	// 给worker足够的时间来处理分区
+	time.Sleep(10 * time.Second)
+
+	// 停止所有worker
+	for _, worker := range workers {
+		worker.Stop()
+	}
+
+	wg.Wait()
+
+	// 从Redis获取最终分区状态
+	partitionsStr, err := dataStore.GetPartitions(ctx, "test:"+namespace+":partitions")
+	assert.NoError(t, err)
+
+	var finalPartitions map[int]PartitionInfo
+	err = json.Unmarshal([]byte(partitionsStr), &finalPartitions)
+	assert.NoError(t, err)
+
+	// 检查处理器状态
+	processor.mu.Lock()
+	maxID := processor.CurrentMaxID
+	processedRanges := len(processor.ProcessedRanges)
+	workerProcessed := processor.ProcessedByWorker
+	processor.mu.Unlock()
+
+	t.Logf("最终全局最大ID: %d, 已处理区间数: %d", maxID, processedRanges)
+
+	// 验证所有分区都已被处理
+	completedPartitions := 0
+	for _, partition := range finalPartitions {
+		if partition.Status == "completed" {
+			completedPartitions++
+		}
+	}
+
+	// 打印各个worker处理的分区情况
+	for workerID, partitions := range workerProcessed {
+		t.Logf("Worker %s 处理了 %d 个分区: %v", workerID, len(partitions), partitions)
+	}
+
+	// 验证：
+	// 1. 所有分区都应该被处理完成
+	assert.Equal(t, partitionCount, completedPartitions, "所有分区应该都被处理完成")
+
+	// 2. 最大ID应该大于初始值
+	assert.Greater(t, maxID, int64(500000), "处理后的最大ID应该大于初始值")
+
+	// 3. 处理的分区数应该等于总分区数
+	assert.Equal(t, partitionCount, processedRanges, "处理的分区数应等于总分区数")
+
+	// 4. 验证没有分区被多个worker重复处理
+	processedPartitions := make(map[int64]string) // 分区ID -> workerID
+	duplicateProcessed := false
+
+	for workerID, partitions := range workerProcessed {
+		for _, partID := range partitions {
+			if prevWorker, exists := processedPartitions[partID]; exists {
+				t.Errorf("分区 %d 被多个worker处理: %s 和 %s", partID, prevWorker, workerID)
+				duplicateProcessed = true
+			}
+			processedPartitions[partID] = workerID
+		}
+	}
+
+	assert.False(t, duplicateProcessed, "不应该有分区被多个worker重复处理")
+}
+
+// 为多worker测试定义的实际任务处理器
+type RealMockTaskProcessor struct {
+	CurrentMaxID      int64
+	ProcessDelay      time.Duration
+	mu                sync.Mutex
+	ProcessedRanges   map[int64]struct{} // 记录已处理的区间起点
+	ProcessedByWorker map[string][]int64 // 记录每个worker处理的分区
+	FailedPartition   int                // 可以设置一个特定分区失败用于测试
+}
+
+func (m *RealMockTaskProcessor) Process(ctx context.Context, minID, maxID int64, opts map[string]interface{}) (int64, int64, error) {
+	// 特殊处理：更新最大ID的请求
+	if action, ok := opts["action"].(string); ok && action == "update_max_id" {
+		if newMaxID, ok := opts["new_max_id"].(int64); ok {
+			m.mu.Lock()
+			if newMaxID > m.CurrentMaxID {
+				m.CurrentMaxID = newMaxID
+			}
+			m.mu.Unlock()
+			return 0, newMaxID, nil
+		}
+	}
+
+	// 模拟处理延迟
+	select {
+	case <-ctx.Done():
+		return 0, minID, ctx.Err()
+	case <-time.After(m.ProcessDelay):
+		// 继续处理
+	}
+
+	// 获取分区ID（用于失败测试）
+	partitionID := -1
+	if partOpt, ok := opts["partition_id"].(int); ok {
+		partitionID = partOpt
+	}
+
+	// 对于测试，如果这个分区ID等于设置的失败分区，则返回错误
+	if m.FailedPartition > 0 && partitionID == m.FailedPartition {
+		return 0, minID, fmt.Errorf("模拟分区 %d 处理失败", partitionID)
+	}
+
+	// 更新已处理区间记录和状态
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// 记录处理过的区间
+	m.ProcessedRanges[minID] = struct{}{}
+
+	// 记录处理的分区到对应的worker
+	if workerID, ok := opts["worker_id"].(string); ok {
+		m.ProcessedByWorker[workerID] = append(m.ProcessedByWorker[workerID], minID)
+	}
+
+	// 模拟处理项目
+	processCount := (maxID - minID)
+	if processCount < 0 {
+		processCount = 0
+	}
+
+	// 更新 CurrentMaxID 如果处理��项目
+	if maxID > m.CurrentMaxID {
+		m.CurrentMaxID = maxID
+	}
+
+	// 返回处理结果
+	return processCount, maxID, nil
+}
+
+func (m *RealMockTaskProcessor) GetMaxProcessedID(ctx context.Context) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.CurrentMaxID, nil
+}
+
+func (m *RealMockTaskProcessor) GetNextMaxID(ctx context.Context, currentMax int64, rangeSize int64) (int64, error) {
+	return currentMax + rangeSize, nil
+}
+
+func (m *RealMockTaskProcessor) UpdateMaxProcessedID(ctx context.Context, newMaxID int64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if newMaxID > m.CurrentMaxID {
+		m.CurrentMaxID = newMaxID
+	}
+	return nil
 }
 
 func TestWorker_ConsolidateGlobalState(t *testing.T) {
@@ -676,7 +808,7 @@ func TestWorker_FailureRecovery(t *testing.T) {
 
 	// 创建新的 worker
 	processor := new(MockTaskProcessor)
-	processor.On("GetMaxProcessedID", mock.Anything).Return(int64(500), nil) // 之前处理到 500
+	processor.On("GetMaxProcessedID", mock.Anything).Return(int64(500), nil) // 之前处理了 500
 	processor.On("GetNextMaxID", mock.Anything, mock.Anything, mock.Anything).Return(int64(3000), nil)
 	processor.On("Process", mock.Anything, int64(1000), int64(2000), mock.Anything).
 		Return(int64(1000), int64(2000), nil)
