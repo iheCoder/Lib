@@ -1,6 +1,10 @@
 package elk_assigner
 
-import "time"
+import (
+	"errors"
+	"log"
+	"time"
+)
 
 // 任务处理相关的常量
 const (
@@ -16,6 +20,35 @@ const (
 	StatusRunning   = "running"
 	StatusCompleted = "completed"
 	StatusFailed    = "failed"
+)
+
+// 默认系统配置常量
+const (
+	// 时间相关默认设置
+	DefaultLeaderLockExpiry       = 30 * time.Second
+	DefaultPartitionLockExpiry    = 3 * time.Minute
+	DefaultHeartbeatInterval      = 10 * time.Second
+	DefaultLeaderElectionInterval = 5 * time.Second
+	DefaultPartitionCount         = 8
+	DefaultMaxRetries             = 3
+	DefaultConsolidationInterval  = 30 * time.Second
+)
+
+// Redis键格式常量
+const (
+	// 键格式字符串
+	LeaderLockKeyFmt    = "%s:leader_lock"
+	PartitionLockFmtFmt = "%s:partition:%d"
+	PartitionInfoKeyFmt = "%s:partitions"
+	HeartbeatFmtFmt     = "%s:heartbeat:%s"
+	StatusKeyFmt        = "%s:status"
+	WorkersKeyFmt       = "%s:workers"
+)
+
+// 系统错误定义
+var (
+	ErrNoAvailablePartition = errors.New("no available partition to claim")
+	ErrMaxRetriesExceeded   = errors.New("maximum retry attempts exceeded")
 )
 
 // PartitionInfo stores partition information
@@ -39,4 +72,31 @@ type SyncStatus struct {
 	GlobalMaxID       int64                  `json:"global_max_id"`
 	PartitionStatus   map[int]PartitionInfo  `json:"partition_status"`
 	AdditionalInfo    map[string]interface{} `json:"additional_info,omitempty"`
+}
+
+// Logger 定义日志接口
+type Logger interface {
+	Infof(format string, args ...interface{})
+	Warnf(format string, args ...interface{})
+	Errorf(format string, args ...interface{})
+	Debugf(format string, args ...interface{})
+}
+
+// defaultLogger 提供简单的默认日志实现
+type defaultLogger struct{}
+
+func (l *defaultLogger) Infof(format string, args ...interface{}) {
+	log.Printf("[INFO] "+format, args...)
+}
+
+func (l *defaultLogger) Warnf(format string, args ...interface{}) {
+	log.Printf("[WARN] "+format, args...)
+}
+
+func (l *defaultLogger) Errorf(format string, args ...interface{}) {
+	log.Printf("[ERROR] "+format, args...)
+}
+
+func (l *defaultLogger) Debugf(format string, args ...interface{}) {
+	log.Printf("[DEBUG] "+format, args...)
 }
