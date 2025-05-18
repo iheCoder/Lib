@@ -36,8 +36,8 @@ const (
 // TaskProcessor is an interface that task processors must implement
 type TaskProcessor interface {
 	// Process processes a range of tasks identified by minID and maxID
-	// Returns the number of processed items, the final max ID processed, and any error
-	Process(ctx context.Context, minID, maxID int64, opts map[string]interface{}) (int64, int64, error)
+	// Returns the number of processed items and any error
+	Process(ctx context.Context, minID, maxID int64, opts map[string]interface{}) (int64, error)
 
 	// GetMaxProcessedID returns the current max ID that has been successfully processed
 	GetMaxProcessedID(ctx context.Context) (int64, error)
@@ -811,21 +811,25 @@ func (w *Worker) processPartition(ctx context.Context, partition *PartitionInfo)
 	partition.Options["worker_id"] = w.ID
 
 	// 更新分区状态为运行中
-	if err := w.updatePartitionStatus(ctx, partition.PartitionID, "running"); err != nil {
-		w.Logger.Errorf("更新分区 %d 状态为 running 失败: %v", partition.PartitionID, err)
-		// 尽管有错误，继续处理
+	updateErr := w.updatePartitionStatus(ctx, partition.PartitionID, "running")
+	if updateErr != nil {
+		w.Logger.Errorf("更新分区 %d 状态为 running 失败: %v", partition.PartitionID, updateErr)
+		// 如果无法更新状态为running，释放锁并返回错误，让其他worker有机会处理此分区
+		lockKey := w.getPartitionLockKey(partition.PartitionID)
+		w.releaseLock(ctx, lockKey)
+		return errors.Wrap(updateErr, "无法将分区状态更新为running")
 	}
 
 	// 使用任务处理器处理分区
 	w.Logger.Infof("调用处理器处理分区 %d", partition.PartitionID)
-	processCount, finalMaxID, err := w.TaskProcessor.Process(
+	processCount, err := w.TaskProcessor.Process(
 		ctx,
 		partition.MinID,
 		partition.MaxID,
 		partition.Options,
 	)
-	w.Logger.Infof("处理器返回：分区 %d，处理项目数 %d，最终maxID %d，错误: %v",
-		partition.PartitionID, processCount, finalMaxID, err)
+	w.Logger.Infof("处理器返回：分区 %d，处理项目数 %d，错误: %v",
+		partition.PartitionID, processCount, err)
 
 	// 根据结果更新分区状态
 	status := "completed"
@@ -834,32 +838,51 @@ func (w *Worker) processPartition(ctx context.Context, partition *PartitionInfo)
 		w.Logger.Errorf("分区 %d 处理失败: %v", partition.PartitionID, err)
 	}
 
-	// 更新分区状态
-	w.Logger.Infof("正在将分区 %d 状态更新为 %s", partition.PartitionID, status)
-	if updateErr := w.updatePartitionStatus(ctx, partition.PartitionID, status); updateErr != nil {
-		w.Logger.Errorf("更新分区 %d 状态为 %s 失败: %v", partition.PartitionID, status, updateErr)
-		// 这里我们仍然继续，以便解锁分区
-	} else {
-		w.Logger.Infof("成功更新分区 %d 状态为 %s", partition.PartitionID, status)
+	// 尝试多次更新分区状态
+	maxRetries := 3
+	updateSuccess := false
+
+	for i := 0; i < maxRetries; i++ {
+		updateErr = w.updatePartitionStatus(ctx, partition.PartitionID, status)
+		if updateErr == nil {
+			updateSuccess = true
+			w.Logger.Infof("成功更新分区 %d 状态为 %s", partition.PartitionID, status)
+			break
+		}
+
+		w.Logger.Warnf("更新分区 %d 状态为 %s 失败(尝试 %d/%d): %v",
+			partition.PartitionID, status, i+1, maxRetries, updateErr)
+
+		// 短暂等待后重试
+		select {
+		case <-ctx.Done():
+			break
+		case <-time.After(time.Duration(200*(i+1)) * time.Millisecond):
+			// 指数退避重试
+		}
+	}
+
+	if !updateSuccess {
+		w.Logger.Errorf("多次尝试后仍无法更新分区 %d 状态为 %s: %v",
+			partition.PartitionID, status, updateErr)
 	}
 
 	// 释放分区锁
 	lockKey := w.getPartitionLockKey(partition.PartitionID)
 	w.Logger.Infof("正在释放分区 %d 锁", partition.PartitionID)
-	w.releaseLock(ctx, lockKey)
+	lockReleased := w.releaseLock(ctx, lockKey)
+
+	if !lockReleased {
+		w.Logger.Errorf("无法释放分区 %d 锁，可能会导致该分区暂时不可用", partition.PartitionID)
+	}
 
 	// 状态为completed时尝试更新全局状态
-	if err == nil && status == "completed" {
-		// 使用合理的最终ID值
-		effectiveMaxID := finalMaxID
-
-		// 如果返回的finalMaxID无效或小于分区的maxID，使用分区的maxID
-		// 修复：确保空分区或无数据分区也能更新全局状态
-		if effectiveMaxID < partition.MaxID {
-			effectiveMaxID = partition.MaxID
-			w.Logger.Infof("使用分区最大值 %d 作为有效最大ID值 (处理计数=%d, 返回的最大ID=%d)",
-				effectiveMaxID, processCount, finalMaxID)
-		}
+	// 注意：即使状态更新失败，如果处理成功，仍然尝试更新全局状态
+	if err == nil {
+		// 使用分区的maxID作为有效最大ID值
+		effectiveMaxID := partition.MaxID
+		w.Logger.Infof("使用分区最大值 %d 作为有效最大ID值 (处理计数=%d)",
+			effectiveMaxID, processCount)
 
 		// 检查是否可以安全更新全局最大ID
 		safeToUpdate, checkErr := w.isSafeToUpdateGlobalMaxID(ctx, partition.PartitionID, effectiveMaxID)
@@ -1080,8 +1103,7 @@ func (w *Worker) updateGlobalMaxID(ctx context.Context, newMaxID int64) error {
 	}
 
 	// Option 2: Fall back to using Process with special parameters
-	// This is a temporary solution until you refactor the TaskProcessor interface
-	_, _, err := w.TaskProcessor.Process(ctx, 0, 0, map[string]interface{}{
+	_, err := w.TaskProcessor.Process(ctx, 0, 0, map[string]interface{}{
 		"action":     "update_max_id",
 		"new_max_id": newMaxID,
 	})
@@ -1203,10 +1225,12 @@ func (w *Worker) isSafeToUpdateGlobalMaxID(ctx context.Context, partitionID int,
 }
 
 // releaseLock releases a lock
-func (w *Worker) releaseLock(ctx context.Context, key string) {
+func (w *Worker) releaseLock(ctx context.Context, key string) bool {
 	if err := w.DataStore.ReleaseLock(ctx, key, w.ID); err != nil {
 		w.Logger.Warnf("Failed to release lock %s: %v", key, err)
+		return false
 	}
+	return true
 }
 
 // getLeaderLockKey returns the leader lock key
