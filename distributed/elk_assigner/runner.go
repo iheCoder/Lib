@@ -38,8 +38,9 @@ func (m *Mgr) acquirePartitionTask(ctx context.Context) (PartitionInfo, error) {
 		return PartitionInfo{}, ErrNoAvailablePartition
 	}
 
-	// 寻找可用的pending分区
+	// 寻找可用的分区
 	for partitionID, partition := range partitions {
+		// 优先处理Pending状态的分区
 		if partition.Status == StatusPending && partition.WorkerID == "" {
 			// 尝试锁定这个分区
 			lockKey := fmt.Sprintf(PartitionLockFmtFmt, m.Namespace, partitionID)
@@ -49,6 +50,22 @@ func (m *Mgr) acquirePartitionTask(ctx context.Context) (PartitionInfo, error) {
 			}
 
 			// 更新分区信息，标记为该节点处理
+			partition.WorkerID = m.ID
+			partition.Status = StatusClaimed
+			partition.UpdatedAt = time.Now()
+		} else if m.shouldReclaimPartition(partition) {
+			// 检查是否有长时间未更新的运行中分区（可能出现问题的分区）
+			// 注意：这里我们需要更加谨慎，只尝试获取明显过期的分区
+			lockKey := fmt.Sprintf(PartitionLockFmtFmt, m.Namespace, partitionID)
+			locked, err := m.acquirePartitionLock(ctx, lockKey, partitionID)
+			if err != nil || !locked {
+				continue
+			}
+
+			m.Logger.Infof("重新获取可能卡住的分区 %d，上次更新时间: %v",
+				partitionID, partition.UpdatedAt)
+
+			// 重新获取该分区
 			partition.WorkerID = m.ID
 			partition.Status = StatusClaimed
 			partition.UpdatedAt = time.Now()
@@ -111,9 +128,24 @@ func (m *Mgr) processPartitionTask(ctx context.Context, task PartitionInfo) erro
 		return errors.Wrap(err, "更新分区状态为running失败")
 	}
 
+	// 为长时间运行的任务创建心跳上下文
+	heartbeatCtx, cancelHeartbeat := context.WithCancel(context.Background())
+	defer cancelHeartbeat()
+
+	// 启动心跳goroutine，定期更新分区状态
+	heartbeatDone := make(chan struct{})
+	go func() {
+		defer close(heartbeatDone)
+		m.runPartitionHeartbeat(heartbeatCtx, task)
+	}()
+
 	// 准备处理选项并执行任务
 	processCount, err := m.executeProcessorTask(ctx, task)
 	m.Logger.Infof("分区 %d 处理完成: 处理项数=%d, 错误=%v", task.PartitionID, processCount, err)
+
+	// 停止心跳
+	cancelHeartbeat()
+	<-heartbeatDone
 
 	// 根据处理结果更新状态
 	newStatus := StatusCompleted
@@ -134,6 +166,14 @@ func (m *Mgr) processPartitionTask(ctx context.Context, task PartitionInfo) erro
 
 // executeProcessorTask 执行处理器任务
 func (m *Mgr) executeProcessorTask(ctx context.Context, task PartitionInfo) (int64, error) {
+	// 设置合理的处理超时时间，避免任务运行时间过长
+	// 默认使用分区锁过期时间的一半作为处理超时
+	taskTimeout := m.PartitionLockExpiry / 2
+
+	// 创建带超时的上下文
+	execCtx, cancel := context.WithTimeout(ctx, taskTimeout)
+	defer cancel()
+
 	// 准备处理选项
 	options := task.Options
 	if options == nil {
@@ -142,8 +182,37 @@ func (m *Mgr) executeProcessorTask(ctx context.Context, task PartitionInfo) (int
 	options["partition_id"] = task.PartitionID
 	options["worker_id"] = m.ID
 
-	// 处理分区数据
-	return m.TaskProcessor.Process(ctx, task.MinID, task.MaxID, options)
+	// 启动处理，并捕获上下文超时
+	processDone := make(chan struct {
+		count int64
+		err   error
+	})
+
+	go func() {
+		count, err := m.TaskProcessor.Process(execCtx, task.MinID, task.MaxID, options)
+		select {
+		case <-execCtx.Done():
+			// 上下文已结束，无需发送结果
+		default:
+			processDone <- struct {
+				count int64
+				err   error
+			}{count, err}
+		}
+	}()
+
+	// 等待处理完成或超时
+	select {
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	case <-execCtx.Done():
+		if execCtx.Err() == context.DeadlineExceeded {
+			return 0, errors.New("任务处理超时")
+		}
+		return 0, execCtx.Err()
+	case result := <-processDone:
+		return result.count, result.err
+	}
 }
 
 // updateTaskStatus 更新任务状态
@@ -229,5 +298,58 @@ func (m *Mgr) handleAcquisitionError(err error) {
 		// 其他错误
 		m.Logger.Warnf("获取分区任务失败: %v", err)
 		time.Sleep(taskRetryDelay)
+	}
+}
+
+// shouldReclaimPartition 判断一个分区是否应该被重新获取
+// 例如分区处于claimed/running状态但长时间未更新
+func (m *Mgr) shouldReclaimPartition(partition PartitionInfo) bool {
+	// 只检查Claimed或Running状态的分区
+	if !(partition.Status == StatusClaimed || partition.Status == StatusRunning) {
+		return false
+	}
+
+	// 检查分区是否长时间未更新 (超过分区锁过期时间的3倍)
+	staleThreshold := m.PartitionLockExpiry * 3
+	timeSinceUpdate := time.Since(partition.UpdatedAt)
+
+	// 如果分区更新时间太旧，并且不是本节点持有的，可以尝试重新获取
+	if timeSinceUpdate > staleThreshold && partition.WorkerID != m.ID {
+		return true
+	}
+
+	return false
+}
+
+// runPartitionHeartbeat 为正在处理的分区任务发送心跳
+// 定期更新分区状态，防止任务被其他节点认为已死亡
+func (m *Mgr) runPartitionHeartbeat(ctx context.Context, task PartitionInfo) {
+	heartbeatTicker := time.NewTicker(m.PartitionLockExpiry / 3) // 确保心跳频率比锁过期时间更频繁
+	defer heartbeatTicker.Stop()
+
+	// 记录上次更新时间，避免过于频繁的更新
+	lastUpdate := time.Now()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-heartbeatTicker.C:
+			// 只有处理时间超过一定阈值才需要发送心跳
+			if time.Since(lastUpdate) >= m.PartitionLockExpiry/3 {
+				updateCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+
+				// 更新分区时间戳，但保持状态不变
+				task.UpdatedAt = time.Now()
+				if err := m.updatePartitionStatus(updateCtx, task); err != nil {
+					m.Logger.Warnf("更新分区 %d 心跳失败: %v", task.PartitionID, err)
+				} else {
+					m.Logger.Debugf("已更新分区 %d 心跳", task.PartitionID)
+					lastUpdate = time.Now()
+				}
+
+				cancel()
+			}
+		}
 	}
 }

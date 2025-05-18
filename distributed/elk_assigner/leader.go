@@ -106,8 +106,12 @@ func (m *Mgr) doLeaderWork(ctx context.Context) error {
 
 // runPartitionAllocationLoop 运行分区分配循环
 func (m *Mgr) runPartitionAllocationLoop(ctx context.Context) error {
-	// 使用Leader选举间隔的一半作为分区分配频率
-	ticker := time.NewTicker(m.LeaderElectionInterval / 2)
+	// 初始运行一次分区分配，确保刚启动时有任务可执行
+	go m.tryAllocatePartitions(ctx)
+
+	// 使用较长时间间隔进行常规分区检查和分配
+	allocationInterval := m.LeaderElectionInterval * 2 // 使用更长的间隔，减少不必要的分配尝试
+	ticker := time.NewTicker(allocationInterval)
 	defer ticker.Stop()
 
 	// 从lastProcessedID开始，持续分配分区任务，直到GetNextMaxID没有更多任务为止
@@ -120,6 +124,7 @@ func (m *Mgr) runPartitionAllocationLoop(ctx context.Context) error {
 			m.Logger.Infof("Leader工作停止 (不再是Leader)")
 			return nil
 		case <-ticker.C:
+			// 检查分区状态并按需分配新分区
 			m.tryAllocatePartitions(ctx)
 		}
 	}
@@ -127,6 +132,19 @@ func (m *Mgr) runPartitionAllocationLoop(ctx context.Context) error {
 
 // tryAllocatePartitions 尝试分配分区并处理错误
 func (m *Mgr) tryAllocatePartitions(ctx context.Context) {
+	// 检查是否有活跃节点，如果没有，则不分配分区
+	activeWorkers, err := m.getActiveWorkers(ctx)
+	if err != nil {
+		m.Logger.Warnf("获取活跃节点失败: %v", err)
+		return
+	}
+
+	if len(activeWorkers) == 0 {
+		m.Logger.Debugf("没有活跃工作节点，跳过分区分配")
+		return
+	}
+
+	// 尝试分配分区
 	if err := m.allocatePartitions(ctx); err != nil {
 		m.Logger.Warnf("分配分区失败: %v", err)
 	}
@@ -184,6 +202,12 @@ func (m *Mgr) relinquishLeadership() {
 
 // allocatePartitions 分配工作分区
 func (m *Mgr) allocatePartitions(ctx context.Context) error {
+	// 首先检查现有分区状态
+	existingPartitions, currentPartitionStats, err := m.checkExistingPartitions(ctx)
+	if err != nil {
+		return errors.Wrap(err, "检查现有分区失败")
+	}
+
 	// 获取ID范围
 	lastProcessedID, nextMaxID, err := m.getProcessingRange(ctx)
 	if err != nil {
@@ -196,21 +220,30 @@ func (m *Mgr) allocatePartitions(ctx context.Context) error {
 		return nil
 	}
 
-	// 计算分区数量和大小
+	// 检查是否需要分配新的分区
+	if !m.shouldAllocateNewPartitions(currentPartitionStats) {
+		m.Logger.Debugf("现有分区未达到完成率阈值，暂不分配新分区。完成率: %.2f%%", currentPartitionStats.completionRate*100)
+		return nil
+	}
+
+	// 计算分区数量和大小，基于活跃节点和已有分区情况
 	partitionCount, err := m.calculatePartitionCount(ctx)
 	if err != nil {
 		return err
 	}
 
-	// 创建分区
-	partitions := m.createPartitions(lastProcessedID, nextMaxID, partitionCount)
+	// 创建新的分区，考虑已有分区的状态
+	newPartitions := m.createPartitions(lastProcessedID, nextMaxID, partitionCount)
 
-	// 保存分区到存储
-	if err := m.savePartitionsToStorage(ctx, partitions); err != nil {
+	// 合并现有分区和新分区
+	mergedPartitions := m.mergePartitions(existingPartitions, newPartitions)
+
+	// 保存合并后的分区到存储
+	if err := m.savePartitionsToStorage(ctx, mergedPartitions); err != nil {
 		return err
 	}
 
-	m.Logger.Infof("成功创建 %d 个分区，ID范围 [%d, %d]", partitionCount, lastProcessedID+1, nextMaxID)
+	m.Logger.Infof("成功创建 %d 个新分区，ID范围 [%d, %d]", len(newPartitions), lastProcessedID+1, nextMaxID)
 
 	return nil
 }
@@ -232,7 +265,7 @@ func (m *Mgr) getProcessingRange(ctx context.Context) (int64, int64, error) {
 	return lastProcessedID, nextMaxID, nil
 }
 
-// calculatePartitionCount 根据活跃工作节点计算分区数量
+// calculatePartitionCount 根据活跃工作节点和现有分区状态计算新分区数量
 func (m *Mgr) calculatePartitionCount(ctx context.Context) (int, error) {
 	// 获取活跃节点
 	activeWorkers, err := m.getActiveWorkers(ctx)
@@ -240,8 +273,39 @@ func (m *Mgr) calculatePartitionCount(ctx context.Context) (int, error) {
 		return 0, errors.Wrap(err, "获取活跃节点失败")
 	}
 
-	// 计算分区数量
-	partitionCount := len(activeWorkers)
+	// 获取现有分区状态
+	_, stats, err := m.checkExistingPartitions(ctx)
+	if err != nil {
+		return 0, errors.Wrap(err, "获取现有分区状态失败")
+	}
+
+	// 计算每个节点正在处理的平均分区数
+	workerCount := len(activeWorkers)
+	if workerCount == 0 {
+		workerCount = 1 // 避免除以零
+	}
+
+	avgPartitionsPerWorker := float64(stats.running) / float64(workerCount)
+
+	// 基于当前负载计算新的分区数量
+	var partitionCount int
+
+	// 如果平均每个节点处理的分区数小于2，可以分配更多分区
+	if avgPartitionsPerWorker < 2.0 {
+		// 分配节点数量*2的分区，为每个节点提供足够的工作
+		partitionCount = workerCount * 2
+	} else if avgPartitionsPerWorker < 3.0 {
+		// 适中分配
+		partitionCount = workerCount
+	} else {
+		// 负载较高，少分配一些
+		partitionCount = workerCount / 2
+		if partitionCount == 0 {
+			partitionCount = 1
+		}
+	}
+
+	// 确保至少有一个分区，且不超过最大限制
 	if partitionCount == 0 {
 		partitionCount = 1 // 至少有一个分区
 	} else if partitionCount > DefaultPartitionCount {
@@ -297,4 +361,110 @@ func (m *Mgr) savePartitionsToStorage(ctx context.Context, partitions map[int]Pa
 	}
 
 	return nil
+}
+
+// 分区统计信息
+type partitionStats struct {
+	total          int     // 总分区数
+	pending        int     // 等待处理的分区数
+	running        int     // 正在处理的分区数
+	completed      int     // 已完成的分区数
+	failed         int     // 失败的分区数
+	completionRate float64 // 完成率 (completed / total)
+}
+
+// checkExistingPartitions 检查现有的分区状态
+func (m *Mgr) checkExistingPartitions(ctx context.Context) (map[int]PartitionInfo, partitionStats, error) {
+	partitionInfoKey := fmt.Sprintf(PartitionInfoKeyFmt, m.Namespace)
+	partitionsData, err := m.DataStore.GetPartitions(ctx, partitionInfoKey)
+
+	stats := partitionStats{}
+	var partitions map[int]PartitionInfo
+
+	if err != nil {
+		return nil, stats, errors.Wrap(err, "获取分区信息失败")
+	}
+
+	// 如果没有分区信息，返回空映射
+	if partitionsData == "" {
+		return make(map[int]PartitionInfo), stats, nil
+	}
+
+	if err := json.Unmarshal([]byte(partitionsData), &partitions); err != nil {
+		return nil, stats, errors.Wrap(err, "解析分区数据失败")
+	}
+
+	// 统计分区状态
+	stats.total = len(partitions)
+	for _, partition := range partitions {
+		switch partition.Status {
+		case StatusPending:
+			stats.pending++
+		case StatusClaimed, StatusRunning:
+			stats.running++
+		case StatusCompleted:
+			stats.completed++
+		case StatusFailed:
+			stats.failed++
+		}
+	}
+
+	// 计算完成率
+	if stats.total > 0 {
+		stats.completionRate = float64(stats.completed) / float64(stats.total)
+	}
+
+	return partitions, stats, nil
+}
+
+// shouldAllocateNewPartitions 判断是否应该分配新的分区
+func (m *Mgr) shouldAllocateNewPartitions(stats partitionStats) bool {
+	// 如果没有分区，应该分配
+	if stats.total == 0 {
+		return true
+	}
+
+	// 如果有太多失败的分区，暂停分配新分区
+	if stats.failed > stats.total/3 { // 失败率超过1/3
+		return false
+	}
+
+	// 如果有足够的等待处理或正在处理的分区，不需要分配新分区
+	if (stats.pending + stats.running) >= stats.total/2 {
+		return false
+	}
+
+	// 如果完成率达到70%，可以分配新分区
+	return stats.completionRate >= 0.7
+}
+
+// mergePartitions 合并现有分区与新分区
+func (m *Mgr) mergePartitions(existingPartitions, newPartitions map[int]PartitionInfo) map[int]PartitionInfo {
+	// 如果没有现有分区，直接返回新分区
+	if len(existingPartitions) == 0 {
+		return newPartitions
+	}
+
+	// 合并分区，找到最大的分区ID
+	maxID := 0
+	for id := range existingPartitions {
+		if id > maxID {
+			maxID = id
+		}
+	}
+
+	// 为新分区分配新的ID，避免冲突
+	mergedPartitions := make(map[int]PartitionInfo)
+	for id, partition := range existingPartitions {
+		mergedPartitions[id] = partition
+	}
+
+	// 添加新分区，确保ID不冲突
+	for _, partition := range newPartitions {
+		maxID++
+		partition.PartitionID = maxID
+		mergedPartitions[maxID] = partition
+	}
+
+	return mergedPartitions
 }
