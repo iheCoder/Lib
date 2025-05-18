@@ -1074,3 +1074,212 @@ func (m *RealMockTaskProcessor) WaitForCompletion(timeout time.Duration) bool {
 		return false
 	}
 }
+
+func TestWorker_IsSafeToUpdateGlobalMaxID(t *testing.T) {
+	worker, processor, dataStore, _, _, cleanup := setupTest(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// 为处理器设置必要的行为
+	processor.On("GetMaxProcessedID", mock.Anything).Return(int64(1000), nil)
+
+	// 测试场景1: 直接跟随全局最大ID的分区 - 应该返回安全
+	t.Run("PartitionDirectlyFollowingGlobalMaxID", func(t *testing.T) {
+		// 准备分区数据
+		partitions := map[int]PartitionInfo{
+			0: {
+				PartitionID: 0,
+				MinID:       100,
+				MaxID:       1000, // 全局最大ID是1000
+				Status:      "completed",
+				UpdatedAt:   time.Now(),
+			},
+			1: { // 这个分区直接跟随全局最大ID
+				PartitionID: 1,
+				MinID:       1001, // 从GlobalMaxID+1开始
+				MaxID:       2000,
+				Status:      "completed",
+				UpdatedAt:   time.Now(),
+			},
+			2: {
+				PartitionID: 2,
+				MinID:       2001,
+				MaxID:       3000,
+				Status:      "pending", // 未完成
+				UpdatedAt:   time.Now(),
+			},
+		}
+
+		// 保存分区数据
+		partitionsData, err := json.Marshal(partitions)
+		assert.NoError(t, err)
+		err = dataStore.SetPartitions(ctx, worker.getPartitionInfoKey(), string(partitionsData))
+		assert.NoError(t, err)
+
+		// 测试是否安全更新
+		safe, err := worker.isSafeToUpdateGlobalMaxID(ctx, 1, 2000) // 分区ID 1, 新最大ID 2000
+		assert.NoError(t, err)
+		assert.True(t, safe, "直接跟随全局最大ID的分区应该安全更新")
+	})
+
+	// 测试场景2: 中间有未完成分区 - 应该返回不安全
+	t.Run("PartitionWithPendingInBetween", func(t *testing.T) {
+		// 准备分区数据
+		partitions := map[int]PartitionInfo{
+			0: {
+				PartitionID: 0,
+				MinID:       100,
+				MaxID:       500,
+				Status:      "pending", // 未完成的分区
+				UpdatedAt:   time.Now(),
+			},
+			1: {
+				PartitionID: 1,
+				MinID:       500,
+				MaxID:       1500,
+				Status:      "completed",
+				UpdatedAt:   time.Now(),
+			},
+		}
+
+		// 保存分区数据
+		partitionsData, err := json.Marshal(partitions)
+		assert.NoError(t, err)
+		err = dataStore.SetPartitions(ctx, worker.getPartitionInfoKey(), string(partitionsData))
+		assert.NoError(t, err)
+
+		// 测试是否安全更新
+		safe, err := worker.isSafeToUpdateGlobalMaxID(ctx, 1, 1500) // 分区ID 1, 新最大ID 1500
+		assert.NoError(t, err)
+		assert.False(t, safe, "有未完成分区时不应该安全更新")
+	})
+
+	// 测试场景3: 有间隙但由已完成分区覆盖 - 应该返回安全
+	t.Run("GapCoveredByCompletedPartition", func(t *testing.T) {
+		// 准备分区数据
+		partitions := map[int]PartitionInfo{
+			0: {
+				PartitionID: 0,
+				MinID:       100,
+				MaxID:       1000, // 全局最大ID
+				Status:      "completed",
+				UpdatedAt:   time.Now(),
+			},
+			1: { // 覆盖间隙的分区
+				PartitionID: 1,
+				MinID:       500,  // 小于全局最大ID
+				MaxID:       1500, // 大于下一分区的MinID
+				Status:      "completed",
+				UpdatedAt:   time.Now(),
+			},
+			2: { // 有间隙的分区
+				PartitionID: 2,
+				MinID:       1200, // 间隙：1000+1 到 1199
+				MaxID:       2000,
+				Status:      "completed",
+				UpdatedAt:   time.Now(),
+			},
+		}
+
+		// 保存分区数据
+		partitionsData, err := json.Marshal(partitions)
+		assert.NoError(t, err)
+		err = dataStore.SetPartitions(ctx, worker.getPartitionInfoKey(), string(partitionsData))
+		assert.NoError(t, err)
+
+		// 测试是否安全更新
+		safe, err := worker.isSafeToUpdateGlobalMaxID(ctx, 2, 2000) // 分区ID 2, 新最大ID 2000
+		assert.NoError(t, err)
+		assert.True(t, safe, "间隙被已完成分区覆盖时应该安全更新")
+	})
+
+	// 测试场景4: 有间隙未覆盖，但都处理完成 - 应该返回安全
+	t.Run("GapNotCovered", func(t *testing.T) {
+		// 准备分区数据
+		partitions := map[int]PartitionInfo{
+			0: {
+				PartitionID: 0,
+				MinID:       100,
+				MaxID:       1000, // 全局最大ID
+				Status:      "completed",
+				UpdatedAt:   time.Now(),
+			},
+			1: { // 有间隙的分区
+				PartitionID: 1,
+				MinID:       1200, // 间隙：1000+1 到 1199
+				MaxID:       2000,
+				Status:      "completed",
+				UpdatedAt:   time.Now(),
+			},
+		}
+
+		// 保存分区数据
+		partitionsData, err := json.Marshal(partitions)
+		assert.NoError(t, err)
+		err = dataStore.SetPartitions(ctx, worker.getPartitionInfoKey(), string(partitionsData))
+		assert.NoError(t, err)
+
+		// 测试是否安全更新
+		safe, err := worker.isSafeToUpdateGlobalMaxID(ctx, 1, 2000) // 分区ID 1, 新最大ID 2000
+		assert.NoError(t, err)
+		assert.True(t, safe, "间隙未覆盖时应该安全更新")
+	})
+
+	// 测试场景5: 分区与另一个未完成的分区重叠 - 应该返回不安全
+	t.Run("OverlappingWithPendingPartition", func(t *testing.T) {
+		// 准备分区数据，包括重叠分区
+		partitions := map[int]PartitionInfo{
+			0: {
+				PartitionID: 0,
+				MinID:       100,
+				MaxID:       1500,      // 与分区1重叠
+				Status:      "pending", // 未完成
+				UpdatedAt:   time.Now(),
+			},
+			1: {
+				PartitionID: 1,
+				MinID:       1000, // 与分区0重叠
+				MaxID:       2000,
+				Status:      "completed",
+				UpdatedAt:   time.Now(),
+			},
+		}
+
+		// 保存分区数据
+		partitionsData, err := json.Marshal(partitions)
+		assert.NoError(t, err)
+		err = dataStore.SetPartitions(ctx, worker.getPartitionInfoKey(), string(partitionsData))
+		assert.NoError(t, err)
+
+		// 测试是否安全更新
+		safe, err := worker.isSafeToUpdateGlobalMaxID(ctx, 1, 2000) // 分区ID 1, 新最大ID 2000
+		assert.NoError(t, err)
+		assert.False(t, safe, "与未完成分区重叠时不应该安全更新")
+	})
+
+	// 测试场景6: 当分区不存在时 - 应该返回错误
+	t.Run("NonExistingPartition", func(t *testing.T) {
+		// 准备分区数据
+		partitions := map[int]PartitionInfo{
+			0: {
+				PartitionID: 0,
+				MinID:       100,
+				MaxID:       1000,
+				Status:      "completed",
+				UpdatedAt:   time.Now(),
+			},
+		}
+
+		// 保存分区数据
+		partitionsData, err := json.Marshal(partitions)
+		assert.NoError(t, err)
+		err = dataStore.SetPartitions(ctx, worker.getPartitionInfoKey(), string(partitionsData))
+		assert.NoError(t, err)
+
+		// 测试不存在的分区ID
+		_, err = worker.isSafeToUpdateGlobalMaxID(ctx, 999, 2000) // 不存在的分区ID
+		assert.Error(t, err, "对不存在的分区应该返回错误")
+		assert.Contains(t, err.Error(), "not found", "错误消息应该说明分区未找到")
+	})
+}
