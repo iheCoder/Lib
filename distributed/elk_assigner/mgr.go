@@ -20,10 +20,11 @@ type Mgr struct {
 	Logger        Logger
 
 	// 配置选项
-	HeartbeatInterval      time.Duration
-	LeaderElectionInterval time.Duration
-	PartitionLockExpiry    time.Duration
-	LeaderLockExpiry       time.Duration
+	HeartbeatInterval       time.Duration
+	LeaderElectionInterval  time.Duration
+	PartitionLockExpiry     time.Duration
+	LeaderLockExpiry        time.Duration
+	WorkerPartitionMultiple int64 // 每个工作节点分配的分区倍数，用于计算ID探测范围
 
 	// 内部状态
 	isLeader        bool
@@ -43,15 +44,16 @@ func NewMgr(namespace string, dataStore data.DataStore, processor Processor) *Mg
 	logger := &defaultLogger{}
 
 	return &Mgr{
-		ID:                     nodeID,
-		Namespace:              namespace,
-		DataStore:              dataStore,
-		TaskProcessor:          processor,
-		Logger:                 logger,
-		HeartbeatInterval:      DefaultHeartbeatInterval,
-		LeaderElectionInterval: DefaultLeaderElectionInterval,
-		PartitionLockExpiry:    DefaultPartitionLockExpiry,
-		LeaderLockExpiry:       DefaultLeaderLockExpiry,
+		ID:                      nodeID,
+		Namespace:               namespace,
+		DataStore:               dataStore,
+		TaskProcessor:           processor,
+		Logger:                  logger,
+		HeartbeatInterval:       DefaultHeartbeatInterval,
+		LeaderElectionInterval:  DefaultLeaderElectionInterval,
+		PartitionLockExpiry:     DefaultPartitionLockExpiry,
+		LeaderLockExpiry:        DefaultLeaderLockExpiry,
+		WorkerPartitionMultiple: DefaultWorkerPartitionMultiple,
 	}
 }
 
@@ -232,4 +234,14 @@ func (m *Mgr) getActiveWorkers(ctx context.Context) ([]string, error) {
 	}
 
 	return activeWorkers, nil
+}
+
+// SetWorkerPartitionMultiple 设置每个工作节点分配的分区倍数
+func (m *Mgr) SetWorkerPartitionMultiple(multiple int64) {
+	if multiple <= 0 {
+		m.Logger.Warnf("无效的工作节点分区倍数: %d，使用默认值 %d", multiple, DefaultWorkerPartitionMultiple)
+		m.WorkerPartitionMultiple = DefaultWorkerPartitionMultiple
+		return
+	}
+	m.WorkerPartitionMultiple = multiple
 }

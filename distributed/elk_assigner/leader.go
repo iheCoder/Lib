@@ -250,8 +250,17 @@ func (m *Mgr) getProcessingRange(ctx context.Context) (int64, int64, error) {
 		return 0, 0, errors.Wrap(err, "获取最后分配的ID边界失败")
 	}
 
+	// 计算合适的ID探测范围大小
+	rangeSize, err := m.calculateLookAheadRange(ctx)
+	if err != nil {
+		m.Logger.Warnf("计算ID探测范围失败: %v，使用默认值", err)
+		rangeSize = 10000 // 使用一个默认值作为备选
+	}
+
+	m.Logger.Debugf("使用动态计算的ID探测范围: %d", rangeSize)
+
 	// 获取下一批次的最大ID
-	nextMaxID, err := m.TaskProcessor.GetNextMaxID(ctx, lastAllocatedID, 10000) // 使用一个合理的范围大小
+	nextMaxID, err := m.TaskProcessor.GetNextMaxID(ctx, lastAllocatedID, rangeSize)
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "获取下一个最大ID失败")
 	}
@@ -312,18 +321,17 @@ func (m *Mgr) calculatePartitionCount(ctx context.Context) (int, error) {
 
 // createPartitions 创建分区信息
 func (m *Mgr) createPartitions(lastAllocatedID, nextMaxID int64) map[int]PartitionInfo {
-	// 尝试从处理器获取建议的分区大小
-	suggestedSize, err := m.TaskProcessor.SuggestPartitionSize(context.Background())
-
-	// 确定分区大小
-	var partitionSize int64
-	if err != nil || suggestedSize <= 0 {
-		// 如果处理器没有建议分区大小，使用默认分区大小
+	// 获取有效的分区大小（从处理器建议或默认值）
+	partitionSize, err := m.getEffectivePartitionSize(context.Background())
+	if err != nil {
+		m.Logger.Warnf("获取有效分区大小失败: %v，使用默认值", err)
 		partitionSize = DefaultPartitionSize
+	}
+
+	// 记录日志
+	if partitionSize == DefaultPartitionSize {
 		m.Logger.Debugf("使用默认分区大小: %d", partitionSize)
 	} else {
-		// 使用处理器建议的分区大小
-		partitionSize = suggestedSize
 		m.Logger.Infof("使用处理器建议的分区大小: %d", partitionSize)
 	}
 
@@ -505,4 +513,46 @@ func (m *Mgr) getLastAllocatedID(ctx context.Context) (int64, error) {
 	}
 
 	return maxID, nil
+}
+
+// calculateLookAheadRange 计算合适的ID探测范围大小
+// 基于当前分区大小、活跃节点数量和配置的分区倍数，动态计算合适的范围大小
+func (m *Mgr) calculateLookAheadRange(ctx context.Context) (int64, error) {
+	// 获取当前建议的分区大小
+	partitionSize, err := m.getEffectivePartitionSize(ctx)
+	if err != nil {
+		// 如果获取失败，使用默认值
+		partitionSize = DefaultPartitionSize
+	}
+
+	// 获取活跃节点数量
+	activeWorkers, err := m.getActiveWorkers(ctx)
+	if err != nil {
+		// 如果获取失败，假设至少有一个节点
+		return partitionSize * m.WorkerPartitionMultiple, nil
+	}
+
+	workerCount := len(activeWorkers)
+	if workerCount == 0 {
+		workerCount = 1 // 避免除以零
+	}
+
+	// 基于分区大小、节点数量和配置的分区倍数计算合理的探测范围
+	// 为每个节点准备指定倍数的分区工作量
+	rangeSize := partitionSize * int64(workerCount) * m.WorkerPartitionMultiple
+
+	return rangeSize, nil
+}
+
+// getEffectivePartitionSize 获取有效的分区大小（从处理器建议或默认值）
+func (m *Mgr) getEffectivePartitionSize(ctx context.Context) (int64, error) {
+	// 尝试从处理器获取建议的分区大小
+	suggestedSize, err := m.TaskProcessor.SuggestPartitionSize(ctx)
+
+	if err != nil || suggestedSize <= 0 {
+		// 如果处理器没有建议分区大小，使用默认分区大小
+		return DefaultPartitionSize, nil
+	}
+
+	return suggestedSize, nil
 }

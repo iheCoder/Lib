@@ -25,14 +25,15 @@ const (
 // 默认系统配置常量
 const (
 	// 时间相关默认设置
-	DefaultLeaderLockExpiry       = 30 * time.Second
-	DefaultPartitionLockExpiry    = 3 * time.Minute
-	DefaultHeartbeatInterval      = 10 * time.Second
-	DefaultLeaderElectionInterval = 5 * time.Second
-	DefaultPartitionCount         = 8
-	DefaultMaxRetries             = 3
-	DefaultConsolidationInterval  = 30 * time.Second
-	DefaultPartitionSize          = 3000 // 默认分区大小，每个分区包含的ID数量
+	DefaultLeaderLockExpiry        = 30 * time.Second
+	DefaultPartitionLockExpiry     = 3 * time.Minute
+	DefaultHeartbeatInterval       = 10 * time.Second
+	DefaultLeaderElectionInterval  = 5 * time.Second
+	DefaultPartitionCount          = 8
+	DefaultMaxRetries              = 3
+	DefaultConsolidationInterval   = 30 * time.Second
+	DefaultPartitionSize           = 3000 // 默认分区大小，每个分区包含的ID数量
+	DefaultWorkerPartitionMultiple = 3    // 默认每个工作节点分配的分区倍数
 )
 
 // Redis键格式常量
