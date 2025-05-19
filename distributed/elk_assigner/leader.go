@@ -209,14 +209,14 @@ func (m *Mgr) allocatePartitions(ctx context.Context) error {
 	}
 
 	// 获取ID范围
-	lastProcessedID, nextMaxID, err := m.getProcessingRange(ctx)
+	lastAllocatedID, nextMaxID, err := m.getProcessingRange(ctx)
 	if err != nil {
 		return err
 	}
 
-	// 如果没有新的数据要处理，直接返回
-	if nextMaxID <= lastProcessedID {
-		m.Logger.Debugf("没有新的数据需要处理，当前最大ID: %d", lastProcessedID)
+	// 如果没有新的数据要分配，直接返回
+	if nextMaxID <= lastAllocatedID {
+		m.Logger.Debugf("没有新的数据需要分配，当前已分配的最大ID: %d", lastAllocatedID)
 		return nil
 	}
 
@@ -227,7 +227,7 @@ func (m *Mgr) allocatePartitions(ctx context.Context) error {
 	}
 
 	// 创建新的分区，基于ID范围和建议的分区大小
-	newPartitions := m.createPartitions(lastProcessedID, nextMaxID)
+	newPartitions := m.createPartitions(lastAllocatedID, nextMaxID)
 
 	// 合并现有分区和新分区
 	mergedPartitions := m.mergePartitions(existingPartitions, newPartitions)
@@ -237,26 +237,26 @@ func (m *Mgr) allocatePartitions(ctx context.Context) error {
 		return err
 	}
 
-	m.Logger.Infof("成功创建 %d 个新分区，ID范围 [%d, %d]", len(newPartitions), lastProcessedID+1, nextMaxID)
+	m.Logger.Infof("成功创建 %d 个新分区，ID范围 [%d, %d]", len(newPartitions), lastAllocatedID+1, nextMaxID)
 
 	return nil
 }
 
 // getProcessingRange 获取需要处理的ID范围
 func (m *Mgr) getProcessingRange(ctx context.Context) (int64, int64, error) {
-	// 获取当前已处理的最大ID
-	lastProcessedID, err := m.TaskProcessor.GetLastProcessedID(ctx)
+	// 获取当前已分配分区的最大ID边界
+	lastAllocatedID, err := m.getLastAllocatedID(ctx)
 	if err != nil {
-		return 0, 0, errors.Wrap(err, "获取最后处理的ID失败")
+		return 0, 0, errors.Wrap(err, "获取最后分配的ID边界失败")
 	}
 
 	// 获取下一批次的最大ID
-	nextMaxID, err := m.TaskProcessor.GetNextMaxID(ctx, lastProcessedID, 10000) // 使用一个合理的范围大小
+	nextMaxID, err := m.TaskProcessor.GetNextMaxID(ctx, lastAllocatedID, 10000) // 使用一个合理的范围大小
 	if err != nil {
 		return 0, 0, errors.Wrap(err, "获取下一个最大ID失败")
 	}
 
-	return lastProcessedID, nextMaxID, nil
+	return lastAllocatedID, nextMaxID, nil
 }
 
 // calculatePartitionCount 根据活跃工作节点和现有分区状态计算新分区数量
@@ -311,7 +311,7 @@ func (m *Mgr) calculatePartitionCount(ctx context.Context) (int, error) {
 }
 
 // createPartitions 创建分区信息
-func (m *Mgr) createPartitions(lastProcessedID, nextMaxID int64) map[int]PartitionInfo {
+func (m *Mgr) createPartitions(lastAllocatedID, nextMaxID int64) map[int]PartitionInfo {
 	// 尝试从处理器获取建议的分区大小
 	suggestedSize, err := m.TaskProcessor.SuggestPartitionSize(context.Background())
 
@@ -328,19 +328,19 @@ func (m *Mgr) createPartitions(lastProcessedID, nextMaxID int64) map[int]Partiti
 	}
 
 	// 根据分区大小计算分区数量
-	totalIds := nextMaxID - lastProcessedID
+	totalIds := nextMaxID - lastAllocatedID
 	partitionCount := int(totalIds / partitionSize)
 	if partitionCount == 0 {
 		partitionCount = 1 // 至少创建一个分区
 	}
 
 	m.Logger.Infof("ID范围 [%d, %d]，分区大小 %d，将创建 %d 个分区",
-		lastProcessedID+1, nextMaxID, partitionSize, partitionCount)
+		lastAllocatedID+1, nextMaxID, partitionSize, partitionCount)
 
 	partitions := make(map[int]PartitionInfo)
 	for i := 0; i < partitionCount; i++ {
-		minID := lastProcessedID + int64(i)*partitionSize + 1
-		maxID := lastProcessedID + int64(i+1)*partitionSize
+		minID := lastAllocatedID + int64(i)*partitionSize + 1
+		maxID := lastAllocatedID + int64(i+1)*partitionSize
 
 		// 最后一个分区处理到nextMaxID
 		if i == partitionCount-1 {
@@ -481,4 +481,28 @@ func (m *Mgr) mergePartitions(existingPartitions, newPartitions map[int]Partitio
 	}
 
 	return mergedPartitions
+}
+
+// getLastAllocatedID 获取当前已分配分区的最大ID边界
+// 注意：这个ID表示的是已经分配的分区范围，而不是已处理完成的ID
+func (m *Mgr) getLastAllocatedID(ctx context.Context) (int64, error) {
+	partitions, _, err := m.checkExistingPartitions(ctx)
+	if err != nil {
+		return 0, errors.Wrap(err, "获取分区信息失败")
+	}
+
+	// 如果没有分区，表示还没有开始分配
+	if len(partitions) == 0 {
+		return 0, nil
+	}
+
+	// 查找所有分区的最大ID
+	var maxID int64 = 0
+	for _, p := range partitions {
+		if p.MaxID > maxID {
+			maxID = p.MaxID
+		}
+	}
+
+	return maxID, nil
 }
