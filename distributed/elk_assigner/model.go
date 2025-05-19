@@ -32,6 +32,7 @@ const (
 	DefaultPartitionCount         = 8
 	DefaultMaxRetries             = 3
 	DefaultConsolidationInterval  = 30 * time.Second
+	DefaultPartitionSize          = 3000 // 默认分区大小，每个分区包含的ID数量
 )
 
 // Redis键格式常量

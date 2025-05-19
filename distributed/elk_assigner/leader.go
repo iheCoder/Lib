@@ -226,14 +226,8 @@ func (m *Mgr) allocatePartitions(ctx context.Context) error {
 		return nil
 	}
 
-	// 计算分区数量和大小，基于活跃节点和已有分区情况
-	partitionCount, err := m.calculatePartitionCount(ctx)
-	if err != nil {
-		return err
-	}
-
-	// 创建新的分区，考虑已有分区的状态
-	newPartitions := m.createPartitions(lastProcessedID, nextMaxID, partitionCount)
+	// 创建新的分区，基于ID范围和建议的分区大小
+	newPartitions := m.createPartitions(lastProcessedID, nextMaxID)
 
 	// 合并现有分区和新分区
 	mergedPartitions := m.mergePartitions(existingPartitions, newPartitions)
@@ -266,6 +260,7 @@ func (m *Mgr) getProcessingRange(ctx context.Context) (int64, int64, error) {
 }
 
 // calculatePartitionCount 根据活跃工作节点和现有分区状态计算新分区数量
+// 注意: 此方法已不是主要的分区数量计算方式，现主要通过分区大小和ID范围计算分区数量
 func (m *Mgr) calculatePartitionCount(ctx context.Context) (int, error) {
 	// 获取活跃节点
 	activeWorkers, err := m.getActiveWorkers(ctx)
@@ -316,12 +311,31 @@ func (m *Mgr) calculatePartitionCount(ctx context.Context) (int, error) {
 }
 
 // createPartitions 创建分区信息
-func (m *Mgr) createPartitions(lastProcessedID, nextMaxID int64, partitionCount int) map[int]PartitionInfo {
-	// 计算每个分区的ID范围
-	partitionSize := (nextMaxID - lastProcessedID) / int64(partitionCount)
-	if partitionSize < 1000 {
-		partitionSize = 1000 // 确保每个分区至少有1000个ID
+func (m *Mgr) createPartitions(lastProcessedID, nextMaxID int64) map[int]PartitionInfo {
+	// 尝试从处理器获取建议的分区大小
+	suggestedSize, err := m.TaskProcessor.SuggestPartitionSize(context.Background())
+
+	// 确定分区大小
+	var partitionSize int64
+	if err != nil || suggestedSize <= 0 {
+		// 如果处理器没有建议分区大小，使用默认分区大小
+		partitionSize = DefaultPartitionSize
+		m.Logger.Debugf("使用默认分区大小: %d", partitionSize)
+	} else {
+		// 使用处理器建议的分区大小
+		partitionSize = suggestedSize
+		m.Logger.Infof("使用处理器建议的分区大小: %d", partitionSize)
 	}
+
+	// 根据分区大小计算分区数量
+	totalIds := nextMaxID - lastProcessedID
+	partitionCount := int(totalIds / partitionSize)
+	if partitionCount == 0 {
+		partitionCount = 1 // 至少创建一个分区
+	}
+
+	m.Logger.Infof("ID范围 [%d, %d]，分区大小 %d，将创建 %d 个分区",
+		lastProcessedID+1, nextMaxID, partitionSize, partitionCount)
 
 	partitions := make(map[int]PartitionInfo)
 	for i := 0; i < partitionCount; i++ {

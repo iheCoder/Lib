@@ -14,4 +14,8 @@ type Processor interface {
 	// GetNextMaxID estimates the next batch's max ID based on currentMax
 	// The rangeSize parameter suggests how far to look ahead
 	GetNextMaxID(ctx context.Context, startID int64, rangeSize int64) (int64, error)
+
+	// SuggestPartitionSize suggests an optimal partition size based on the processor's knowledge
+	// If not implemented or returns 0, the system will use the default calculation method
+	SuggestPartitionSize(ctx context.Context) (int64, error)
 }
