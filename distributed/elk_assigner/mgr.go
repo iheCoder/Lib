@@ -26,6 +26,13 @@ type Mgr struct {
 	LeaderLockExpiry        time.Duration
 	WorkerPartitionMultiple int64 // 每个工作节点分配的分区倍数，用于计算ID探测范围
 
+	// 性能指标和自适应处理参数
+	UseTaskMetrics          bool           // 是否使用任务指标
+	MetricsUpdateInterval   time.Duration  // 指标更新间隔
+	RecentPartitionsToTrack int            // 记录最近多少个分区的处理速度
+	Metrics                 *WorkerMetrics // 节点性能指标
+	metricsMutex            sync.RWMutex   // 指标访问互斥锁
+
 	// 内部状态
 	isLeader        bool
 	heartbeatCtx    context.Context
@@ -54,6 +61,20 @@ func NewMgr(namespace string, dataStore data.DataStore, processor Processor) *Mg
 		PartitionLockExpiry:     DefaultPartitionLockExpiry,
 		LeaderLockExpiry:        DefaultLeaderLockExpiry,
 		WorkerPartitionMultiple: DefaultWorkerPartitionMultiple,
+
+		// 性能指标相关初始化
+		UseTaskMetrics:          true, // 默认启用指标收集
+		MetricsUpdateInterval:   30 * time.Second,
+		RecentPartitionsToTrack: 10, // 默认记录最近10个分区的处理速度
+		Metrics: &WorkerMetrics{
+			ProcessingSpeed:     0.0,
+			SuccessRate:         1.0, // 初始默认100%成功率
+			AvgProcessingTime:   0,
+			TotalTasksCompleted: 0,
+			SuccessfulTasks:     0,
+			TotalItemsProcessed: 0,
+			LastUpdateTime:      time.Now(),
+		},
 	}
 }
 
@@ -90,6 +111,11 @@ func (m *Mgr) Start(ctx context.Context) error {
 
 	// 设置信号处理，捕获终止信号
 	go m.setupSignalHandler(ctx)
+
+	// 如果启用了指标收集，定期发布指标
+	if m.UseTaskMetrics {
+		go m.publishMetricsPeriodically(ctx)
+	}
 
 	return nil
 }

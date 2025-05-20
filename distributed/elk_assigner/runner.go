@@ -166,6 +166,9 @@ func (m *Mgr) processPartitionTask(ctx context.Context, task PartitionInfo) erro
 
 // executeProcessorTask 执行处理器任务
 func (m *Mgr) executeProcessorTask(ctx context.Context, task PartitionInfo) (int64, error) {
+	// 记录任务开始时间，用于性能指标统计
+	startTime := time.Now()
+
 	// 设置合理的处理超时时间，避免任务运行时间过长
 	// 默认使用分区锁过期时间的一半作为处理超时
 	taskTimeout := m.PartitionLockExpiry / 2
@@ -202,17 +205,29 @@ func (m *Mgr) executeProcessorTask(ctx context.Context, task PartitionInfo) (int
 	}()
 
 	// 等待处理完成或超时
+	var processCount int64 = 0
+	var processErr error
+
 	select {
 	case <-ctx.Done():
-		return 0, ctx.Err()
+		processErr = ctx.Err()
 	case <-execCtx.Done():
 		if execCtx.Err() == context.DeadlineExceeded {
-			return 0, errors.New("任务处理超时")
+			processErr = errors.New("任务处理超时")
+		} else {
+			processErr = execCtx.Err()
 		}
-		return 0, execCtx.Err()
 	case result := <-processDone:
-		return result.count, result.err
+		processCount = result.count
+		processErr = result.err
 	}
+
+	// 记录任务性能指标
+	if m.UseTaskMetrics {
+		m.recordTaskPerformance(startTime, processCount, processErr, task.PartitionID)
+	}
+
+	return processCount, processErr
 }
 
 // updateTaskStatus 更新任务状态
