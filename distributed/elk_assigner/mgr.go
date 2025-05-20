@@ -13,6 +13,7 @@ import (
 
 // Mgr 是一个分布式管理器，管理分区任务的执行
 type Mgr struct {
+	// 核心字段
 	ID            string
 	Namespace     string
 	DataStore     data.DataStore
@@ -20,11 +21,11 @@ type Mgr struct {
 	Logger        Logger
 
 	// 配置选项
-	HeartbeatInterval       time.Duration
-	LeaderElectionInterval  time.Duration
-	PartitionLockExpiry     time.Duration
-	LeaderLockExpiry        time.Duration
-	WorkerPartitionMultiple int64 // 每个工作节点分配的分区倍数，用于计算ID探测范围
+	HeartbeatInterval       time.Duration // 心跳间隔
+	LeaderElectionInterval  time.Duration // Leader选举间隔
+	PartitionLockExpiry     time.Duration // 分区锁过期时间
+	LeaderLockExpiry        time.Duration // Leader锁过期时间
+	WorkerPartitionMultiple int64         // 每个工作节点分配的分区倍数，用于计算ID探测范围
 
 	// 任务窗口相关配置
 	UseTaskWindow  bool        // 是否使用任务窗口（并行处理多个分区）
@@ -46,39 +47,39 @@ type Mgr struct {
 	cancelLeader    context.CancelFunc
 	workCtx         context.Context
 	cancelWork      context.CancelFunc
-
-	mu sync.RWMutex
+	mu              sync.RWMutex
 }
 
-// NewMgr 创建一个新的管理器实例
-func NewMgr(namespace string, dataStore data.DataStore, processor Processor) *Mgr {
+// NewMgr 创建一个新的管理器实例，使用选项模式配置可选参数
+func NewMgr(namespace string, dataStore data.DataStore, processor Processor, options ...MgrOption) *Mgr {
 	nodeID := generateNodeID()
-	logger := &defaultLogger{}
 
-	return &Mgr{
-		ID:                      nodeID,
-		Namespace:               namespace,
-		DataStore:               dataStore,
-		TaskProcessor:           processor,
-		Logger:                  logger,
+	// 创建带默认值的管理器
+	mgr := &Mgr{
+		ID:            nodeID,
+		Namespace:     namespace,
+		DataStore:     dataStore,
+		TaskProcessor: processor,
+		Logger:        &defaultLogger{},
+
+		// 默认配置
 		HeartbeatInterval:       DefaultHeartbeatInterval,
 		LeaderElectionInterval:  DefaultLeaderElectionInterval,
 		PartitionLockExpiry:     DefaultPartitionLockExpiry,
 		LeaderLockExpiry:        DefaultLeaderLockExpiry,
 		WorkerPartitionMultiple: DefaultWorkerPartitionMultiple,
 
-		// 任务窗口相关初始化
-		UseTaskWindow:  false, // 默认不启用任务窗口
-		TaskWindowSize: 5,     // 默认任务窗口大小为5
-		taskWindow:     nil,   // 默认任务窗口实例为空
+		// 任务窗口默认配置
+		UseTaskWindow:  false,
+		TaskWindowSize: DefaultTaskWindowSize,
 
-		// 性能指标相关初始化
-		UseTaskMetrics:          true, // 默认启用指标收集
-		MetricsUpdateInterval:   30 * time.Second,
-		RecentPartitionsToTrack: 10, // 默认记录最近10个分区的处理速度
+		// 指标收集默认配置
+		UseTaskMetrics:          true,
+		MetricsUpdateInterval:   DefaultCapacityUpdateInterval,
+		RecentPartitionsToTrack: DefaultRecentPartitions,
 		Metrics: &WorkerMetrics{
 			ProcessingSpeed:     0.0,
-			SuccessRate:         1.0, // 初始默认100%成功率
+			SuccessRate:         1.0,
 			AvgProcessingTime:   0,
 			TotalTasksCompleted: 0,
 			SuccessfulTasks:     0,
@@ -86,10 +87,20 @@ func NewMgr(namespace string, dataStore data.DataStore, processor Processor) *Mg
 			LastUpdateTime:      time.Now(),
 		},
 	}
+
+	// 应用所有选项
+	for _, option := range options {
+		option(mgr)
+	}
+
+	return mgr
 }
 
-// SetLogger 设置自定义日志记录器
+// SetLogger 已被选项模式替代，保留用于向后兼容
+//
+// 推荐使用 WithLogger 选项代替
 func (m *Mgr) SetLogger(logger Logger) {
+	m.Logger.Warnf("SetLogger 方法已过时，请使用 WithLogger 选项")
 	m.Logger = logger
 }
 
@@ -196,7 +207,7 @@ func (m *Mgr) getActiveWorkers(ctx context.Context) ([]string, error) {
 	pattern := fmt.Sprintf(HeartbeatFmtFmt, m.Namespace, "*")
 	keys, err := m.DataStore.GetKeys(ctx, pattern)
 	if err != nil {
-		return nil, errors.Wrap(err, "获取心跳键失败")
+		return nil, errors.Wrap(err, "获取心跳失败")
 	}
 
 	var activeWorkers []string
@@ -231,8 +242,11 @@ func (m *Mgr) getActiveWorkers(ctx context.Context) ([]string, error) {
 	return activeWorkers, nil
 }
 
-// SetWorkerPartitionMultiple 设置每个工作节点分配的分区倍数
+// SetWorkerPartitionMultiple 已被选项模式替代，保留用于向后兼容
+//
+// 推荐使用 WithWorkerPartitionMultiple 选项代替
 func (m *Mgr) SetWorkerPartitionMultiple(multiple int64) {
+	m.Logger.Warnf("SetWorkerPartitionMultiple 方法已过时，请使用 WithWorkerPartitionMultiple 选项")
 	if multiple <= 0 {
 		m.Logger.Warnf("无效的工作节点分区倍数: %d，使用默认值 %d", multiple, DefaultWorkerPartitionMultiple)
 		m.WorkerPartitionMultiple = DefaultWorkerPartitionMultiple
