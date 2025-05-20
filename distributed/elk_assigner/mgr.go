@@ -88,51 +88,10 @@ func (m *Mgr) Start(ctx context.Context) error {
 	// 处理分配任务
 	go m.Handle(ctx)
 
+	// 设置信号处理，捕获终止信号
+	go m.setupSignalHandler(ctx)
+
 	return nil
-}
-
-// Stop 停止管理器
-func (m *Mgr) Stop() {
-	m.Logger.Infof("停止管理器 %s", m.ID)
-
-	// 取消所有运行中的任务
-	if m.cancelHeartbeat != nil {
-		m.cancelHeartbeat()
-	}
-
-	if m.cancelLeader != nil {
-		m.cancelLeader()
-	}
-
-	if m.cancelWork != nil {
-		m.cancelWork()
-	}
-
-	// 释放锁和清理
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	m.mu.RLock()
-	isLeader := m.isLeader
-	m.mu.RUnlock()
-
-	if isLeader {
-		leaderLockKey := fmt.Sprintf(LeaderLockKeyFmt, m.Namespace)
-		err := m.DataStore.ReleaseLock(ctx, leaderLockKey, m.ID)
-		if err != nil {
-			m.Logger.Warnf("释放Leader锁失败: %v", err)
-		}
-	}
-
-	// 删除心跳
-	heartbeatKey := fmt.Sprintf(HeartbeatFmtFmt, m.Namespace, m.ID)
-	m.DataStore.DeleteKey(ctx, heartbeatKey)
-
-	// 注销节点
-	workersKey := fmt.Sprintf(WorkersKeyFmt, m.Namespace)
-	m.DataStore.UnregisterWorker(ctx, workersKey, m.ID, heartbeatKey)
-
-	m.Logger.Infof("管理器 %s 已停止", m.ID)
 }
 
 // IsLeader 返回当前节点是否是Leader

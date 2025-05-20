@@ -45,6 +45,7 @@ const (
 	HeartbeatFmtFmt     = "%s:heartbeat:%s"
 	StatusKeyFmt        = "%s:status"
 	WorkersKeyFmt       = "%s:workers"
+	ExitingNodeFmt      = "%s:exiting:%s" // 标记节点正在退出的键格式
 )
 
 // 系统错误定义
