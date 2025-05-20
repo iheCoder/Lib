@@ -26,6 +26,11 @@ type Mgr struct {
 	LeaderLockExpiry        time.Duration
 	WorkerPartitionMultiple int64 // 每个工作节点分配的分区倍数，用于计算ID探测范围
 
+	// 任务窗口相关配置
+	UseTaskWindow  bool        // 是否使用任务窗口（并行处理多个分区）
+	TaskWindowSize int         // 任务窗口大小（同时处理的最大分区数）
+	taskWindow     *TaskWindow // 任务窗口实例
+
 	// 性能指标和自适应处理参数
 	UseTaskMetrics          bool           // 是否使用任务指标
 	MetricsUpdateInterval   time.Duration  // 指标更新间隔
@@ -61,6 +66,11 @@ func NewMgr(namespace string, dataStore data.DataStore, processor Processor) *Mg
 		PartitionLockExpiry:     DefaultPartitionLockExpiry,
 		LeaderLockExpiry:        DefaultLeaderLockExpiry,
 		WorkerPartitionMultiple: DefaultWorkerPartitionMultiple,
+
+		// 任务窗口相关初始化
+		UseTaskWindow:  false, // 默认不启用任务窗口
+		TaskWindowSize: 5,     // 默认任务窗口大小为5
+		taskWindow:     nil,   // 默认任务窗口实例为空
 
 		// 性能指标相关初始化
 		UseTaskMetrics:          true, // 默认启用指标收集

@@ -12,6 +12,13 @@ import (
 func (m *Mgr) Handle(ctx context.Context) error {
 	m.Logger.Infof("开始任务处理循环")
 
+	// 如果启用了任务窗口，使用异步并行处理模式
+	if m.UseTaskWindow {
+		m.Logger.Infof("使用任务窗口模式，窗口大小: %d", m.TaskWindowSize)
+		return m.handleWithTaskWindow(ctx)
+	}
+
+	// 否则使用传统模式（单任务串行处理）
 	for {
 		select {
 		case <-ctx.Done():
@@ -24,6 +31,17 @@ func (m *Mgr) Handle(ctx context.Context) error {
 			m.executeTaskCycle(ctx)
 		}
 	}
+}
+
+// handleWithTaskWindow 使用任务窗口处理分区任务
+func (m *Mgr) handleWithTaskWindow(ctx context.Context) error {
+	// 初始化任务窗口
+	m.taskWindow = NewTaskWindow(m)
+
+	// 启动任务窗口处理
+	m.taskWindow.Start(m.workCtx)
+
+	return nil
 }
 
 // acquirePartitionTask 获取一个可用的分区任务
