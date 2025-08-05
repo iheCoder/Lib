@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"regexp"
+	"strings"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/mark3labs/mcp-go/mcp"
 	"gopkg.in/yaml.v3"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strings"
 )
 
 // Define the tool name
@@ -28,10 +28,13 @@ type DatabaseConfig struct {
 }
 
 // 连接 MySQL 数据库
-func initGlobalDB() error {
-	cwd, _ := os.Getwd()
-	filePath := filepath.Join(cwd, "mcp/mysql_readonly/config/database.yaml")
-	data, err := os.ReadFile(filePath)
+func initGlobalDB(configPath string) error {
+	// 如果没有指定配置路径，使用默认路径
+	if configPath == "" {
+		configPath = "../config/database.yaml"
+	}
+
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("读取数据库配置文件失败: %v", err)
 	}
