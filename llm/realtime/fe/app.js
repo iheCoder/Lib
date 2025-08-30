@@ -53,30 +53,105 @@
     logEl.scrollTop = logEl.scrollHeight;
   }
 
-  // Placeholder for mic VU meter until Step 2
-  let fakeVuTimer = null;
-  function startFakeVu() {
-    stopFakeVu();
-    fakeVuTimer = setInterval(() => {
-      const v = Math.floor(Math.random() * 8) + 2; // 2-10%
-      vuBar.style.width = `${v}%`;
-    }, 120);
+  // Step 2: Real microphone capture + VU meter
+  let audioContext = null;
+  let analyser = null;
+  let micStream = null;
+  let sourceNode = null;
+  let rafId = null;
+
+  function levelToPercent(rms) {
+    // rms is 0..1 approx. Apply some gain for visibility
+    const percent = Math.min(100, Math.max(2, Math.round(rms * 100 * 1.8)));
+    return percent;
   }
-  function stopFakeVu() {
-    if (fakeVuTimer) clearInterval(fakeVuTimer);
-    fakeVuTimer = null;
-    vuBar.style.width = "2%";
+
+  function startVuLoop() {
+    if (!analyser) return;
+    const buf = new Uint8Array(analyser.fftSize);
+
+    const tick = () => {
+      analyser.getByteTimeDomainData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) {
+        const v = (buf[i] - 128) / 128; // [-1, 1]
+        sum += v * v;
+      }
+      const rms = Math.sqrt(sum / buf.length);
+      vuBar.style.width = `${levelToPercent(rms)}%`;
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+  }
+
+  async function startMic() {
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      // Some browsers require resume() after user gesture; ensured by button click
+      if (audioContext.state === "suspended") await audioContext.resume();
+
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 1024; // lower latency visual
+      analyser.smoothingTimeConstant = 0.8;
+      sourceNode = audioContext.createMediaStreamSource(micStream);
+      sourceNode.connect(analyser);
+      startVuLoop();
+      log("麦克风已开启，音量表就绪。");
+      return true;
+    } catch (err) {
+      log("无法获取麦克风权限或不在安全上下文（需 http://localhost 或 HTTPS）。", "error");
+      log(String(err), "error");
+      return false;
+    }
+  }
+
+  function stopMic() {
+    try {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
+      vuBar.style.width = "2%";
+
+      if (sourceNode) {
+        try { sourceNode.disconnect(); } catch {}
+      }
+      sourceNode = null;
+      analyser = null;
+
+      if (micStream) {
+        micStream.getTracks().forEach(t => t.stop());
+      }
+      micStream = null;
+
+      if (audioContext) {
+        const ctx = audioContext;
+        audioContext = null;
+        // Close may reject on Safari; ignore
+        ctx.close && ctx.close().catch(() => {});
+      }
+    } catch (e) {
+      // noop
+    }
   }
 
   async function onStart() {
     try {
-      log("开始：初始化 UI（Step 1，仅占位）");
+      log("开始：请求麦克风并启动音量表（Step 2）");
       setState(UI_STATE.Connecting);
-      // Step 1: 不做实际连接，仅模拟 UI 状态变化
-      await new Promise((r) => setTimeout(r, 500));
+      const ok = await startMic();
+      if (!ok) {
+        setState(UI_STATE.Error);
+        return;
+      }
       setState(UI_STATE.Connected);
-      log("已进入已连接状态（占位）。下一步将接入麦克风与 VU meter。");
-      startFakeVu();
+      log("已连接（本地麦克风就绪）。下一步将接入会话与 WebRTC。");
     } catch (err) {
       console.error(err);
       log(String(err), "error");
@@ -85,9 +160,9 @@
   }
 
   async function onStop() {
-    log("停止：清理状态（Step 1，占位）");
+    log("停止：关闭麦克风并复位（Step 2）");
+    stopMic();
     setState(UI_STATE.Idle);
-    stopFakeVu();
   }
 
   btnStart.addEventListener("click", onStart);
@@ -95,6 +170,5 @@
 
   // 初始
   setState(UI_STATE.Idle);
-  log("页面就绪。点击“开始通话”体验 Step 1 UI。");
+  log("页面就绪。点击“开始通话”授予麦克风权限并查看实时音量。");
 })();
-
