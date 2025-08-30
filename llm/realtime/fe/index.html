@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Realtime 语音助手 (Step 1)</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="app__header">
+        <h1>Realtime 语音助手</h1>
+        <span class="badge">Step 1: Scaffold</span>
+      </header>
+
+      <section class="status">
+        <div class="status__indicator" id="status-indicator"></div>
+        <div class="status__text" id="status-text">未连接</div>
+      </section>
+
+      <section class="controls">
+        <button id="btn-start" class="btn btn--primary">开始通话</button>
+        <button id="btn-stop" class="btn" disabled>停止通话</button>
+      </section>
+
+      <section class="panels">
+        <div class="panel">
+          <h2>日志</h2>
+          <div id="log" class="log"></div>
+        </div>
+        <div class="panel">
+          <h2>占位：音量表</h2>
+          <div class="vu">
+            <div id="vu-bar" class="vu__bar" style="width: 2%;"></div>
+          </div>
+          <p class="muted">将在 Step 2 启用麦克风并展示实时音量</p>
+        </div>
+      </section>
+
+      <footer class="app__footer">
+        <span class="muted">后续步骤将逐步打通 WebRTC 与 Realtime</span>
+      </footer>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+  </html>
+
