@@ -102,6 +102,8 @@
         },
         video: false,
       });
+      // Expose for RTC steps
+      window.__micStream = micStream;
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
       // Some browsers require resume() after user gesture; ensured by button click
       if (audioContext.state === "suspended") await audioContext.resume();
@@ -184,7 +186,7 @@
 })();
 
 // ----- Realtime helpers -----
-async function connectRealtime() {
+  async function connectRealtime() {
   const log = (window.__log ||= (msg, level) => {
     const el = document.querySelector("#log");
     const line = document.createElement("div");
@@ -200,14 +202,27 @@ async function connectRealtime() {
   // 1) 获取临时密钥
   log("请求 /session 以获取临时密钥…");
   const sResp = await fetch("/session");
-  if (!sResp.ok) throw new Error(`/session failed: ${sResp.status}`);
-  const session = await sResp.json();
+  const sText = await sResp.text();
+  if (!sResp.ok) {
+    log(`/session 响应错误: ${sResp.status}` , "error");
+    log(sText || "(空响应体)", "error");
+    throw new Error(`/session failed: ${sResp.status}`);
+  }
+  let session = null;
+  try {
+    session = JSON.parse(sText);
+  } catch (e) {
+    log(`解析 /session JSON 失败: ${e?.message || e}`, "error");
+    throw e;
+  }
   const ephemeralKey = session?.client_secret?.value;
   const modelFromSession = session?.model || session?.default_model;
   const model = modelFromSession || DEFAULT_REALTIME_MODEL;
   if (!ephemeralKey) {
     throw new Error("no ephemeral key in /session response");
   }
+  const voice = session?.voice || (session?.default_session && session.default_session.voice);
+  log(`会话就绪: model=${model} voice=${voice || "(unspecified)"}`);
 
   // 2) 创建 RTCPeerConnection
   log("创建 RTCPeerConnection…");
@@ -225,12 +240,19 @@ async function connectRealtime() {
 
   // Data channel for events (we'll use in later steps)
   const dc = (window.__dc = pc.createDataChannel("oai-events"));
-  dc.onopen = () => log("DataChannel 已打开");
+  dc.onopen = () => { 
+    log("DataChannel 已打开");
+    try { autoGreet(dc, { conversation: "auto" }); } catch (e) { log(`自动问候发送失败: ${e}`, "error"); }
+  };
   dc.onclose = () => log("DataChannel 已关闭");
   dc.onerror = (e) => log(`DataChannel 错误: ${e?.message || e}`, "error");
   dc.onmessage = (ev) => {
-    // Raw events; in Step 6 we will parse and render
-    log(`DC <= ${ev.data}`);
+    const raw = String(ev.data || "");
+    log(`DC <= ${raw.length > 180 ? raw.slice(0, 180) + "…" : raw}`);
+    try {
+      const msg = JSON.parse(raw);
+      handleRealtimeEvent(msg, log);
+    } catch {}
   };
 
   // Attach remote audio
@@ -238,7 +260,11 @@ async function connectRealtime() {
   pc.ontrack = (ev) => {
     ev.streams[0].getTracks().forEach((t) => remoteStream.addTrack(t));
     const audio = document.querySelector("#remote-audio");
-    if (audio) audio.srcObject = remoteStream;
+    if (audio) {
+      audio.srcObject = remoteStream;
+      // Best-effort autoplay after user gesture
+      audio.play && audio.play().catch((e) => log(`audio.play 被阻止: ${e?.message || e}`, "warn"));
+    }
     log("收到远端音轨并绑定到播放器");
   };
 
@@ -268,9 +294,12 @@ async function connectRealtime() {
   });
   if (!r.ok) {
     const txt = await r.text().catch(() => "");
-    throw new Error(`Realtime SDP failed: ${r.status} ${txt}`);
+    log(`发送 SDP 失败: ${r.status}`, "error");
+    log(txt || "(空响应体)", "error");
+    throw new Error(`Realtime SDP failed: ${r.status}`);
   }
   const answer = await r.text();
+  log(`收到 SDP answer（长度=${answer.length}）`);
   await pc.setRemoteDescription({ type: "answer", sdp: answer });
   log("SDP 交换完成，连接建立。");
 
@@ -320,4 +349,78 @@ function waitForIceGatheringComplete(pc, log) {
       }
     });
   });
+}
+
+function safeSend(dc, obj, log = window.__log || (() => {})) {
+  try {
+    const s = JSON.stringify(obj);
+    dc.send(s);
+    log(`DC => ${obj.type || "<no type>"}`);
+  } catch (e) {
+    log(`DC 发送失败: ${e?.message || e}`, "error");
+  }
+}
+
+function autoGreet(dc, opts = {}) {
+  const log = window.__log || (() => {});
+  log("发送自动问候事件（response.create）…");
+  const conversation = opts.conversation || "auto"; // 'auto' | 'none'
+  const evt = {
+    type: "response.create",
+    response: {
+      modalities: ["text", "audio"],
+      conversation,
+      instructions:
+        "你是一个中文语音助手。请用友好简洁的中文打个招呼，并告诉我可以直接开口说话和你对话。",
+      // 可选覆盖 voice（通常已在 /session 设置）
+      // audio: { voice: "verse" }
+    },
+  };
+  safeSend(dc, evt, log);
+}
+
+// Very lightweight event handler for Realtime messages
+let __currentResponseId = null;
+let __currentText = "";
+function handleRealtimeEvent(msg, log) {
+  const type = msg?.type;
+  switch (type) {
+    case "response.created": {
+      __currentResponseId = msg?.response?.id || null;
+      __currentText = "";
+      log(`response.created: ${__currentResponseId || "(no id)"}`);
+      break;
+    }
+    case "response.output_text.delta": {
+      const d = msg?.delta || msg?.text || "";
+      __currentText += d;
+      log(`text.delta += ${d}`);
+      break;
+    }
+    case "response.output_text.done": {
+      log(`text.done: ${__currentText}`);
+      break;
+    }
+    case "response.completed": {
+      log(`response.completed: ${msg?.response?.id || "(no id)"}`);
+      if (__currentText) log(`final text: ${__currentText}`);
+      __currentResponseId = null;
+      __currentText = "";
+      break;
+    }
+    case "error": {
+      const e = msg?.error || msg;
+      const emsg = e?.message || JSON.stringify(e);
+      log(`Realtime error: ${emsg}`, "error");
+      // Auto-retry if 'default' conversation is not accepted (older samples used 'default')
+      if (/Supported values are: 'auto' and 'none'/.test(emsg) && window.__dc) {
+        log("检测到不支持的 conversation 值，改用 'auto' 重试问候…");
+        try { autoGreet(window.__dc, { conversation: "auto" }); } catch {}
+      }
+      break;
+    }
+    default: {
+      if (type) log(`event: ${type}`);
+    }
+  }
 }
