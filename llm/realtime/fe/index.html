@@ -16,11 +16,16 @@
       <section class="status">
         <div class="status__indicator" id="status-indicator"></div>
         <div class="status__text" id="status-text">未连接</div>
+        <div class="status__mode" id="mode-pill">空闲</div>
+        <button id="btn-reconnect" class="btn btn--warn" style="margin-left:auto;" disabled>重连</button>
       </section>
 
       <section class="controls">
         <button id="btn-start" class="btn btn--primary">开始通话</button>
         <button id="btn-stop" class="btn" disabled>停止通话</button>
+        <button id="btn-cancel" class="btn" disabled>取消生成</button>
+        <button id="btn-ptt" class="btn btn--ptt" disabled title="按住说话（空格键）">按住说话</button>
+        <button id="btn-continuous" class="btn" disabled title="开启/关闭持续对话（开启后无需按住说话）">持续对话：关</button>
       </section>
 
       <section class="panels">
@@ -36,6 +41,10 @@
           <p class="muted">将在 Step 2 启用麦克风并展示实时音量</p>
           <h2 style="margin-top:16px;">远端音频</h2>
           <audio id="remote-audio" autoplay playsinline controls style="width:100%;"></audio>
+        </div>
+        <div class="panel panel--wide">
+          <h2>对话</h2>
+          <div id="chat" class="chat"></div>
         </div>
       </section>
 

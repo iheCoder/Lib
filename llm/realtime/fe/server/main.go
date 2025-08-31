@@ -27,7 +27,8 @@ func main() {
 	if apiKey == "" {
 		log.Println("[WARN] OPENAI_API_KEY not set. /session will fail until provided.")
 	}
-	model := getenv("REALTIME_MODEL", "gpt-4o-realtime-preview-2024-12-17")
+	// Default to the latest Realtime family model (can override via REALTIME_MODEL)
+	model := getenv("REALTIME_MODEL", "gpt-realtime")
 	voice := os.Getenv("VOICE") // optional, e.g. "verse" or "alloy"
 	// Default to current directory so `cd llm/realtime/fe && go run ./server` works.
 	feDir := getenv("FE_DIR", ".")
