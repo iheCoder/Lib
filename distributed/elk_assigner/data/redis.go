@@ -345,3 +345,8 @@ func (d *RedisDataStore) RemoveFromQueue(ctx context.Context, queueKey string, i
 func (d *RedisDataStore) GetQueueLength(ctx context.Context, queueKey string) (int64, error) {
 	return d.rds.ZCard(ctx, d.prefixKey(queueKey)).Result()
 }
+
+// SetKey sets a key with an expiry time
+func (d *RedisDataStore) SetKey(ctx context.Context, key string, value string, expiry time.Duration) error {
+	return d.rds.Set(ctx, d.prefixKey(key), value, expiry).Err()
+}
