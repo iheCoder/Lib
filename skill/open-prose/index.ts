@@ -3,22 +3,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { OpenClawPluginApi, PluginCommandContext } from "openclaw/plugin-sdk";
 import { runPluginCommandWithTimeout } from "openclaw/plugin-sdk";
-import { resolveQQBotAccount } from "../qqbot/src/config.js";
-import {
-  MediaFileType,
-  getAccessToken,
-  sendC2CMediaMessage,
-  sendGroupMediaMessage,
-  uploadC2CMedia,
-  uploadGroupMedia,
-} from "../qqbot/src/api.js";
-import { sendMedia as sendQQMedia } from "../qqbot/src/outbound.js";
 
 type ProseAction =
   | { kind: "help" }
   | { kind: "examples" }
   | { kind: "compile"; target: string; request?: string }
   | { kind: "run"; target: string; request?: string }
+  | { kind: "invest"; request?: string }
   | { kind: "invalid"; reason: string };
 
 type DeterministicWritePlan = {
@@ -73,6 +64,16 @@ type QQDeliveryResult = {
   };
 };
 
+type FeishuDeliveryResult = {
+  stageImages: Array<{
+    stage: string;
+    markdownPath: string;
+    imagePath?: string;
+    delivered: boolean;
+    error?: string;
+  }>;
+};
+
 const COMMAND_HELP = [
   "OpenProse commands:",
   "",
@@ -80,6 +81,7 @@ const COMMAND_HELP = [
   "/prose examples",
   "/prose run <file.prose>",
   "/prose compile <file.prose>",
+  "/prose invest <你的研究请求>  例：/prose invest 深度研究下牧原股份现在是否值得投资",
 ].join("\n");
 
 function parseAction(rawArgs: string): ProseAction {
@@ -109,6 +111,10 @@ function parseAction(rawArgs: string): ProseAction {
       return { kind: "invalid", reason: "Usage: /prose compile <file.prose>" };
     }
     return { kind: "compile", target: parsedTarget.target, request: parsedTarget.request };
+  }
+  if (action === "invest") {
+    const request = rest.join(" ").trim();
+    return { kind: "invest", request: request || undefined };
   }
 
   return { kind: "invalid", reason: `Unknown subcommand: ${action}` };
@@ -219,6 +225,215 @@ function canDeliverToQQ(ctx: PluginCommandContext): boolean {
   return ctx.channel === "qqbot" && Boolean(parseQQTarget(ctx.to));
 }
 
+function canDeliverToFeishu(ctx: PluginCommandContext): boolean {
+  return ctx.channel === "feishu" && Boolean(ctx.to?.trim());
+}
+
+function parseFeishuReceiveTarget(rawTarget?: string): {
+  receiveId: string;
+  receiveIdType: "chat_id" | "open_id" | "user_id" | "union_id";
+} | null {
+  const target = rawTarget?.trim();
+  if (!target) {
+    return null;
+  }
+
+  const [prefix, ...restParts] = target.split(":");
+  const rest = restParts.join(":").trim();
+  const normalized = rest || prefix;
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (prefix === "user") {
+    return {
+      receiveId: normalized,
+      receiveIdType: normalized.startsWith("ou_") ? "open_id" : "user_id",
+    };
+  }
+  if (prefix === "open_id") {
+    return { receiveId: normalized, receiveIdType: "open_id" };
+  }
+  if (prefix === "user_id") {
+    return { receiveId: normalized, receiveIdType: "user_id" };
+  }
+  if (prefix === "union_id") {
+    return { receiveId: normalized, receiveIdType: "union_id" };
+  }
+  if (prefix === "chat" || prefix === "chat_id" || prefix === "group") {
+    return { receiveId: normalized, receiveIdType: "chat_id" };
+  }
+  if (normalized.startsWith("ou_")) {
+    return { receiveId: normalized, receiveIdType: "open_id" };
+  }
+  if (normalized.startsWith("oc_")) {
+    return { receiveId: normalized, receiveIdType: "chat_id" };
+  }
+  return { receiveId: normalized, receiveIdType: "chat_id" };
+}
+
+async function getFeishuTenantToken(appId: string, appSecret: string): Promise<string> {
+  const res = await fetch("https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
+  });
+  if (!res.ok) {
+    throw new Error(`Feishu auth failed: ${res.status} ${await res.text()}`);
+  }
+  const data = (await res.json()) as { tenant_access_token?: string; code?: number };
+  if (data.code && data.code !== 0) {
+    throw new Error(`Feishu auth error: code=${data.code}`);
+  }
+  if (!data.tenant_access_token) {
+    throw new Error("Feishu auth: no tenant_access_token");
+  }
+  return data.tenant_access_token;
+}
+
+async function feishuUploadImage(accessToken: string, imagePath: string): Promise<string> {
+  const form = new FormData();
+  form.append("image_type", "message");
+  form.append("image", new Blob([await fs.readFile(imagePath)]), path.basename(imagePath));
+
+  const res = await fetch("https://open.feishu.cn/open-apis/im/v1/images", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: form as unknown as BodyInit,
+  });
+  if (!res.ok) {
+    throw new Error(`Feishu upload image failed: ${res.status} ${await res.text()}`);
+  }
+  const data = (await res.json()) as { data?: { image_key?: string }; code?: number };
+  if (data.code && data.code !== 0) {
+    throw new Error(`Feishu upload error: code=${data.code}`);
+  }
+  if (!data.data?.image_key) {
+    throw new Error("Feishu upload: no image_key");
+  }
+  return data.data.image_key;
+}
+
+async function feishuSendImage(
+  accessToken: string,
+  receiveTarget: { receiveId: string; receiveIdType: "chat_id" | "open_id" | "user_id" | "union_id" },
+  imageKey: string,
+): Promise<void> {
+  const res = await fetch(
+    `https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=${receiveTarget.receiveIdType}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        receive_id: receiveTarget.receiveId,
+        msg_type: "image",
+        content: JSON.stringify({ image_key: imageKey }),
+      }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(`Feishu send message failed: ${res.status} ${await res.text()}`);
+  }
+  const data = (await res.json()) as { code?: number };
+  if (data.code && data.code !== 0) {
+    throw new Error(`Feishu send error: code=${data.code}`);
+  }
+}
+
+function getFeishuConfigFromCtx(ctx: PluginCommandContext): { appId: string; appSecret: string } | null {
+  const config = ctx.config as Record<string, unknown> | undefined;
+  const channels = config?.channels as Record<string, unknown> | undefined;
+  const feishu = channels?.feishu as Record<string, unknown> | undefined;
+  const accounts = feishu?.accounts as Record<string, { appId?: string; appSecret?: string }> | undefined;
+  const defaultAccount = (feishu?.defaultAccount as string) || "main";
+  const account = accounts?.[defaultAccount];
+  if (!account?.appId || !account?.appSecret) {
+    return null;
+  }
+  return { appId: account.appId, appSecret: account.appSecret };
+}
+
+async function deliverStageImagesToFeishu(params: {
+  ctx: PluginCommandContext;
+  stageResults: StageResult[];
+}): Promise<FeishuDeliveryResult["stageImages"]> {
+  const receiveTarget = parseFeishuReceiveTarget(params.ctx.to);
+  if (!receiveTarget) {
+    return params.stageResults.map((s) => ({
+      stage: s.stage,
+      markdownPath: s.stagePath,
+      delivered: false,
+      error: "missing or invalid feishu receive target",
+    }));
+  }
+  const feishuConfig = getFeishuConfigFromCtx(params.ctx);
+  if (!feishuConfig) {
+    return params.stageResults.map((s) => ({
+      stage: s.stage,
+      markdownPath: s.stagePath,
+      delivered: false,
+      error: "feishu account not configured in openclaw.json channels.feishu",
+    }));
+  }
+  // #region agent log
+  fetch("http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e182aa" },
+    body: JSON.stringify({
+      sessionId: "e182aa",
+      runId: "feishu-delivery-target",
+      hypothesisId: "H9",
+      location: "skill/open-prose/index.ts:356",
+      message: "resolved feishu receive target",
+      data: {
+        rawTo: params.ctx.to ?? null,
+        receiveIdType: receiveTarget.receiveIdType,
+        receiveIdPreview: receiveTarget.receiveId.slice(0, 8),
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion
+  let accessToken: string;
+  try {
+    accessToken = await getFeishuTenantToken(feishuConfig.appId, feishuConfig.appSecret);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return params.stageResults.map((s) => ({
+      stage: s.stage,
+      markdownPath: s.stagePath,
+      delivered: false,
+      error: `feishu auth failed: ${msg}`,
+    }));
+  }
+  const deliveries: FeishuDeliveryResult["stageImages"] = [];
+  for (const stage of params.stageResults) {
+    try {
+      const imagePath = await renderMarkdownToImage(stage.stagePath);
+      const imageKey = await feishuUploadImage(accessToken, imagePath);
+      await feishuSendImage(accessToken, receiveTarget, imageKey);
+      deliveries.push({
+        stage: stage.stage,
+        markdownPath: stage.stagePath,
+        imagePath,
+        delivered: true,
+      });
+    } catch (err) {
+      deliveries.push({
+        stage: stage.stage,
+        markdownPath: stage.stagePath,
+        delivered: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return deliveries;
+}
+
 async function renderMarkdownToImage(markdownPath: string): Promise<string> {
   const outputDir = path.dirname(markdownPath);
   const renderedPath = `${markdownPath}.png`;
@@ -255,6 +470,28 @@ async function deliverStageImagesToQQ(params: {
       markdownPath: stage.stagePath,
       delivered: false,
       error: "missing qq target",
+    }));
+  }
+
+  let resolveQQBotAccount: (config: unknown, accountId?: string) => { appId?: string; clientSecret?: string };
+  let sendQQMedia: (opts: {
+    to: string;
+    mediaUrl: string;
+    accountId?: string;
+    account: { appId?: string; clientSecret?: string };
+  }) => Promise<{ error?: string }>;
+  try {
+    const qqConfig = await import("../qqbot/src/config.js");
+    const qqApi = await import("../qqbot/src/api.js");
+    const qqOut = await import("../qqbot/src/outbound.js");
+    resolveQQBotAccount = qqConfig.resolveQQBotAccount;
+    sendQQMedia = qqOut.sendMedia;
+  } catch {
+    return params.stageResults.map((stage) => ({
+      stage: stage.stage,
+      markdownPath: stage.stagePath,
+      delivered: false,
+      error: "qqbot module not available (optional dependency)",
     }));
   }
 
@@ -310,6 +547,31 @@ async function probeQQFileSupport(params: {
       attempted: false,
       supported: false,
       error: "channel target does not support qq file probe",
+    };
+  }
+
+  let resolveQQBotAccount: (config: unknown, accountId?: string) => { appId?: string; clientSecret?: string };
+  let getAccessToken: (appId: string, secret: string) => Promise<string>;
+  let uploadC2CMedia: (token: string, id: string, type: unknown, a: unknown, data: string, b: boolean) => Promise<{ file_info: unknown }>;
+  let uploadGroupMedia: (token: string, id: string, type: unknown, a: unknown, data: string, b: boolean) => Promise<{ file_info: unknown }>;
+  let sendC2CMediaMessage: (token: string, id: string, fileInfo: unknown, a?: unknown, b?: unknown) => Promise<unknown>;
+  let sendGroupMediaMessage: (token: string, id: string, fileInfo: unknown, a?: unknown, b?: unknown) => Promise<unknown>;
+  let MediaFileType: { FILE: unknown };
+  try {
+    const qqConfig = await import("../qqbot/src/config.js");
+    const qqApi = await import("../qqbot/src/api.js");
+    resolveQQBotAccount = qqConfig.resolveQQBotAccount;
+    getAccessToken = qqApi.getAccessToken;
+    uploadC2CMedia = qqApi.uploadC2CMedia;
+    uploadGroupMedia = qqApi.uploadGroupMedia;
+    sendC2CMediaMessage = qqApi.sendC2CMediaMessage;
+    sendGroupMediaMessage = qqApi.sendGroupMediaMessage;
+    MediaFileType = qqApi.MediaFileType;
+  } catch {
+    return {
+      attempted: false,
+      supported: false,
+      error: "qqbot module not available (optional dependency)",
     };
   }
 
@@ -382,6 +644,27 @@ async function deliverQQArtifacts(params: {
   };
 
   await fs.writeFile(path.join(params.runDir, "qq-delivery.json"), `${JSON.stringify(result, null, 2)}\n`, "utf8");
+  return result;
+}
+
+async function deliverFeishuArtifacts(params: {
+  ctx: PluginCommandContext;
+  runDir: string;
+  stageResults: StageResult[];
+}): Promise<FeishuDeliveryResult | null> {
+  if (!canDeliverToFeishu(params.ctx)) {
+    return null;
+  }
+  const stageImages = await deliverStageImagesToFeishu({
+    ctx: params.ctx,
+    stageResults: params.stageResults,
+  });
+  const result: FeishuDeliveryResult = { stageImages };
+  await fs.writeFile(
+    path.join(params.runDir, "feishu-delivery.json"),
+    `${JSON.stringify(result, null, 2)}\n`,
+    "utf8",
+  );
   return result;
 }
 
@@ -539,6 +822,9 @@ async function executeInvestmentWorkflow(params: {
 }): Promise<string> {
   const request = params.request?.trim() || "Please run this investment workflow.";
   await ensureStagesDir(params.runDir);
+  // #region agent log
+  fetch('http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e182aa'},body:JSON.stringify({sessionId:'e182aa',runId:params.runId,hypothesisId:'H4',location:'skill/open-prose/index.ts:756',message:'executeInvestmentWorkflow entered',data:{channel:params.ctx.channel,programPath:params.programPath,runDir:params.runDir,request},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 
   const plannerPrompt = [
     "You are the planner stage of an OpenProse investment workflow.",
@@ -769,14 +1055,25 @@ async function executeInvestmentWorkflow(params: {
     critic,
     report,
   ];
-  const qqDelivery = await deliverQQArtifacts({
-    ctx: params.ctx,
-    runDir: params.runDir,
-    stageResults: orderedStages,
-  });
+  // #region agent log
+  fetch('http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e182aa'},body:JSON.stringify({sessionId:'e182aa',runId:params.runId,hypothesisId:'H4',location:'skill/open-prose/index.ts:983',message:'executeInvestmentWorkflow completed all stages before delivery',data:{stageCount:orderedStages.length,stageNames:orderedStages.map((stage)=>stage.stage),runDir:params.runDir},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  const [qqDelivery, feishuDelivery] = await Promise.all([
+    deliverQQArtifacts({
+      ctx: params.ctx,
+      runDir: params.runDir,
+      stageResults: orderedStages,
+    }),
+    deliverFeishuArtifacts({
+      ctx: params.ctx,
+      runDir: params.runDir,
+      stageResults: orderedStages,
+    }),
+  ]);
   const summaryWithDelivery = {
     ...summary,
     qqDelivery,
+    feishuDelivery,
   };
 
   await fs.writeFile(path.join(params.runDir, "result.json"), `${JSON.stringify(summaryWithDelivery, null, 2)}\n`, "utf8");
@@ -785,7 +1082,7 @@ async function executeInvestmentWorkflow(params: {
   const deliveryNotes: string[] = [];
   if (qqDelivery) {
     const deliveredCount = qqDelivery.stageImages.filter((item) => item.delivered).length;
-    deliveryNotes.push(`STAGE_IMAGE_DELIVERY=${deliveredCount}/${qqDelivery.stageImages.length}`);
+    deliveryNotes.push(`STAGE_IMAGE_DELIVERY_QQ=${deliveredCount}/${qqDelivery.stageImages.length}`);
     if (qqDelivery.fileProbe?.attempted) {
       deliveryNotes.push(
         qqDelivery.fileProbe.supported
@@ -793,6 +1090,10 @@ async function executeInvestmentWorkflow(params: {
           : `QQ_FILE_ATTACHMENT_PROBE=unsupported (${qqDelivery.fileProbe.error ?? "unknown error"})`,
       );
     }
+  }
+  if (feishuDelivery) {
+    const deliveredCount = feishuDelivery.stageImages.filter((item) => item.delivered).length;
+    deliveryNotes.push(`STAGE_IMAGE_DELIVERY_FEISHU=${deliveredCount}/${feishuDelivery.stageImages.length}`);
   }
 
   return [report.text, "", ...deliveryNotes, `RUN_ARTIFACT_DIR=${params.runDir}`].join("\n");
@@ -951,6 +1252,10 @@ async function compileProgram(programPath: string, programText: string, runDir: 
   ].join("\n");
 }
 
+function getBuiltInInvestmentProgramPath(): string {
+  return path.join(process.env.HOME ?? "", ".openclaw", "extensions", "open-prose", "skills", "prose", "investment_research_pipeline.prose");
+}
+
 async function listExamples(): Promise<string> {
   const examplesDir = path.join(process.env.HOME ?? "", ".openclaw", "extensions", "open-prose", "skills", "prose", "examples");
   const entries = await fs.readdir(examplesDir, { withFileTypes: true }).catch(() => []);
@@ -967,12 +1272,18 @@ async function listExamples(): Promise<string> {
 }
 
 export default function register(api: OpenClawPluginApi) {
+  // #region agent log
+  fetch('http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e182aa'},body:JSON.stringify({sessionId:'e182aa',runId:'plugin-load',hypothesisId:'H7',location:'skill/open-prose/index.ts:1207',message:'open-prose register invoked',data:{plugin:'open-prose'},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   api.registerCommand({
     name: "prose",
     description: "Run or compile OpenProse programs with auditable run artifacts.",
     acceptsArgs: true,
     handler: async (ctx) => {
       const action = parseAction(ctx.args ?? "");
+      // #region agent log
+      fetch('http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e182aa'},body:JSON.stringify({sessionId:'e182aa',runId:'pre-run',hypothesisId:'H2',location:'skill/open-prose/index.ts:1207',message:'open-prose command handler entered',data:{channel:ctx.channel,accountId:ctx.accountId ?? null,to:ctx.to ?? null,args:ctx.args ?? '',actionKind:action.kind},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       if (action.kind === "help") {
         return { text: COMMAND_HELP };
       }
@@ -984,16 +1295,32 @@ export default function register(api: OpenClawPluginApi) {
       }
 
       try {
-        const programPath = await resolveProgramPath(action.target);
+        let programPath: string;
+        let runRequest: string | undefined;
+        if (action.kind === "invest") {
+          programPath = getBuiltInInvestmentProgramPath();
+          runRequest = action.request;
+          if (!(await fileExists(programPath))) {
+            return {
+              text: `OpenProse invest 需要内置程序文件，未找到: ${programPath}\n请执行 skill/open-prose/install-openclaw.sh 完成安装。`,
+            };
+          }
+        } else {
+          programPath = await resolveProgramPath(action.target);
+          runRequest = action.request;
+        }
         const programText = await fs.readFile(programPath, "utf8");
         const runId = buildRunId();
         const runDir = await ensureRunDir(programPath, runId);
         await fs.writeFile(path.join(runDir, "program.prose"), programText, "utf8");
+        // #region agent log
+        fetch('http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e182aa'},body:JSON.stringify({sessionId:'e182aa',runId,hypothesisId:'H3',location:'skill/open-prose/index.ts:1233',message:'open-prose resolved program branch',data:{actionKind:action.kind,programPath,runDir,request:runRequest ?? null,isInvestmentProgram:isInvestmentResearchProgram(programPath, programText),hasDeterministicPlan:Boolean(parseDeterministicWrite(programText))},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
 
         const meta: RunMeta = {
           id: runId,
           action: action.kind,
-          target: action.target,
+          target: action.kind === "invest" ? "investment_research_pipeline.prose" : action.target,
           source: programPath,
           createdAt: new Date().toISOString(),
           channel: ctx.channel,
@@ -1020,7 +1347,7 @@ export default function register(api: OpenClawPluginApi) {
           };
         }
 
-        if (isInvestmentResearchProgram(programPath, programText)) {
+        if (action.kind === "invest" || isInvestmentResearchProgram(programPath, programText)) {
           meta.mode = "staged-agent-bridge";
           await writeRunMeta(runDir, meta);
           return {
@@ -1030,7 +1357,7 @@ export default function register(api: OpenClawPluginApi) {
               runDir,
               programPath,
               programText,
-              request: action.request,
+              request: runRequest,
             }),
           };
         }

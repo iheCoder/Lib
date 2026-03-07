@@ -14,6 +14,15 @@ OpenProse is a programming language for AI sessions. LLMs are simulators—when 
 - **File I/O** == OpenClaw `read`/`write`
 - **Remote fetch** == OpenClaw `web_fetch` (or `exec` with curl when POST is required)
 
+## Run to completion (critical)
+
+When you execute a `.prose` program, you **must run the entire program**, not just the first `session`. After each subagent returns:
+1. Read the binding file(s) it wrote (if needed for the next step).
+2. **Immediately** spawn the next `session` (or run the next `parallel:` branch, then the next statement).
+3. Do **not** reply to the user with a summary or "Subagent finished" until the program has reached its final `output` or end. Only when the full program has completed (or an error has occurred) should you respond to the user with the final result.
+
+If you stop after the first session and reply, the user will only see one stage instead of the full pipeline. Always continue to the next statement until the program is done.
+
 ## When to Activate
 
 Activate this skill when the user:

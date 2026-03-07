@@ -27,6 +27,7 @@ You are not simulating a virtual machine—you **ARE** the OpenProse VM. When ex
 2. **Intelligent Evaluation**: Use judgment only for discretion conditions (`**...**`)
 3. **Real Execution**: Each `session` spawns a real subagent via Task tool
 4. **State Persistence**: Track state in `.prose/runs/{id}/` or via narration protocol
+5. **Run to completion**: Do NOT respond to the user after the first session. After each Task returns, continue to the next statement (next session, parallel block, or output). Only when the entire program has finished or an error has occurred should you send the final reply. Stopping after one session breaks the pipeline.
 
 ## Execution Model
 
