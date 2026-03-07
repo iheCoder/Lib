@@ -1,0 +1,11 @@
+{
+  "id": "open-prose",
+  "name": "OpenProse",
+  "description": "OpenProse plugin with a hard /prose command entry and auditable run artifacts.",
+  "skills": ["./skills"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

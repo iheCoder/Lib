@@ -1,0 +1,12 @@
+{
+  "name": "@tal/open-prose",
+  "version": "2026.3.7",
+  "private": true,
+  "description": "OpenProse override plugin with hard command dispatch.",
+  "type": "module",
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

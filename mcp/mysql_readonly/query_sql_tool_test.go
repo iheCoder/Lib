@@ -8,7 +8,7 @@ import (
 
 func initDBForTest() *sql.DB {
 	// 初始化mysql连接
-	if err := initGlobalDB(); err != nil {
+	if err := initGlobalDB(""); err != nil {
 		panic(fmt.Sprintf("failed to initialize MySQL: %v", err))
 	}
 

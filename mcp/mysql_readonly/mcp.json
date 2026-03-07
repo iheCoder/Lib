@@ -1,0 +1,20 @@
+{
+    "servers": {
+        "mysql-readonly-server": {
+            "type": "stdio",
+            "command": "go",
+            "args": [
+                "run", 
+                "main.go", 
+                "query_sql_tool.go",
+                "-mode", "stdio",
+                "-config", "/Users/tal/GolandProjects/Lib/mcp/mysql_readonly/config/database.yaml"
+            ],
+            "cwd": "/Users/tal/GolandProjects/Lib/mcp/mysql_readonly",
+            "env": {
+                "MYSQL_CONFIG_PATH": "/Users/tal/GolandProjects/Lib/mcp/mysql_readonly/config/database.yaml"
+            }
+        }
+    }
+}
+
