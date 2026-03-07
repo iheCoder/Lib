@@ -1,7 +1,7 @@
 {
   "id": "open-prose",
   "name": "OpenProse",
-  "description": "OpenProse VM skill pack with a /prose slash command.",
+  "description": "OpenProse plugin with a hard /prose command entry and auditable run artifacts.",
   "skills": ["./skills"],
   "configSchema": {
     "type": "object",

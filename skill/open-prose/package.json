@@ -1,8 +1,8 @@
 {
-  "name": "@openclaw/open-prose",
-  "version": "2026.3.1",
+  "name": "@tal/open-prose",
+  "version": "2026.3.7",
   "private": true,
-  "description": "OpenProse VM skill pack plugin (slash command + telemetry).",
+  "description": "OpenProse override plugin with hard command dispatch.",
   "type": "module",
   "openclaw": {
     "extensions": [
