@@ -68,7 +68,8 @@ type FeishuDeliveryResult = {
   stageImages: Array<{
     stage: string;
     markdownPath: string;
-    imagePath?: string;
+    deliveryType?: "interactive" | "text";
+    messageId?: string;
     delivered: boolean;
     error?: string;
   }>;
@@ -344,6 +345,165 @@ async function feishuSendImage(
   }
 }
 
+async function feishuSendMessage(
+  accessToken: string,
+  receiveTarget: { receiveId: string; receiveIdType: "chat_id" | "open_id" | "user_id" | "union_id" },
+  msgType: "interactive" | "text",
+  content: string,
+): Promise<string> {
+  // #region agent log
+  fetch('http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5aa00'},body:JSON.stringify({sessionId:'a5aa00',location:'index.ts:354',message:'feishuSendMessage called',data:{msgType,contentLength:content.length,receiveIdType:receiveTarget.receiveIdType},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
+  // #endregion
+  const res = await fetch(
+    `https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=${receiveTarget.receiveIdType}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        receive_id: receiveTarget.receiveId,
+        msg_type: msgType,
+        content,
+      }),
+    },
+  );
+  if (!res.ok) {
+    const errorText = await res.text();
+    // #region agent log
+    fetch('http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5aa00'},body:JSON.stringify({sessionId:'a5aa00',location:'index.ts:373',message:'feishu API !res.ok',data:{status:res.status,errorText},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+    throw new Error(`Feishu send message failed: ${res.status} ${errorText}`);
+  }
+  const data = (await res.json()) as { code?: number; data?: { message_id?: string }; msg?: string };
+  // #region agent log
+  fetch('http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5aa00'},body:JSON.stringify({sessionId:'a5aa00',location:'index.ts:378',message:'feishu API response',data:{code:data.code,hasMessageId:!!data.data?.message_id,msg:data.msg},timestamp:Date.now(),hypothesisId:'D'})}).catch(()=>{});
+  // #endregion
+  if (data.code && data.code !== 0) {
+    throw new Error(`Feishu send error: code=${data.code}, msg=${data.msg}`);
+  }
+  return data.data?.message_id ?? "";
+}
+
+function buildStageCard(stage: StageResult): string {
+  const stageTitleMap: Record<string, string> = {
+    planner: "研究计划",
+    financial: "财务分析",
+    industry: "行业分析",
+    news: "新闻事件",
+    macro: "宏观环境",
+    sentiment: "市场情绪",
+    thesis: "投资逻辑",
+    risk: "风险分析",
+    critic: "反面论证",
+    report: "投资报告",
+  };
+
+  const stageTitle = stageTitleMap[stage.stage] || stage.stage;
+  let cardContent = stage.text.trim();
+
+  if (cardContent.length > 3000) {
+    cardContent = cardContent.slice(0, 2950) + "\n\n...\n\n[内容过长，详见运行产物中的 markdown 文件]";
+  }
+
+  const lines = cardContent.split("\n");
+  const elements: Array<{ tag: string; text?: { content: string; tag: string } }> = [];
+
+  elements.push({
+    tag: "div",
+    text: {
+      content: `**${stageTitle}**`,
+      tag: "lark_md",
+    },
+  });
+
+  elements.push({
+    tag: "hr",
+  });
+
+  let currentParagraph = "";
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      if (currentParagraph) {
+        elements.push({
+          tag: "div",
+          text: {
+            content: currentParagraph,
+            tag: "lark_md",
+          },
+        });
+        currentParagraph = "";
+      }
+      continue;
+    }
+
+    if (currentParagraph) {
+      currentParagraph += "\n" + trimmed;
+    } else {
+      currentParagraph = trimmed;
+    }
+  }
+
+  if (currentParagraph) {
+    elements.push({
+      tag: "div",
+      text: {
+        content: currentParagraph,
+        tag: "lark_md",
+      },
+    });
+  }
+
+  elements.push({
+    tag: "hr",
+  });
+
+  elements.push({
+    tag: "note",
+    text: {
+      content: `文件: ${path.basename(stage.stagePath)}`,
+      tag: "plain_text",
+    },
+  });
+
+  const card = {
+    config: {
+      wide_screen_mode: true,
+    },
+    elements,
+  };
+
+  return JSON.stringify(card);
+}
+
+function buildStageTextFallback(stage: StageResult): string {
+  const stageTitleMap: Record<string, string> = {
+    planner: "研究计划",
+    financial: "财务分析",
+    industry: "行业分析",
+    news: "新闻事件",
+    macro: "宏观环境",
+    sentiment: "市场情绪",
+    thesis: "投资逻辑",
+    risk: "风险分析",
+    critic: "反面论证",
+    report: "投资报告",
+  };
+
+  const stageTitle = stageTitleMap[stage.stage] || stage.stage;
+  let textContent = stage.text.trim();
+
+  if (textContent.length > 3000) {
+    textContent = textContent.slice(0, 2950) + "\n\n...\n\n[内容过长，详见运行产物]";
+  }
+
+  return JSON.stringify({
+    text: `【${stageTitle}】\n\n${textContent}`,
+  });
+}
+
 function getFeishuConfigFromCtx(ctx: PluginCommandContext): { appId: string; appSecret: string } | null {
   const config = ctx.config as Record<string, unknown> | undefined;
   const channels = config?.channels as Record<string, unknown> | undefined;
@@ -361,6 +521,9 @@ async function deliverStageImagesToFeishu(params: {
   ctx: PluginCommandContext;
   stageResults: StageResult[];
 }): Promise<FeishuDeliveryResult["stageImages"]> {
+  // #region agent log
+  fetch('http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5aa00'},body:JSON.stringify({sessionId:'a5aa00',location:'index.ts:513',message:'deliverStageImagesToFeishu called',data:{stageCount:params.stageResults.length,to:params.ctx.to},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
   const receiveTarget = parseFeishuReceiveTarget(params.ctx.to);
   if (!receiveTarget) {
     return params.stageResults.map((s) => ({
@@ -379,25 +542,6 @@ async function deliverStageImagesToFeishu(params: {
       error: "feishu account not configured in openclaw.json channels.feishu",
     }));
   }
-  // #region agent log
-  fetch("http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "e182aa" },
-    body: JSON.stringify({
-      sessionId: "e182aa",
-      runId: "feishu-delivery-target",
-      hypothesisId: "H9",
-      location: "skill/open-prose/index.ts:356",
-      message: "resolved feishu receive target",
-      data: {
-        rawTo: params.ctx.to ?? null,
-        receiveIdType: receiveTarget.receiveIdType,
-        receiveIdPreview: receiveTarget.receiveId.slice(0, 8),
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
   let accessToken: string;
   try {
     accessToken = await getFeishuTenantToken(feishuConfig.appId, feishuConfig.appSecret);
@@ -413,22 +557,43 @@ async function deliverStageImagesToFeishu(params: {
   const deliveries: FeishuDeliveryResult["stageImages"] = [];
   for (const stage of params.stageResults) {
     try {
-      const imagePath = await renderMarkdownToImage(stage.stagePath);
-      const imageKey = await feishuUploadImage(accessToken, imagePath);
-      await feishuSendImage(accessToken, receiveTarget, imageKey);
+      const cardContent = buildStageCard(stage);
+      // #region agent log
+      fetch('http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5aa00'},body:JSON.stringify({sessionId:'a5aa00',location:'index.ts:547',message:'buildStageCard returned',data:{stage:stage.stage,contentLength:cardContent.length,contentPreview:cardContent.substring(0,200)},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      const messageId = await feishuSendMessage(accessToken, receiveTarget, "interactive", cardContent);
+      // #region agent log
+      fetch('http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5aa00'},body:JSON.stringify({sessionId:'a5aa00',location:'index.ts:548',message:'feishuSendMessage interactive success',data:{stage:stage.stage,messageId},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
       deliveries.push({
         stage: stage.stage,
         markdownPath: stage.stagePath,
-        imagePath,
+        deliveryType: "interactive",
+        messageId,
         delivered: true,
       });
-    } catch (err) {
-      deliveries.push({
-        stage: stage.stage,
-        markdownPath: stage.stagePath,
-        delivered: false,
-        error: err instanceof Error ? err.message : String(err),
-      });
+    } catch (cardErr) {
+      // #region agent log
+      fetch('http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a5aa00'},body:JSON.stringify({sessionId:'a5aa00',location:'index.ts:556',message:'card send failed, trying text fallback',data:{stage:stage.stage,error:cardErr instanceof Error?cardErr.message:String(cardErr)},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
+      try {
+        const textContent = buildStageTextFallback(stage);
+        const messageId = await feishuSendMessage(accessToken, receiveTarget, "text", textContent);
+        deliveries.push({
+          stage: stage.stage,
+          markdownPath: stage.stagePath,
+          deliveryType: "text",
+          messageId,
+          delivered: true,
+        });
+      } catch (textErr) {
+        deliveries.push({
+          stage: stage.stage,
+          markdownPath: stage.stagePath,
+          delivered: false,
+          error: `card failed: ${cardErr instanceof Error ? cardErr.message : String(cardErr)}; text fallback failed: ${textErr instanceof Error ? textErr.message : String(textErr)}`,
+        });
+      }
     }
   }
   return deliveries;
@@ -660,11 +825,13 @@ async function deliverFeishuArtifacts(params: {
     stageResults: params.stageResults,
   });
   const result: FeishuDeliveryResult = { stageImages };
+  const runDir = params.runDir;
   await fs.writeFile(
-    path.join(params.runDir, "feishu-delivery.json"),
+    path.join(runDir, "feishu-delivery.json"),
     `${JSON.stringify(result, null, 2)}\n`,
     "utf8",
   );
+  await fs.writeFile(path.join(runDir, "feishu-delivery-version.txt"), "card\n", "utf8").catch(() => {});
   return result;
 }
 
@@ -822,10 +989,6 @@ async function executeInvestmentWorkflow(params: {
 }): Promise<string> {
   const request = params.request?.trim() || "Please run this investment workflow.";
   await ensureStagesDir(params.runDir);
-  // #region agent log
-  fetch('http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e182aa'},body:JSON.stringify({sessionId:'e182aa',runId:params.runId,hypothesisId:'H4',location:'skill/open-prose/index.ts:756',message:'executeInvestmentWorkflow entered',data:{channel:params.ctx.channel,programPath:params.programPath,runDir:params.runDir,request},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-
   const plannerPrompt = [
     "You are the planner stage of an OpenProse investment workflow.",
     "",
@@ -1055,9 +1218,6 @@ async function executeInvestmentWorkflow(params: {
     critic,
     report,
   ];
-  // #region agent log
-  fetch('http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e182aa'},body:JSON.stringify({sessionId:'e182aa',runId:params.runId,hypothesisId:'H4',location:'skill/open-prose/index.ts:983',message:'executeInvestmentWorkflow completed all stages before delivery',data:{stageCount:orderedStages.length,stageNames:orderedStages.map((stage)=>stage.stage),runDir:params.runDir},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   const [qqDelivery, feishuDelivery] = await Promise.all([
     deliverQQArtifacts({
       ctx: params.ctx,
@@ -1272,18 +1432,12 @@ async function listExamples(): Promise<string> {
 }
 
 export default function register(api: OpenClawPluginApi) {
-  // #region agent log
-  fetch('http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e182aa'},body:JSON.stringify({sessionId:'e182aa',runId:'plugin-load',hypothesisId:'H7',location:'skill/open-prose/index.ts:1207',message:'open-prose register invoked',data:{plugin:'open-prose'},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   api.registerCommand({
     name: "prose",
     description: "Run or compile OpenProse programs with auditable run artifacts.",
     acceptsArgs: true,
     handler: async (ctx) => {
       const action = parseAction(ctx.args ?? "");
-      // #region agent log
-      fetch('http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e182aa'},body:JSON.stringify({sessionId:'e182aa',runId:'pre-run',hypothesisId:'H2',location:'skill/open-prose/index.ts:1207',message:'open-prose command handler entered',data:{channel:ctx.channel,accountId:ctx.accountId ?? null,to:ctx.to ?? null,args:ctx.args ?? '',actionKind:action.kind},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (action.kind === "help") {
         return { text: COMMAND_HELP };
       }
@@ -1313,9 +1467,6 @@ export default function register(api: OpenClawPluginApi) {
         const runId = buildRunId();
         const runDir = await ensureRunDir(programPath, runId);
         await fs.writeFile(path.join(runDir, "program.prose"), programText, "utf8");
-        // #region agent log
-        fetch('http://127.0.0.1:7383/ingest/5e67e177-188a-465c-80d1-54ac3658e0c5',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e182aa'},body:JSON.stringify({sessionId:'e182aa',runId,hypothesisId:'H3',location:'skill/open-prose/index.ts:1233',message:'open-prose resolved program branch',data:{actionKind:action.kind,programPath,runDir,request:runRequest ?? null,isInvestmentProgram:isInvestmentResearchProgram(programPath, programText),hasDeterministicPlan:Boolean(parseDeterministicWrite(programText))},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
 
         const meta: RunMeta = {
           id: runId,
