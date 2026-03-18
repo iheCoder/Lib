@@ -1,0 +1,4 @@
+interface:
+  display_name: "Aliyun SLS Trace"
+  short_description: "Query Alibaba Cloud trace logs"
+  default_prompt: "Query Alibaba Cloud SLS tracing logs with configurable prod/test environment."
