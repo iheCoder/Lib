@@ -1,10 +1,16 @@
 # Scoring Framework
 
-把行业动量拆成五个模块评分，再用阶段规则做最终判断。
+这个版本把“当前动量”定义为今天到近 `3` 个交易日内的强化或衰减状态。`20d/60d` 不是当前本身，而是背景上下文。
+
+## 时间框架
+
+- 核心层：`1d`、`3d`
+- 辅助层：`5d`、`10d`
+- 背景层：`20d`、`60d`、`120d`
+
+脚本的主要模块会优先给 `1d/3d` 更高权重。没有今天数据时，最多允许退到近 `3` 个交易日；如果 `as_of` 距今天超过 `3` 天，脚本会把“当前性”降级。
 
 ## 输入结构
-
-顶层 JSON 结构：
 
 ```json
 {
@@ -13,121 +19,163 @@
   "flow": {},
   "narrative": {},
   "breadth": {},
-  "risk": {}
+  "crowding": {},
+  "compare": {}
 }
 ```
 
-### meta
+## meta
 
 - `sector`: 行业或主题名称
 - `market`: `CN`、`HK`、`US`、`GLOBAL`
 - `benchmark`: 对比基准
-- `as_of`: 绝对日期，格式 `YYYY-MM-DD`
-- `basket_note`: 可选，说明成分口径
+- `as_of`: 数据日期，`YYYY-MM-DD`
+- `as_of_time`: 可选，盘中时点
+- `basket_note`: 行业口径说明
 
-### price
+## price
 
-- `ret_5d`: 5 日收益，十进制，例如 `0.08`
+### 当前强弱
+
+- `ret_1d`
+- `ret_3d`
+- `rs_1d`: 相对基准 1 日超额
+- `rs_3d`
+- `close_strength_1d`: 收盘强度或盘中收在高位的强度，`0` 到 `1`
+- `breakout`: 是否刚突破关键平台
+
+### 平滑度和延续性
+
+- `up_day_ratio_5d`
+- `max_drawdown_3d`
+- `max_drawdown_20d`
+- `trend_smoothness_5d`: 收益/波动类指标，`0` 到 `1`
+
+### 背景位置
+
+- `ret_5d`
 - `ret_20d`
 - `ret_60d`
-- `ret_120d`
-- `relative_strength_20d`: 相对基准 20 日超额
-- `relative_strength_60d`
-- `up_day_ratio_20d`: 20 日上涨天数占比，`0` 到 `1`
-- `max_drawdown_20d`: 20 日最大回撤，十进制
-- `distance_to_52w_high`: 离 52 周高点的距离，越小越强
-- `breakout`: 是否刚突破关键平台，布尔值
+- `distance_to_breakout_level`
+- `distance_to_52w_high`
 
-### flow
+## flow
 
-- `volume_ratio_20d`: 最近 20 日量能相对过去 60 日的放大倍数
-- `turnover_ratio_20d`: 换手或成交额放大倍数
-- `net_flow_5d_pct`: 5 日净流入占板块自由流通市值或 ETF 资产的比例
-- `net_flow_20d_pct`
-- `positive_flow_days_ratio_20d`: 20 日正净流入天数占比
-- `concentration_top3_pct`: 前三大标的吸走的资金占比，越高说明越偏龙头
+### 成交额与换手率扩张
 
-### narrative
+- `turnover_ratio_1d`
+- `turnover_ratio_3d`
+- `volume_ratio_1d`
+- `volume_ratio_3d`
 
-- `catalyst_count_14d`: 最近 14 日关键催化数量
-- `thesis_alignment`: 交易理由一致性，`0` 到 `1`
-- `earnings_revision_score`: 盈利预期修正，`-1` 到 `1`
-- `policy_support_score`: 政策或监管支持强度，`0` 到 `1`
-- `narrative_freshness`: 叙事新鲜度，`0` 到 `1`
+### 净流入持续性
 
-### breadth
+- `net_flow_1d_pct`
+- `net_flow_3d_pct`
+- `positive_flow_days_ratio_3d`
+- `net_flow_acceleration`: 最近 `3d` 相比此前 `3d` 的边际改善，`-1` 到 `1`
 
-- `pct_above_ma20`: 成分中站上 20 日线的比例
-- `pct_above_ma60`
-- `advance_decline_ratio`: 涨跌家数比
-- `median_ret_20d`: 成分中位数 20 日收益
-- `leader_contribution_pct`: 龙头对板块 20 日涨幅的贡献占比，越高越偏单核
+### 不同资金类型确认
 
-### risk
+- `etf_flow_confirm_score`: `0` 到 `1`
+- `northbound_confirm_score`: `0` 到 `1`
+- `margin_confirm_score`: `0` 到 `1`
 
-- `valuation_percentile_5y`: 估值在近 5 年中的分位，`0` 到 `1`
-- `short_term_spike_10d`: 10 日涨幅，越大越容易拥挤
-- `rsi_14`: RSI(14)
-- `event_risk_score`: 未来 2 到 4 周事件风险，`0` 到 `1`
-- `narrative_crowding_score`: 叙事拥挤度，`0` 到 `1`
+### 龙头与跟风结构
 
-## 模块评分逻辑
+- `leader_flow_share_pct`
+- `follower_participation_ratio`
+- `pullback_resilience_score`: 回调日资金承接强度，`0` 到 `1`
 
-脚本会在可用字段上加权平均。缺少字段不会报错，但会降低覆盖度。
+## narrative
 
-### 价格分
+### 频率层
 
-- 看 20 日和 60 日趋势，而不是只看一天脉冲
-- 相对基准越强越好
-- 上涨天数占比越高越好
-- 回撤越小越好
-- 贴近 52 周新高且伴随突破，有额外加分
+- `mention_burst_3d`: 最近 `3d` 话题热度相对过去区间的抬升，`0` 到 `1`
+- `catalyst_count_3d`
 
-### 资金分
+### 一致性层
 
-- 量价齐升、净流入持续，才算有效增量资金
-- 只放量不净流入，或者只有一天大额流入，分数不会太高
-- 资金过度集中在前三大标的，会拉低“持续性”评价
+- `thesis_alignment`
+- `source_diversity_score`
 
-### 叙事分
+### 升级层
 
-- 催化数量只是起点，更重要的是叙事是否统一
-- 盈利修正、政策支持、新鲜度能提高可信度
-- 纯情绪性热词、没有验证的主题，叙事分应保守
+- `thesis_upgrade_score`: 叙事是否从概念升级到订单、盈利、景气或政策兑现，`0` 到 `1`
+- `earnings_revision_score`: `-1` 到 `1`
+- `narrative_freshness`
 
-### 结构分
+## breadth
 
-- 成分越多站上均线、涨跌家数比越健康，越像板块扩散
-- 中位数收益比龙头涨幅更能说明是否“全体共振”
-- 龙头贡献度过高时，结构分会下调
+- `advancers_ratio_1d`
+- `advancers_ratio_3d`
+- `median_ret_1d`
+- `median_ret_3d`
+- `layer_diffusion_score`: 龙头、中军、二线、小票的扩散情况，`0` 到 `1`
+- `subtheme_resonance_ratio`: 子方向共振比例，`0` 到 `1`
+- `non_leader_participation_ratio`: 非龙头参与率，`0` 到 `1`
+- `leader_contribution_pct`
 
-### 风险分
+## crowding
 
-- 这是“风险/拥挤分”，越高越危险
-- 高估值分位、短期暴冲、高 RSI、事件密集、共识过高，都会抬高风险
+- `valuation_percentile_5y`
+- `short_term_spike_3d`
+- `short_term_spike_10d`
+- `rsi_14`
+- `turnover_share_percentile_1y`: 行业成交额占全市场比例在过去 1 年中的分位
+- `narrative_crowding_score`
+- `second_line_mania_score`: 二线杂毛补涨和题材泛化强度，`0` 到 `1`
+- `event_risk_score`
 
-## 阶段判定
+## compare
 
-脚本把阶段收敛为四类：
+这是可选模块，用于跨行业排序。
 
-- `启动`：价格与叙事开始转强，但资金和扩散还没完全确认
-- `加速`：价格、资金、结构同时走强，风险尚未失控
-- `拥挤`：趋势仍强，但估值、短期涨幅、情绪一致性已经明显抬升
-- `退潮`：价格或资金、结构明显转弱，前期强势难以维持
+- `peer_overall_percentile`
+- `peer_price_percentile`
+- `peer_flow_percentile`
+- `peer_narrative_percentile`
+- `peer_breadth_percentile`
 
-判定不是单看综合分，而是同时看：
+## 模块评分
 
-- 价格分
-- 资金分
-- 结构分
-- 风险分
+脚本会输出：
+
+- `price`
+- `flow`
+- `narrative`
+- `breadth`
+- `crowding`
+- `compare`
+
+其中：
+
+- `price/flow/narrative/breadth/compare` 越高越强
+- `crowding` 越高越危险
+
+## 阶段识别
+
+阶段不是总分映射，而是规则判断：
+
+- `启动`：当前 `1d/3d` 转强，但资金和扩散还没完全确认
+- `加速`：当前价格、资金、叙事、扩散同时走强，拥挤尚未失控
+- `拥挤`：仍强，但二线泛化、短期脉冲、估值和交易热度都偏高
+- `退潮`：当前脉冲减弱，扩散收缩，资金承接转弱
+
+## 当前性约束
+
+脚本会检查 `as_of` 到系统当天的差值：
+
+- `0-1` 天：当前性正常
+- `2-3` 天：当前性下降，但仍可勉强视作当前
+- 超过 `3` 天：自动提示“不能称为当前动量分析”
 
 ## 置信度
 
-脚本根据五个模块的字段覆盖度给出：
+置信度由三部分决定：
 
-- `高`：平均覆盖度至少 `0.75`
-- `中`：平均覆盖度至少 `0.45`
-- `低`：其余情况
+- 字段覆盖度
+- 数据日期新鲜度
+- 横向比较是否具备
 
-如果最新日期不明确，或者多个关键模块只有代理数据，人工结论应再下调一档。
+即使字段很全，只要日期过旧，最终置信度也必须下调。
