@@ -1,0 +1,50 @@
+{
+  "meta": {
+    "sector": "中国半导体",
+    "market": "CN",
+    "benchmark": "沪深300",
+    "as_of": "2026-03-28",
+    "basket_note": "申万半导体叠加核心设备/设计龙头"
+  },
+  "price": {
+    "ret_5d": 0.061,
+    "ret_20d": 0.184,
+    "ret_60d": 0.327,
+    "ret_120d": 0.418,
+    "relative_strength_20d": 0.121,
+    "relative_strength_60d": 0.186,
+    "up_day_ratio_20d": 0.65,
+    "max_drawdown_20d": 0.058,
+    "distance_to_52w_high": 0.034,
+    "breakout": true
+  },
+  "flow": {
+    "volume_ratio_20d": 1.76,
+    "turnover_ratio_20d": 1.48,
+    "net_flow_5d_pct": 0.021,
+    "net_flow_20d_pct": 0.063,
+    "positive_flow_days_ratio_20d": 0.62,
+    "concentration_top3_pct": 0.43
+  },
+  "narrative": {
+    "catalyst_count_14d": 4,
+    "thesis_alignment": 0.78,
+    "earnings_revision_score": 0.34,
+    "policy_support_score": 0.62,
+    "narrative_freshness": 0.58
+  },
+  "breadth": {
+    "pct_above_ma20": 0.74,
+    "pct_above_ma60": 0.67,
+    "advance_decline_ratio": 2.1,
+    "median_ret_20d": 0.112,
+    "leader_contribution_pct": 0.39
+  },
+  "risk": {
+    "valuation_percentile_5y": 0.73,
+    "short_term_spike_10d": 0.109,
+    "rsi_14": 72,
+    "event_risk_score": 0.41,
+    "narrative_crowding_score": 0.66
+  }
+}
