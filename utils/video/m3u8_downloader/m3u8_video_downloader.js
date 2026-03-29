@@ -69,6 +69,316 @@
         return;
     }
 
+    // 下载任务对象：
+    // 这里把旧版 download() 里揉在一起的策略判断、取消控制、进度回调、错误处理拆成一个稳定对象。
+    // 这样做的目标不是“为了面向对象而面向对象”，而是为了让下载生命周期有明确边界：
+    // idle -> probing/downloading -> completed/failed/cancelled。
+    // 后面如果继续扩展为任务列表、失败重试、并发控制，也能继续沿着这个结构演化。
+    class DownloadTask {
+        constructor(api, details) {
+            this.api = api;
+            this.details = details || {};
+            this.url = this.details.url;
+            this.filename = this.details.name || 'download.mp4';
+            this.state = 'idle';
+            this.progress = 0;
+            this.strategy = null;
+            this.isCancelled = false;
+            this.abortController = null;
+            this.gmRequest = null;
+            this.stopNotified = false;
+
+            // 任务创建后立即启动，外部只需要持有实例并在需要时 cancel。
+            this.start();
+        }
+
+        // 统一的内部状态更新入口。
+        // 注意这里只更新任务模型自身，不直接碰 UI；
+        // UI 仍然通过 reportProgress/onComplete/onError/onStop 这些外部回调驱动。
+        setState(nextState, extra = {}) {
+            this.state = nextState;
+            if (typeof extra.progress === "number") {
+                this.progress = extra.progress;
+            }
+            if (extra.strategy) {
+                this.strategy = extra.strategy;
+            }
+        }
+
+        // 统一上报进度。
+        // 旧实现里每种下载策略各自计算百分比并直接调回调，
+        // 现在收口之后，进度语义会更一致，也方便未来做节流或格式化。
+        reportProgress(progress) {
+            if (typeof progress !== "number" || !Number.isFinite(progress)) return;
+            this.progress = progress;
+            this.details.reportProgress?.(progress);
+        }
+
+        // 取消事件只允许向外广播一次。
+        // 这是因为用户主动 cancel、fetch 的 AbortError、GM 的 onabort，
+        // 这三条路径理论上都可能触发“停止”，如果不收口，UI 很容易重复复位。
+        notifyStopOnce() {
+            if (this.stopNotified) return;
+            this.stopNotified = true;
+            this.details.onStop?.();
+        }
+
+        // 成功完成任务。
+        // 这里顺手把进度强制补到 100%，避免某些响应没有 length 或最后一次 onprogress 没打满。
+        complete() {
+            if (this.isCancelled) return;
+            this.setState('completed', { progress: 100 });
+            this.reportProgress(100);
+            this.details.onComplete?.();
+        }
+
+        // 统一错误出口。
+        // 一旦是用户主动取消，就不再把它继续向外表现成“失败”。
+        fail(error) {
+            if (this.isCancelled) return;
+            this.setState('failed', { progress: 0 });
+            this.details.onError?.(error);
+        }
+
+        // 对外暴露的取消动作。
+        // 无论当前底层是 fetch 还是 GM 请求，调用方都不需要知道细节，只调这一个入口。
+        cancel() {
+            if (this.isCancelled) return;
+            this.isCancelled = true;
+            this.setState('cancelled', { progress: 0 });
+
+            // 不同下载策略各自持有不同的可中断句柄，这里统一收口。
+            if (this.abortController) {
+                this.abortController.abort();
+            }
+            if (this.gmRequest && typeof this.gmRequest.abort === 'function') {
+                this.gmRequest.abort();
+            }
+
+            this.notifyStopOnce();
+        }
+
+        // 任务主流程：
+        // 1. 先把 URL 规范化并校验是否合法；
+        // 2. 同域资源优先走浏览器原生下载；
+        // 3. 跨域且浏览器支持文件系统 API 时，优先走流式写盘；
+        // 4. 如果流式能力不可用或执行失败，再降级到 GM 代理下载。
+        // 这里故意省掉“探测一次再下载一次”的预检请求，避免平白多一次网络成本。
+        async start() {
+            if (this.isCancelled) return;
+
+            try {
+                const url = this.resolveUrl(this.url);
+                if (window.location.origin === url.origin) {
+                    // 同域资源优先交给浏览器原生下载，避免无意义的代理与内存占用。
+                    this.strategy = 'anchor';
+                    this.setState('downloading', { strategy: 'anchor', progress: 100 });
+                    this.triggerAnchorDownload(url.href, this.filename);
+                    this.complete();
+                    return;
+                }
+
+                const supportsFileSystem = typeof unsafeWindow.showSaveFilePicker === 'function';
+                if (supportsFileSystem) {
+                    try {
+                        // 优先尝试流式写盘，减少大文件下载时 blob 常驻内存的风险。
+                        this.strategy = 'stream';
+                        await this.streamDownload(url.href, this.filename, this.details.headers);
+                        return;
+                    } catch (error) {
+                        if (this.isCancelled || error?.name === 'AbortError') {
+                            this.notifyStopOnce();
+                            return;
+                        }
+                        console.error("策略2执行失败，降级到策略3:", error);
+                    }
+                }
+
+                if (this.isCancelled) return;
+
+                // 浏览器流式能力不可用或失败时，再退回到 GM 代理下载。
+                this.strategy = 'gm';
+                this.gmDownload();
+            } catch (error) {
+                this.fail(error);
+            }
+        }
+
+        // 统一做 URL 解析，兼容相对路径，同时把异常都变成一致的错误文案。
+        // 统一 URL 解析。
+        // 好处是：任何调用方传相对路径或非法值时，错误行为都能保持一致。
+        resolveUrl(url) {
+            try {
+                return new URL(url, location.href);
+            } catch (error) {
+                throw new Error(`无效的 URL: ${url}`);
+            }
+        }
+
+        // 利用浏览器原生下载行为保存文件。
+        // 如果传入的是 blob URL，这里会在稍后 revoke，避免对象 URL 长时间泄漏。
+        // 浏览器原生下载触发器。
+        // 同域资源与 GM blob 分支都会走到这里，避免保存逻辑在多个地方重复实现。
+        triggerAnchorDownload(blobUrl, name) {
+            const element = document.createElement('a');
+            element.setAttribute('href', blobUrl);
+            element.setAttribute('download', name);
+            element.style.display = 'none';
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+            if (blobUrl.startsWith('blob:')) {
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+            }
+        }
+
+        // 基于 fetch + File System Access 的流式下载。
+        // 这条路径的价值在于：一边从网络读，一边写入磁盘，不需要把整个视频先堆到内存里。
+        async streamDownload(url, name, headers) {
+            this.setState('probing', { strategy: 'stream', progress: 0 });
+
+            let handle;
+            try {
+                // 先让用户确认保存位置，再发起网络请求，避免无效下载。
+                handle = await unsafeWindow.showSaveFilePicker({
+                    suggestedName: name,
+                    types: [{
+                        description: 'Video File',
+                        accept: { 'video/mp4': ['.mp4'], 'application/octet-stream': ['.bin', '.ts'] }
+                    }],
+                });
+            } catch (error) {
+                if (error?.name === 'AbortError') throw error;
+                throw new Error("无法打开文件保存对话框");
+            }
+
+            if (this.isCancelled) throw new DOMException('Download cancelled', 'AbortError');
+
+            // 只有用户确认了保存位置后，才真正创建写流并开始网络请求。
+            const writable = await handle.createWritable();
+            this.abortController = new AbortController();
+            this.setState('downloading', { strategy: 'stream', progress: 0 });
+
+            let response;
+            try {
+                response = await fetch(url, {
+                    headers: headers || {},
+                    signal: this.abortController.signal
+                });
+            } catch (error) {
+                await this.abortWritable(writable);
+                throw error;
+            }
+
+            // 非 2xx 直接视为失败，让上层去决定是否降级到 GM 方案。
+            if (!response.ok) {
+                await this.abortWritable(writable);
+                throw new Error(`请求失败，状态码: ${response.status}`);
+            }
+
+            // 没有 body 说明当前环境不能做流式读取，这条策略没法继续。
+            if (!response.body) {
+                await this.abortWritable(writable);
+                throw new Error('ReadableStream not supported.');
+            }
+
+            const reader = response.body.getReader();
+            const contentLength = +response.headers.get('Content-Length');
+            let receivedLength = 0;
+
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    if (this.isCancelled) {
+                        throw new DOMException('Download cancelled', 'AbortError');
+                    }
+
+                    // 边读边写，避免把整个文件堆到内存里再一次性保存。
+                    await writable.write(value);
+                    receivedLength += value.length;
+
+                    // 只有拿到总大小时，百分比才是可信的；
+                    // 没有 Content-Length 时宁可只显示“下载中”，也不伪造进度。
+                    if (contentLength > 0) {
+                        const percent = Math.min(100, Number(((receivedLength / contentLength) * 100).toFixed(2)));
+                        this.reportProgress(percent);
+                    }
+                }
+
+                await writable.close();
+                this.abortController = null;
+                this.complete();
+            } catch (error) {
+                await this.abortWritable(writable);
+                if (error?.name === 'AbortError' || this.isCancelled) {
+                    throw new DOMException('Download cancelled', 'AbortError');
+                }
+                throw error;
+            } finally {
+                this.abortController = null;
+            }
+        }
+
+        // 统一关闭/中止写流。
+        // 某些实现支持 abort，某些只有 close，这里做一层兼容。
+        async abortWritable(writable) {
+            try {
+                if (typeof writable.abort === "function") {
+                    await writable.abort();
+                } else {
+                    await writable.close();
+                }
+            } catch { }
+        }
+
+        // GM 代理下载兜底分支。
+        // 兼容性好，但缺点也很明确：最终会把整份文件放进 blob，再由浏览器保存。
+        // 所以它适合作为后备方案，而不是优先方案。
+        gmDownload() {
+            this.setState('downloading', { strategy: 'gm', progress: 0 });
+            this.gmRequest = this.api.xmlHttpRequest({
+                method: "GET",
+                url: this.url,
+                responseType: 'blob',
+                headers: this.details.headers || {},
+                onload: (res) => {
+                    this.gmRequest = null;
+                    if (this.isCancelled) return;
+                    if (res.status >= 200 && res.status < 300) {
+                        // GM 分支只能拿到完整 blob，再转成临时 URL 交给浏览器保存。
+                        const blob = res.response;
+                        const blobUrl = URL.createObjectURL(blob);
+                        this.triggerAnchorDownload(blobUrl, this.filename);
+                        this.api.message("下载完成，正在保存...", 3000);
+                        this.complete();
+                        return;
+                    }
+                    this.fail(new Error(`请求失败，状态码: ${res.status}`));
+                },
+                onprogress: (event) => {
+                    if (this.isCancelled) return;
+                    if (event.lengthComputable && event.total > 0) {
+                        const percent = Number(((event.loaded / event.total) * 100).toFixed(2));
+                        this.reportProgress(percent);
+                    }
+                },
+                onerror: (error) => {
+                    this.gmRequest = null;
+                    if (this.isCancelled) return;
+                    this.fail(error);
+                },
+                onabort: () => {
+                    this.gmRequest = null;
+                    if (this.isCancelled) {
+                        this.notifyStopOnce();
+                    }
+                }
+            });
+        }
+    }
+
     const mgmapi = {
 
         addStyle(s) {
@@ -92,263 +402,7 @@
             return ((typeof GM_xmlhttpRequest === "function") ? GM_xmlhttpRequest : GM.xmlHttpRequest)(details);
         },
         download(details) {
-            const self = this;
-            const url = details.url;
-            const filename = details.name || 'download.mp4';
-
-            // 提取回调函数，并提供默认空函数防止报错
-            const reportProgress = details.reportProgress || function () { };
-            const onComplete = details.onComplete || function () { };
-            const onError = details.onError || function () { };
-            const onStop = details.onStop || function () { };
-
-            // 状态标记
-            let isCancelled = false;
-            let currentAbortController = null; // 用于策略2 (Fetch)
-            let currentGmRequest = null;       // 用于策略3 (GM_xmlhttpRequest)
-
-            // 定义取消函数
-            const cancel = () => {
-                if (isCancelled) return;
-                isCancelled = true;
-                console.log("用户触发取消操作。");
-
-                // 中断 Fetch 请求
-                if (currentAbortController) {
-                    currentAbortController.abort();
-                }
-                // 中断 GM 请求
-                if (currentGmRequest && typeof currentGmRequest.abort === 'function') {
-                    currentGmRequest.abort();
-                }
-
-                onStop();
-            };
-
-            // 内部执行异步逻辑
-            (async () => {
-                if (isCancelled) return;
-
-                // ============================================================
-                // 策略 1: 同域检查 (Same-Origin Check)
-                // ============================================================
-                const currentOrigin = window.location.origin;
-                let targetOrigin;
-                try {
-                    targetOrigin = new URL(url).origin;
-                } catch (e) {
-                    onError(new Error(`无效的 URL: ${url}`));
-                    return;
-                }
-
-                if (currentOrigin === targetOrigin) {
-                    console.log("策略1: 检测到同域，使用 <a> 标签下载");
-                    // 同域下载通常无法监听进度，直接视为完成
-                    reportProgress(100);
-                    triggerAnchorDownload(url, filename);
-                    onComplete();
-                    return;
-                }
-
-                // ============================================================
-                // 策略 2: 尝试 CORS 请求 + 流式写入 (Fetch + FileSystem API)
-                // ============================================================
-                const supportsFileSystem = typeof unsafeWindow.showSaveFilePicker === 'function';
-                let isCorsSupported = false;
-
-                if (supportsFileSystem && !isCancelled) {
-                    try {
-                        // 探测 CORS 支持情况
-                        currentAbortController = new AbortController();
-                        const response = await fetch(url, {
-                            method: 'GET',
-                            signal: currentAbortController.signal,
-                            headers: details.headers || {}
-                        });
-
-                        // 如果能拿到响应，说明支持 CORS (即使是 404 等错误，也说明网络通了且允许跨域)
-                        // 注意：这里我们立即中断，因为只是为了探测
-                        isCorsSupported = true;
-                        currentAbortController.abort();
-                        currentAbortController = null; // 重置
-
-                    } catch (error) {
-                        if (error.name === 'AbortError') {
-                            // 如果是我们主动中断的，说明请求发出去了，CORS 支持
-                            isCorsSupported = true;
-                        } else {
-                            console.log("策略2检测: 目标不支持 CORS 或网络错误。", error);
-                        }
-                    }
-                }
-
-                if (isCancelled) return;
-
-                // 执行策略 2
-                if (supportsFileSystem && isCorsSupported) {
-                    console.log("策略2: 支持 CORS 且支持文件系统 API，尝试流式下载");
-                    try {
-                        await streamDownload(url, filename, details.headers);
-                        return; // 成功则退出
-                    } catch (err) {
-                        if (isCancelled || err.name === 'AbortError') {
-                            console.log("下载被取消 (策略2)");
-                            onStop();
-                            return;
-                        }
-                        console.error("策略2执行失败，降级到策略3:", err);
-                        // 失败后继续向下执行策略 3
-                    }
-                }
-
-                if (isCancelled) return;
-
-                // ============================================================
-                // 策略 3: GM_xmlhttpRequest (mgmapi) 代理下载
-                // ============================================================
-                console.log("策略3: 使用 GM_xmlhttpRequest 下载");
-                gmDownload(details);
-
-            })();
-
-            // ============================================================
-            // 辅助函数定义 (内部作用域)
-            // ============================================================
-
-            function triggerAnchorDownload(blobUrl, name) {
-                const element = document.createElement('a');
-                element.setAttribute('href', blobUrl);
-                element.setAttribute('download', name);
-                element.style.display = 'none';
-                document.body.appendChild(element);
-                element.click();
-                document.body.removeChild(element);
-                if (blobUrl.startsWith('blob:')) {
-                    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-                }
-            }
-
-            async function streamDownload(url, name, headers) {
-                // 1. 弹出保存对话框
-                let handle;
-                try {
-                    handle = await unsafeWindow.showSaveFilePicker({
-                        suggestedName: name,
-                        types: [{
-                            description: 'Video File',
-                            accept: { 'video/mp4': ['.mp4'], 'application/octet-stream': ['.bin', '.ts'] }
-                        }],
-                    });
-                } catch (e) {
-                    // 用户取消了保存框
-                    if (e.name === 'AbortError') throw e;
-                    throw new Error("无法打开文件保存对话框");
-                }
-
-                if (isCancelled) throw new Error('AbortError');
-
-                // 2. 创建写入流
-                const writable = await handle.createWritable();
-
-                // 3. 发起真正的下载请求
-                currentAbortController = new AbortController();
-                let response;
-                try {
-                    response = await fetch(url, {
-                        headers: headers || {},
-                        signal: currentAbortController.signal
-                    });
-                } catch (e) {
-                    await writable.close(); // 确保关闭文件流
-                    throw e;
-                }
-
-                if (!response.body) {
-                    await writable.close();
-                    throw new Error('ReadableStream not supported.');
-                }
-
-                const reader = response.body.getReader();
-                const contentLength = +response.headers.get('Content-Length');
-                let receivedLength = 0;
-
-                // 4. 读取流并写入
-                try {
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-
-                        await writable.write(value);
-
-                        receivedLength += value.length;
-                        if (contentLength) {
-                            const percent = ((receivedLength / contentLength) * 100).toFixed(2);
-                            reportProgress(parseFloat(percent));
-                        } else {
-                            // 无法计算百分比时，也可以选择传 -1 或仅打印日志
-                            console.log(`[StreamDownload] 已下载: ${receivedLength} bytes`);
-                        }
-                    }
-                    // 下载完成
-                    await writable.close();
-                    onComplete();
-                    // self.message("下载完成 (FileSystem API)", 3000);
-
-                } catch (err) {
-                    // 发生错误或取消时，尝试关闭流
-                    try { await writable.close(); } catch (e) { }
-                    // 如果是取消，抛出 AbortError 以便上层捕获
-                    if (err.name === 'AbortError' || isCancelled) {
-                        throw new Error('AbortError');
-                    }
-                    throw err;
-                } finally {
-                    currentAbortController = null;
-                }
-            }
-
-            function gmDownload(opt) {
-                // 保存请求对象以便取消
-                currentGmRequest = mgmapi.xmlHttpRequest({
-                    method: "GET",
-                    url: opt.url,
-                    responseType: 'blob',
-                    headers: opt.headers || {},
-                    onload(res) {
-                        if (isCancelled) return;
-                        if (res.status >= 200 && res.status < 300) {
-                            const blob = res.response;
-                            const url = URL.createObjectURL(blob);
-                            triggerAnchorDownload(url, opt.name);
-
-                            reportProgress(100);
-                            onComplete();
-                            self.message("下载完成，正在保存...", 3000);
-                        } else {
-                            onError(new Error(`请求失败，状态码: ${res.status}`));
-                            // self.message("下载失败", 3000);
-                        }
-                    },
-                    onprogress(e) {
-                        if (isCancelled) return;
-                        if (e.lengthComputable && e.total > 0) {
-                            const percent = ((e.loaded / e.total) * 100).toFixed(2);
-                            reportProgress(parseFloat(percent));
-                        }
-                    },
-                    onerror(err) {
-                        if (isCancelled) return;
-                        onError(err);
-                        // self.message("网络错误，下载失败", 3000);
-                    },
-                    onabort() {
-                        console.log("GM_Download 请求已中止");
-                    }
-                });
-            }
-
-            // 立即返回控制对象
-            return { cancel };
+            return new DownloadTask(this, details);
         },
 
 
@@ -405,15 +459,32 @@
             }, disappearTime);
         },
         waitEle(selector) {
-            return new Promise(resolve => {
-                while (true) {
-                    let ele = document.querySelector(selector);
-                    if (ele) {
-                        resolve(ele);
-                        break;
-                    }
-                    sleep(200);
+            return new Promise((resolve, reject) => {
+                const found = document.querySelector(selector);
+                if (found) {
+                    resolve(found);
+                    return;
                 }
+
+                const observer = new MutationObserver(() => {
+                    const ele = document.querySelector(selector);
+                    if (!ele) return;
+                    observer.disconnect();
+                    clearTimeout(timer);
+                    resolve(ele);
+                });
+
+                let timer = null;
+                // 只监听新增/删除节点，避免轮询或 attributes 全监听带来的高频开销。
+                observer.observe(document.documentElement, {
+                    childList: true,
+                    subtree: true
+                });
+
+                timer = setTimeout(() => {
+                    observer.disconnect();
+                    reject(new Error(`等待元素超时: ${selector}`));
+                }, 15000);
             });
         }
     };
@@ -515,40 +586,224 @@
         });
     }
 
+    // m3u8 检测策略说明：
+    // 旧实现是全局改写 Response.prototype.text，然后任何文本响应被读取时都顺手检查一次。
+    // 这种做法优点是简单粗暴，缺点是拦截面太大，容易把无关接口也卷进来。
+    // 这里改成“有限拦截 + 多层过滤”：
+    // 1. 只在 fetch/XHR 出口做检查；
+    // 2. 只检查 GET；
+    // 3. 只检查体积较小的文本响应；
+    // 4. URL / content-type 先做启发式筛选；
+    // 5. 最后再用正文首行 #EXTM3U 做最终确认。
+    const M3U8_TEXT_SIZE_LIMIT = 512 * 1024;
+    // 常见的 m3u8 专用内容类型。
+    const M3U8_CONTENT_TYPES = [
+        "application/vnd.apple.mpegurl",
+        "application/x-mpegurl",
+        "audio/mpegurl",
+        "audio/x-mpegurl"
+    ];
+    // 一些站点会错误地把 m3u8 当成普通文本返回，所以保留文本类兜底。
+    // 但命中这里只代表“值得进一步看正文”，不代表已经确认是 m3u8。
+    const TEXT_LIKE_CONTENT_TYPES = [
+        "text/",
+        "application/json",
+        "application/xml",
+        "application/javascript",
+        "application/x-www-form-urlencoded"
+    ];
+    // 调度状态：
+    // scheduled 负责避免重复 queueMicrotask，
+    // running 负责避免正在消费时再次重入消费逻辑。
+    let m3uQueueScheduled = false;
+    let m3uQueueRunning = false;
+    // pending 记录“已经入队但还没彻底处理完”的 URL，
+    // queue 记录真正待消费的任务体。
+    const pendingM3UDetections = new Set();
+    const queuedM3UDetections = new Map();
+    
+    // 资源 URL 规范化：
+    // 1. 兼容相对路径；
+    // 2. 去掉 hash，避免同一资源仅因片段不同被认为是两份资源；
+    // 3. 返回统一 href 作为去重 key。
+    function normalizeResourceUrl(rawUrl) {
+        try {
+            const url = new URL(rawUrl, location.href);
+            url.hash = "";
+            return url.href;
+        } catch {
+            return null;
+        }
+    }
 
-    {
+    // 最终内容判定。
+    // 前面的 URL / header 过滤都只是为了降低检查成本，真正确认仍然依赖正文首行。
+    function checkM3UContent(content) {
+        return typeof content === "string" && content.trim().startsWith("#EXTM3U");
+    }
 
-        const _r_text = unsafeWindow.Response.prototype.text;
-        unsafeWindow.Response.prototype.text = function () {
-            return new Promise((resolve, reject) => {
-                _r_text.call(this).then((text) => {
-                    resolve(text);
-                    if (checkContent(text)) doM3U({ url: this.url, content: text });
-                }).catch(reject);
-            });
+    // 兼容不同 header 读取形式：
+    // fetch 返回 Headers 对象，而某些兜底实现可能只给原始字符串。
+    function getHeaderValue(headers, name) {
+        if (!headers) return "";
+        if (typeof headers.get === "function") {
+            return headers.get(name) || "";
+        }
+        if (typeof headers === "string") {
+            const match = headers.match(new RegExp(`^${name}:\\s*(.+)$`, "im"));
+            return match ? match[1] : "";
+        }
+        return "";
+    }
+
+    // 兼容 fetch 的 string / URL / Request 入参。
+    // 统一拿到 URL 后，后面的过滤逻辑就不需要关心调用形态差异。
+    function getFetchUrl(input) {
+        if (!input) return "";
+        if (typeof input === "string") return input;
+        if (typeof URL !== "undefined" && input instanceof URL) return input.href;
+        if (typeof input.url === "string") return input.url;
+        return String(input);
+    }
+
+    // URL 层面的轻量启发式判断。
+    // 这里只是用来缩小候选范围，不要求百分之百准确。
+    function isLikelyM3U8Url(rawUrl) {
+        try {
+            const { href, pathname, search } = new URL(rawUrl, location.href);
+            return /\.m3u8($|[?#])/i.test(href)
+                || /(?:playlist|manifest|m3u8)/i.test(pathname)
+                || /(?:playlist|manifest|m3u8)/i.test(search);
+        } catch {
+            return false;
+        }
+    }
+
+    // 判断一个响应是否值得继续 clone().text()。
+    // 这一步是收缩拦截面的关键：不是每个响应都值得付出“再读一遍正文”的成本。
+    function isInspectableTextResponse(rawUrl, contentType, contentLength) {
+        const normalizedType = (contentType || "").toLowerCase();
+        const normalizedLength = Number(contentLength);
+        const isSmallEnough = !Number.isFinite(normalizedLength) || normalizedLength <= M3U8_TEXT_SIZE_LIMIT;
+        const isM3U8Type = M3U8_CONTENT_TYPES.some(type => normalizedType.includes(type));
+        const isTextLike = TEXT_LIKE_CONTENT_TYPES.some(type => normalizedType.includes(type));
+        return isSmallEnough && (isLikelyM3U8Url(rawUrl) || isM3U8Type || isTextLike);
+    }
+
+    // 把疑似资源压入检测队列。
+    // 这里先做 shown/pending 去重，是为了避免 fetch 和 XHR 同时命中同一 URL 时重复解析。
+    function enqueueM3UDetection({ url, content }) {
+        const normalizedUrl = normalizeResourceUrl(url);
+        if (!normalizedUrl || shownUrls.has(normalizedUrl) || pendingM3UDetections.has(normalizedUrl)) {
+            return;
         }
 
-        const _open = unsafeWindow.XMLHttpRequest.prototype.open;
-        unsafeWindow.XMLHttpRequest.prototype.open = function (...args) {
-            this.addEventListener("load", () => {
+        // 用 Set/Map 做去重和排队，避免同一资源被 fetch 与 XHR 双重命中后重复解析。
+        queuedM3UDetections.set(normalizedUrl, { url: normalizedUrl, content });
+        pendingM3UDetections.add(normalizedUrl);
+
+        if (!m3uQueueScheduled) {
+            m3uQueueScheduled = true;
+            queueMicrotask(processQueuedM3UDetections);
+        }
+    }
+
+    // 串行消费队列。
+    // 这里故意不并发处理，主要是为了让去重、日志和 UI 注入顺序都保持简单、稳定、可预期。
+    async function processQueuedM3UDetections() {
+        if (m3uQueueRunning) return;
+
+        m3uQueueScheduled = false;
+        m3uQueueRunning = true;
+        try {
+            // 串行处理可以降低并发解析带来的重复 UI 注入和异常交叉影响。
+            for (const [normalizedUrl, payload] of queuedM3UDetections) {
+                queuedM3UDetections.delete(normalizedUrl);
                 try {
-                    let content = this.responseText;
-                    if (checkContent(content)) doM3U({ url: args[1], content });
-                } catch { }
-            });
-            // checkUrl(args[1]);
-            return _open.apply(this, args);
-        }
-
-        function checkContent(content) {
-            if (content.trim().startsWith("#EXTM3U")) {
-                return true;
+                    await doM3U(payload);
+                } catch (error) {
+                    console.error("M3U8 检测失败:", error);
+                } finally {
+                    pendingM3UDetections.delete(normalizedUrl);
+                }
+            }
+        } finally {
+            m3uQueueRunning = false;
+            if (queuedM3UDetections.size > 0) {
+                processQueuedM3UDetections();
             }
         }
+    }
 
-        // 检查纯视频
+    {
+        // fetch 分支：
+        // 不再全局改写 Response.prototype.text，而是在 fetch 出口就地检查。
+        // 这样只影响真正经过 fetch 的响应，侵入范围明显比旧方案小。
+        const originalFetch = unsafeWindow.fetch;
+        if (typeof originalFetch === "function") {
+            unsafeWindow.fetch = async function (input, init) {
+                const response = await originalFetch.apply(this, arguments);
+
+                try {
+                    const method = ((init && init.method) || input?.method || "GET").toUpperCase();
+                    const url = getFetchUrl(input);
+                    const contentType = getHeaderValue(response.headers, "content-type");
+                    const contentLength = getHeaderValue(response.headers, "content-length");
+
+                    // 只有小体积、文本类、且 URL/类型可疑的响应才继续读正文。
+                    // 这样做的目的是保留命中率，同时尽量减少对普通业务接口的打扰。
+                    if (method === "GET" && isInspectableTextResponse(url, contentType, contentLength)) {
+                        response.clone().text().then((content) => {
+                            if (checkM3UContent(content)) {
+                                enqueueM3UDetection({ url, content });
+                            }
+                        }).catch(() => { });
+                    }
+                } catch (error) {
+                    console.debug("fetch 响应检查跳过:", error);
+                }
+
+                return response;
+            };
+        }
+
+        // XHR 分支：
+        // 只在 open 阶段挂一次 load 监听，不去改更底层的原型 getter/setter。
+        // 这样相对更温和，也更容易和目标站点自身的 XHR 包装共存。
+        const originalXHROpen = unsafeWindow.XMLHttpRequest.prototype.open;
+        unsafeWindow.XMLHttpRequest.prototype.open = function (method, url) {
+            this.__wtmzjkMethod = method;
+            this.__wtmzjkUrl = url;
+
+            if (!this.__wtmzjkListenerAttached) {
+                this.__wtmzjkListenerAttached = true;
+                this.addEventListener("load", () => {
+                    try {
+                        const requestMethod = String(this.__wtmzjkMethod || "GET").toUpperCase();
+                        const requestUrl = getFetchUrl(this.__wtmzjkUrl);
+                        if (requestMethod !== "GET") return;
+                        if (this.responseType && this.responseType !== "" && this.responseType !== "text") return;
+
+                        const contentType = this.getResponseHeader("content-type") || "";
+                        const contentLength = this.getResponseHeader("content-length") || "";
+                        // XHR 分支同样坚持“先过滤，再读正文”的原则。
+                        // 否则很多普通文本接口也会被拖进检测流程。
+                        if (!isInspectableTextResponse(requestUrl, contentType, contentLength)) return;
+
+                        const content = this.responseText;
+                        if (checkM3UContent(content)) {
+                            enqueueM3UDetection({ url: requestUrl, content });
+                        }
+                    } catch { }
+                });
+            }
+
+            return originalXHROpen.apply(this, arguments);
+        };
+
+        // 网络层检测之外，仍保留对页面中原生 <video> 的轮询扫描。
+        // 这是因为有些站点的视频直链不会经过我们能观察到的 fetch/XHR 流程。
         setInterval(doVideos, 1000);
-
     }
 
     const rootDiv = document.createElement("div");
@@ -752,20 +1007,26 @@
 
 
     let count = 0;
-    let shownUrls = [];
+    const shownUrls = new Set();
 
 
+    // 扫描页面中的 <video> 元素。
+    // 这里解决的是“已经挂到 DOM 上的媒体资源”，它和网络层发现 m3u8 是互补关系。
     function doVideos() {
         for (let v of Array.from(document.querySelectorAll("video"))) {
-            if (v.duration && v.src && v.src.startsWith("http") && (!shownUrls.includes(v.src))) {
+            const normalizedSrc = normalizeResourceUrl(v.src);
+            if (v.duration && normalizedSrc && normalizedSrc.startsWith("http") && (!shownUrls.has(normalizedSrc))) {
                 const src = v.src;
 
-                shownUrls.push(src);
+                // 纯视频资源走独立展示路径，但仍然复用统一的去重集合。
+                shownUrls.add(normalizedSrc);
                 let { updateDownloadState } = showVideo({
                     type: "video",
                     url: new URL(src),
                     duration: `${Math.ceil(v.duration * 10 / 60) / 10} ${T.mins}`,
                     download() {
+                        // 这里把 video 直链也包装成和 m3u8 相同的动作模型，
+                        // 这样 UI 层不需要区分两类资源的下载状态更新方式。
                         const details = {
                             url: src,
                             name: (() => {
@@ -832,15 +1093,21 @@
         }
     }
 
+    // 处理一个已经确认或高度怀疑为 m3u8 的资源。
+    // 这一步负责 URL 规范化、清单解析和面板项渲染，不负责网络层拦截。
     async function doM3U({ url, content }) {
 
-        url = new URL(url);
+        url = new URL(url, location.href);
+        const normalizedUrl = normalizeResourceUrl(url.href);
 
-        if (shownUrls.includes(url.href)) return;
+        if (!normalizedUrl || shownUrls.has(normalizedUrl)) return;
 
-        // 解析 m3u
+        // 如果队列里已经带了正文，就直接复用；
+        // 没带正文时才兜底再请求一次，避免平白多一次网络访问。
         content = content || await (await fetch(url)).text();
+        if (!checkM3UContent(content)) return;
 
+        // 解析 m3u8 清单结构，给 UI 提供总时长或“多轨”信息。
         const parser = new m3u8Parser.Parser();
         parser.push(content);
         parser.end();
@@ -871,6 +1138,8 @@
 
     }
 
+    // 渲染一个资源条目到悬浮面板。
+    // 这里既是 UI 创建点，也是 UI 与下载任务之间的连接点。
     function showVideo({
                            type,
                            url,
@@ -933,6 +1202,8 @@
 
 
 
+        // 当前条目只缓存一个“当前可取消任务”的入口。
+        // UI 不需要知道 DownloadTask 的完整结构，只需要知道如何停止即可。
         let cancelDownload;
 
         let downloadBtn = div.querySelector(".download-btn");
@@ -955,13 +1226,20 @@
 
         count++;
 
-        shownUrls.push(url.href);
+        // UI 展示成功后再登记，避免失败分支把资源永久标记为“已展示”。
+        const normalizedUrl = normalizeResourceUrl(url.href);
+        if (normalizedUrl) {
+            shownUrls.add(normalizedUrl);
+        }
 
         bar.querySelector(".number-indicator").setAttribute("data-number", count);
 
         wrapper.appendChild(div);
 
         return {
+            // 通过这个方法让下载逻辑把状态同步回 UI。
+            // 这样 UI 与下载器之间保持单向依赖：下载器告诉 UI“现在是什么状态”，
+            // UI 再决定显示下载按钮、进度文案还是停止按钮。
             updateDownloadState({ downloading, progress, cancel }) {
                 if (downloading) {
                     if (cancel) cancelDownload = cancel;
