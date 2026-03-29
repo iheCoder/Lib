@@ -490,6 +490,85 @@
     };
 
 
+    function headersToObject(headers) {
+        if (!headers) return {};
+        if (headers instanceof Headers) {
+            return Object.fromEntries(headers.entries());
+        }
+        if (Array.isArray(headers)) {
+            return Object.fromEntries(headers);
+        }
+        return { ...headers };
+    }
+
+    function parseResponseHeaders(rawHeaders) {
+        const headers = new Headers();
+        String(rawHeaders || "")
+            .split(/\r?\n/)
+            .filter(Boolean)
+            .forEach((line) => {
+                const index = line.indexOf(":");
+                if (index === -1) return;
+                const name = line.slice(0, index).trim();
+                const value = line.slice(index + 1).trim();
+                if (name) headers.append(name, value);
+            });
+        return headers;
+    }
+
+    function getFetchRequestMeta(input, init) {
+        const requestLike = input instanceof Request ? input : null;
+        const url = requestLike ? requestLike.url : getFetchUrl(input);
+        const method = String(init?.method || requestLike?.method || "GET").toUpperCase();
+        const headers = {
+            ...headersToObject(requestLike?.headers),
+            ...headersToObject(init?.headers)
+        };
+
+        return {
+            url,
+            method,
+            headers,
+            body: init?.body,
+            canProxy: !init?.body && (method === "GET" || method === "HEAD")
+        };
+    }
+
+    function createProxyResponse({ url, status, statusText, headers, arrayBuffer }) {
+        const responseHeaders = headers instanceof Headers ? headers : new Headers(headers || {});
+        const bodyBuffer = arrayBuffer || new ArrayBuffer(0);
+        return {
+            ok: status >= 200 && status < 300,
+            status,
+            statusText: statusText || "",
+            url,
+            redirected: false,
+            type: "basic",
+            headers: responseHeaders,
+            async text() {
+                return new TextDecoder().decode(bodyBuffer);
+            },
+            async json() {
+                return JSON.parse(await this.text());
+            },
+            async arrayBuffer() {
+                return bodyBuffer.slice(0);
+            },
+            async blob() {
+                return new Blob([bodyBuffer], { type: responseHeaders.get("content-type") || "" });
+            },
+            clone() {
+                return createProxyResponse({
+                    url,
+                    status,
+                    statusText,
+                    headers: new Headers(responseHeaders),
+                    arrayBuffer: bodyBuffer.slice(0)
+                });
+            }
+        };
+    }
+
     if (location.host === "tools.thatwind.com" || location.host === "localhost:3000") {
         mgmapi.addStyle("#userscript-tip{display:none !important;}");
 
@@ -497,56 +576,64 @@
 
         // 对请求做代理
         const _fetch = unsafeWindow.fetch;
-        unsafeWindow.fetch = async function (...args) {
-            let hostname = new URL(args[0]).hostname;
+        unsafeWindow.fetch = async function (input, init) {
+            const meta = getFetchRequestMeta(input, init);
+            if (!meta.url) {
+                return await _fetch.apply(this, arguments);
+            }
+
+            let hostname = new URL(meta.url).hostname;
 
             if (hostNeedsProxy.has(hostname)) {
-                return await mgmapiFetch(...args);
+                if (meta.canProxy) {
+                    return await mgmapiFetch(meta);
+                }
+                return await _fetch.apply(this, arguments);
             }
 
             try {
-                let response = await _fetch(...args);
-                if (response.status !== 200) throw new Error(response.status);
+                let response = await _fetch.apply(this, arguments);
                 return response;
             } catch (e) {
                 // 失败请求使用代理
-                if (args.length == 1) {
-                    console.log(`域名 ${hostname} 需要请求代理，url示例：${args[0]}`);
+                if (meta.canProxy) {
+                    console.log(`域名 ${hostname} 需要请求代理，url示例：${meta.url}`);
                     hostNeedsProxy.add(hostname);
-                    return await mgmapiFetch(...args);
+                    return await mgmapiFetch(meta);
                 } else {
                     throw e;
                 }
             }
         }
 
-        function mgmapiFetch(...args) {
+        function mgmapiFetch(meta) {
             return new Promise((resolve, reject) => {
                 let referer = new URLSearchParams(location.hash.slice(1)).get("referer");
-                let headers = {};
+                let headers = {
+                    ...meta.headers
+                };
                 if (referer) {
                     referer = new URL(referer);
                     headers = {
+                        ...headers,
                         "origin": referer.origin,
                         "referer": referer.href
                     };
                 }
                 mgmapi.xmlHttpRequest({
-                    method: "GET",
-                    url: args[0],
+                    method: meta.method,
+                    url: meta.url,
                     responseType: 'arraybuffer',
                     headers,
                     onload(r) {
-                        resolve({
+                        const responseHeaders = parseResponseHeaders(r.responseHeaders);
+                        resolve(createProxyResponse({
+                            url: meta.url,
                             status: r.status,
-                            headers: new Headers(r.responseHeaders.split("\n").filter(n => n).map(s => s.split(/:\s*/)).reduce((all, [a, b]) => { all[a] = b; return all; }, {})),
-                            async text() {
-                                return r.responseText;
-                            },
-                            async arrayBuffer() {
-                                return r.response;
-                            }
-                        });
+                            statusText: responseHeaders.get("statusText") || "",
+                            headers: responseHeaders,
+                            arrayBuffer: r.response
+                        }));
                     },
                     onerror() {
                         reject(new Error());
@@ -694,7 +781,7 @@
     // 这里先做 shown/pending 去重，是为了避免 fetch 和 XHR 同时命中同一 URL 时重复解析。
     function enqueueM3UDetection({ url, content }) {
         const normalizedUrl = normalizeResourceUrl(url);
-        if (!normalizedUrl || shownUrls.has(normalizedUrl) || pendingM3UDetections.has(normalizedUrl)) {
+        if (!normalizedUrl || !shouldRenderResource("m3u8", normalizedUrl) || pendingM3UDetections.has(normalizedUrl)) {
             return;
         }
 
@@ -801,9 +888,10 @@
             return originalXHROpen.apply(this, arguments);
         };
 
-        // 网络层检测之外，仍保留对页面中原生 <video> 的轮询扫描。
-        // 这是因为有些站点的视频直链不会经过我们能观察到的 fetch/XHR 流程。
-        setInterval(doVideos, 1000);
+        // 视频扫描改成“初始化一次 + DOM 增量跟踪”，避免每秒全量轮询整页 video。
+        whenDOMReady(() => {
+            scanVideosInTree(document);
+        });
     }
 
     const rootDiv = document.createElement("div");
@@ -1007,91 +1095,161 @@
 
 
     let count = 0;
-    const shownUrls = new Set();
+    // 统一资源索引：
+    // 以后无论是 m3u8、直链视频，还是其他可下载资源，都可以往这个 store 里挂统一元数据，
+    // 避免继续依赖单一 Set/数组导致状态越来越散。
+    const resourceStore = new Map();
+    // DOM 级去重：
+    // video/magnet 的 DOM 注入是“同一个节点只处理一次”的问题，和 URL 资源去重不是一回事，
+    // 所以这里单独用 WeakSet 跟踪节点级处理状态。
+    const trackedVideoElements = new WeakSet();
+    const processedMagnetTextNodes = new WeakSet();
+    const processedMagnetElements = new WeakSet();
+    const magnetAttrSelectors = ['href', 'value', 'data-clipboard-text', 'data-value', 'title', 'alt', 'data-url', 'data-magnet', 'data-copy'];
 
+    // 资源唯一键目前由“资源类型 + 规范化 URL”组成。
+    // 这样同一个 URL 的 m3u8 与 mp4 不会互相覆盖，但同类资源能稳定去重。
+    function createResourceKey(type, normalizedUrl) {
+        return `${type}:${normalizedUrl}`;
+    }
 
-    // 扫描页面中的 <video> 元素。
-    // 这里解决的是“已经挂到 DOM 上的媒体资源”，它和网络层发现 m3u8 是互补关系。
-    function doVideos() {
-        for (let v of Array.from(document.querySelectorAll("video"))) {
-            const normalizedSrc = normalizeResourceUrl(v.src);
-            if (v.duration && normalizedSrc && normalizedSrc.startsWith("http") && (!shownUrls.has(normalizedSrc))) {
-                const src = v.src;
+    function getResource(type, rawUrl) {
+        const normalizedUrl = normalizeResourceUrl(rawUrl);
+        if (!normalizedUrl) return null;
 
-                // 纯视频资源走独立展示路径，但仍然复用统一的去重集合。
-                shownUrls.add(normalizedSrc);
-                let { updateDownloadState } = showVideo({
-                    type: "video",
-                    url: new URL(src),
-                    duration: `${Math.ceil(v.duration * 10 / 60) / 10} ${T.mins}`,
-                    download() {
-                        // 这里把 video 直链也包装成和 m3u8 相同的动作模型，
-                        // 这样 UI 层不需要区分两类资源的下载状态更新方式。
-                        const details = {
-                            url: src,
-                            name: (() => {
-                                let name = new URL(src).pathname.split("/").slice(-1)[0];
-                                if (!/\.\w+$/.test(name)) {
-                                    if (name.match(/^\s*$/)) name = Date.now();
-                                    name = name + ".mp4";
-                                }
-                                return name;
-                            })(),
-                            headers: {
-                                // referer: location.origin, // 不允许该头
-                                origin: location.origin
-                            },
-                            onError(e) {
+        const key = createResourceKey(type, normalizedUrl);
+        let resource = resourceStore.get(key);
+        if (!resource) {
+            resource = {
+                key,
+                type,
+                rawUrl,
+                normalizedUrl,
+                rendered: false
+            };
+            resourceStore.set(key, resource);
+        }
 
-                                console.error(e);
+        return resource;
+    }
 
-                                updateDownloadState({
-                                    downloading: false,
-                                    cancel: null,
-                                    progress: 0
-                                });
+    function shouldRenderResource(type, rawUrl) {
+        const resource = getResource(type, rawUrl);
+        return !!(resource && !resource.rendered);
+    }
 
-                                mgmapi.openInTab(src);
-                                mgmapi.message("下载失败，链接已在新窗口打开", 5000);
-                            },
-                            reportProgress(progress) {
-                                updateDownloadState({
-                                    downloading: true,
-                                    cancel: null,
-                                    progress
-                                });
-                            },
-                            onComplete() {
-                                mgmapi.message("下载完成", 5000);
-                                updateDownloadState({
-                                    downloading: false,
-                                    cancel: null,
-                                    progress: 0
-                                });
-                            },
-                            onStop() {
-                                updateDownloadState({
-                                    downloading: false,
-                                    cancel: null,
-                                    progress: 0
-                                });
-                            }
-                        };
-                        let { cancel } = mgmapi.download(details);
+    function markResourceRendered(type, rawUrl, extra = {}) {
+        const resource = getResource(type, rawUrl);
+        if (!resource) return null;
+        Object.assign(resource, extra, { rendered: true });
+        return resource;
+    }
 
+    // 处理一个具体的 <video> 元素。
+    // 这里不再扫描整页，而是在元素生命周期事件触发时按需检查。
+    function detectVideoElement(video) {
+        if (!(video instanceof HTMLVideoElement)) return;
+        if (!video.duration || !video.src || !video.src.startsWith("http")) return;
+        if (!shouldRenderResource("video", video.src)) return;
 
+        const src = video.src;
+
+        let { updateDownloadState } = showVideo({
+            type: "video",
+            url: new URL(src),
+            duration: `${Math.ceil(video.duration * 10 / 60) / 10} ${T.mins}`,
+            download() {
+                const details = {
+                    url: src,
+                    name: (() => {
+                        let name = new URL(src).pathname.split("/").slice(-1)[0];
+                        if (!/\.\w+$/.test(name)) {
+                            if (name.match(/^\s*$/)) name = Date.now();
+                            name = name + ".mp4";
+                        }
+                        return name;
+                    })(),
+                    headers: {
+                        origin: location.origin
+                    },
+                    onError(e) {
+                        console.error(e);
+                        updateDownloadState({
+                            downloading: false,
+                            cancel: null,
+                            progress: 0
+                        });
+
+                        mgmapi.openInTab(src);
+                        mgmapi.message("下载失败，链接已在新窗口打开", 5000);
+                    },
+                    reportProgress(progress) {
                         updateDownloadState({
                             downloading: true,
-                            cancel() {
-                                cancel();
-                            },
+                            cancel: null,
+                            progress
+                        });
+                    },
+                    onComplete() {
+                        mgmapi.message("下载完成", 5000);
+                        updateDownloadState({
+                            downloading: false,
+                            cancel: null,
+                            progress: 0
+                        });
+                    },
+                    onStop() {
+                        updateDownloadState({
+                            downloading: false,
+                            cancel: null,
                             progress: 0
                         });
                     }
-                })
+                };
+                let { cancel } = mgmapi.download(details);
+
+                updateDownloadState({
+                    downloading: true,
+                    cancel() {
+                        cancel();
+                    },
+                    progress: 0
+                });
             }
+        });
+
+        markResourceRendered("video", src, {
+            duration: video.duration
+        });
+    }
+
+    // 给 video 元素挂一次性跟踪器。
+    // 后面如果这个元素懒加载元数据或切换 src，事件会再次触发 detectVideoElement。
+    function trackVideoElement(video) {
+        if (!(video instanceof HTMLVideoElement) || trackedVideoElements.has(video)) return;
+        trackedVideoElements.add(video);
+
+        const handleVideoState = () => detectVideoElement(video);
+        video.addEventListener("loadedmetadata", handleVideoState);
+        video.addEventListener("durationchange", handleVideoState);
+        video.addEventListener("canplay", handleVideoState);
+
+        handleVideoState();
+    }
+
+    function collectVideoElements(root) {
+        if (!root) return [];
+        if (root instanceof HTMLVideoElement) return [root];
+        if (!(root instanceof Element || root instanceof Document || root instanceof DocumentFragment)) return [];
+        return Array.from(root.querySelectorAll("video"));
+    }
+
+    function scanVideosInTree(root) {
+        for (const video of collectVideoElements(root)) {
+            trackVideoElement(video);
         }
     }
+
 
     // 处理一个已经确认或高度怀疑为 m3u8 的资源。
     // 这一步负责 URL 规范化、清单解析和面板项渲染，不负责网络层拦截。
@@ -1100,7 +1258,7 @@
         url = new URL(url, location.href);
         const normalizedUrl = normalizeResourceUrl(url.href);
 
-        if (!normalizedUrl || shownUrls.has(normalizedUrl)) return;
+        if (!normalizedUrl || !shouldRenderResource("m3u8", normalizedUrl)) return;
 
         // 如果队列里已经带了正文，就直接复用；
         // 没带正文时才兜底再请求一次，避免平白多一次网络访问。
@@ -1227,10 +1385,7 @@
         count++;
 
         // UI 展示成功后再登记，避免失败分支把资源永久标记为“已展示”。
-        const normalizedUrl = normalizeResourceUrl(url.href);
-        if (normalizedUrl) {
-            shownUrls.add(normalizedUrl);
-        }
+        markResourceRendered(type, url.href);
 
         bar.querySelector(".number-indicator").setAttribute("data-number", count);
 
@@ -1384,6 +1539,7 @@
         window.addEventListener("mousedown", onEvents, true); // 如果不需要拖拽等操作，通常 click 就够了
         window.addEventListener("mouseup", onEvents, true);
 
+        work(document.body);
         watchBodyChange(work);
     });
 
@@ -1469,71 +1625,125 @@
         return group;
     }
 
-    function hasPlainMagUrlThatNotHandled() {
-        let m = document.body.textContent.match(new RegExp(reg, 'g'));
-        return document.querySelectorAll(`[data-wtmzjk-button-for-plain]`).length != (m ? m.length : 0);
+    // 处理正文里的纯文本 magnet 链接。
+    // 这里只处理单个文本节点，不再像旧逻辑那样每次都递归扫完整个 body。
+    function processMagnetTextNode(node) {
+        if (!(node instanceof Text) || processedMagnetTextNodes.has(node)) return;
+        if (!node.parentNode || !node.nodeValue || /^\s*$/.test(node.nodeValue)) return;
+        if (node.nextSibling && node.nextSibling.hasAttribute && node.nextSibling.className.includes('wtmzjk-btn-group')) return;
+
+        const match = node.nodeValue.match(reg);
+        if (!match) return;
+
+        const url = match[0];
+        const parent = node.parentNode;
+        processedMagnetTextNodes.add(node);
+        parent.insertBefore(document.createTextNode(node.nodeValue.slice(0, match.index + url.length)), node);
+        parent.insertBefore(createWatchButton(url, true), node);
+        parent.insertBefore(document.createTextNode(node.nodeValue.slice(match.index + url.length)), node);
+        parent.removeChild(node);
     }
 
-    function work() {
-        if (!document.body) return;
-        if (hasPlainMagUrlThatNotHandled()) {
-            for (let node of getAllTextNodes(document.body)) {
-                if (node.nextSibling && node.nextSibling.hasAttribute && node.nextSibling.className.includes('wtmzjk-btn-group')) continue;
-                let text = node.nodeValue;
-                if (!reg.test(text)) continue;
-                let match = text.match(reg);
-                if (match) {
-                    let url = match[0];
-                    let p = node.parentNode;
-                    p.insertBefore(document.createTextNode(text.slice(0, match.index + url.length)), node);
-                    p.insertBefore(createWatchButton(url, true), node);
-                    p.insertBefore(document.createTextNode(text.slice(match.index + url.length)), node);
-                    p.removeChild(node);
+    // 处理属性里携带 magnet 的元素，例如 href、data-url、title 等。
+    function processMagnetElement(element) {
+        if (!(element instanceof Element) || processedMagnetElements.has(element)) return;
+        if (element.nextSibling && element.nextSibling.hasAttribute && element.nextSibling.className.includes('wtmzjk-btn-group')) {
+            processedMagnetElements.add(element);
+            return;
+        }
+        if (reg.test(element.textContent || "")) return;
+
+        for (let attr of element.getAttributeNames()) {
+            let val = element.getAttribute(attr);
+            if (!val || !reg.test(val)) continue;
+            let url = val.match(reg)[0];
+            element.parentNode?.insertBefore(createWatchButton(url), element.nextSibling);
+            processedMagnetElements.add(element);
+            break;
+        }
+    }
+
+    // 处理一个增量 root。
+    // root 可以是新增元素子树，也可以是刚刚变动过的文本节点，因此这里分别处理。
+    function processMagnetRoot(root) {
+        if (!root) return;
+
+        if (root instanceof Text) {
+            processMagnetTextNode(root);
+            return;
+        }
+
+        if (!(root instanceof Element || root instanceof Document || root instanceof DocumentFragment)) return;
+
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+            acceptNode(node) {
+                const parentTag = node.parentElement?.tagName;
+                if (["STYLE", "SCRIPT", "BASE", "COMMAND", "LINK", "META", "TITLE", "XTRANS-TXT", "XTRANS-TXT-GROUP", "XTRANS-POPUP"].includes(parentTag)) {
+                    return NodeFilter.FILTER_REJECT;
                 }
-            }
-        }
-        for (let a of Array.from(document.querySelectorAll(
-            ['href', 'value', 'data-clipboard-text', 'data-value', 'title', 'alt', 'data-url', 'data-magnet', 'data-copy'].map(n => `[${n}*="magnet:?xt=urn:btih:"]`).join(',')
-        ))) {
-            if (a.nextSibling && a.nextSibling.hasAttribute && a.nextSibling.className.includes('wtmzjk-btn-group')) continue; // 已经添加
-            if (reg.test(a.textContent)) continue;
-            for (let attr of a.getAttributeNames()) {
-                let val = a.getAttribute(attr);
-                if (!reg.test(val)) continue;
-                let url = val.match(reg)[0];
-                a.parentNode.insertBefore(createWatchButton(url), a.nextSibling);
-            }
-        }
-    }
-
-
-    function watchBodyChange(onchange) {
-        let timeout;
-        let observer = new MutationObserver(() => {
-            if (!timeout) {
-                timeout = setTimeout(() => {
-                    timeout = null;
-                    onchange();
-                }, 200);
+                return /^\s*$/.test(node.nodeValue || "") ? NodeFilter.FILTER_SKIP : NodeFilter.FILTER_ACCEPT;
             }
         });
-        observer.observe(document.documentElement, {
+
+        let currentTextNode;
+        while ((currentTextNode = walker.nextNode())) {
+            processMagnetTextNode(currentTextNode);
+        }
+
+        const selector = magnetAttrSelectors.map(n => `[${n}*="magnet:?xt=urn:btih:"]`).join(',');
+        if (root instanceof Element && root.matches(selector)) {
+            processMagnetElement(root);
+        }
+        for (const element of Array.from(root.querySelectorAll(selector))) {
+            processMagnetElement(element);
+        }
+    }
+
+    // 增量工作入口：
+    // 同一个入口同时处理 magnet 注入和新增 video 跟踪，避免多个观察器各自全量扫子树。
+    function work(root = document.body) {
+        if (!document.body || !root) return;
+        processMagnetRoot(root);
+        scanVideosInTree(root);
+    }
+
+
+    // 观察 DOM 增量变化：
+    // 1. 只关心 childList 和 characterData，不再监听所有 attributes；
+    // 2. 不再每次变化就重扫全页，而是收集受影响的根节点后批量增量处理。
+    function watchBodyChange(onchange) {
+        let pendingRoots = new Set();
+        let timeout;
+        let observer = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                if (mutation.type === "childList") {
+                    mutation.addedNodes.forEach((node) => {
+                        if (node instanceof Element || node instanceof Text) {
+                            pendingRoots.add(node);
+                        }
+                    });
+                } else if (mutation.type === "characterData" && mutation.target instanceof Text) {
+                    pendingRoots.add(mutation.target);
+                }
+            }
+
+            if (!pendingRoots.size || timeout) return;
+
+            timeout = setTimeout(() => {
+                const roots = Array.from(pendingRoots);
+                pendingRoots.clear();
+                timeout = null;
+                for (const root of roots) {
+                    onchange(root);
+                }
+            }, 120);
+        });
+        observer.observe(document.body || document.documentElement, {
             childList: true,
             subtree: true,
-            attributes: true,
             characterData: true
         });
 
-    }
-
-    function getAllTextNodes(parent) {
-        var re = [];
-        if (["STYLE", "SCRIPT", "BASE", "COMMAND", "LINK", "META", "TITLE", "XTRANS-TXT", "XTRANS-TXT-GROUP", "XTRANS-POPUP"].includes(parent.tagName)) return re;
-        for (let node of parent.childNodes) {
-            if (node.childNodes.length) re = re.concat(getAllTextNodes(node));
-            else if (Text.prototype.isPrototypeOf(node) && (!node.nodeValue.match(/^\s*$/))) re.push(node);
-        }
-        return re;
     }
 
     function whenDOMReady(f) {
