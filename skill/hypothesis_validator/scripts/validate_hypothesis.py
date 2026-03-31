@@ -432,8 +432,14 @@ def _count_simultaneous_entities(items: list[dict]) -> int:
 # Composite
 # ---------------------------------------------------------------------------
 
-def compute_composite(temporal: dict, magnitude: dict, scope: dict) -> dict:
-    """Compute composite score and decision from layer results."""
+def compute_composite(temporal: dict, magnitude: dict, scope: dict,
+                      evidence: dict | None = None) -> dict:
+    """Compute composite score and decision from layer results.
+
+    If *evidence* is provided, apply observation reliability propagation:
+      1. Weight each layer's fit by supporting evidence confidence.
+      2. Cap the final score by world-coverage ratio (Anti-Pattern 6.4).
+    """
     t = temporal.get("temporal_fit")
     m = magnitude.get("magnitude_fit")
     s = scope.get("scope_fit")
@@ -467,10 +473,77 @@ def compute_composite(temporal: dict, magnitude: dict, scope: dict) -> dict:
             "note": "量级+范围双不足",
         }
 
+    # ---------------------------------------------------------------
+    # Observation reliability propagation (when evidence is available)
+    # ---------------------------------------------------------------
+    reliability_note = None
+    temporal_degraded = False
+
+    if evidence is not None:
+        ev_items = evidence.get("evidence_items", [])
+
+        if ev_items:
+            # Compute average evidence confidence
+            confidences = [
+                item.get("confidence", 0.5) for item in ev_items
+                if isinstance(item.get("confidence"), (int, float))
+            ]
+            avg_confidence = sum(confidences) / len(confidences) if confidences else 0.5
+
+            # Penalize if too many trust_warning items
+            trust_warnings = sum(
+                1 for item in ev_items
+                if "trust_warning" in item.get("tags", [])
+            )
+            trust_warning_ratio = trust_warnings / len(ev_items) if ev_items else 0
+            if trust_warning_ratio > 0.3:
+                avg_confidence *= 0.7
+
+            # Check if temporal reliability is degraded (clock skew etc.)
+            temporal_trust_issues = any(
+                "trust_warning" in item.get("tags", [])
+                and any(
+                    kw in item.get("fact_text", "").lower()
+                    for kw in ["clock", "skew", "ntp", "时钟", "时间偏移"]
+                )
+                for item in ev_items
+            )
+            if temporal_trust_issues:
+                t = min(t, 0.6)
+                temporal_degraded = True
+
+            # Weight layer fits by evidence reliability
+            evidence_reliability = clamp(avg_confidence, 0.3, 1.0)
+            t *= evidence_reliability
+            m *= evidence_reliability
+            s *= evidence_reliability
+
+            reliability_note = (
+                f"evidence_reliability={evidence_reliability:.2f} "
+                f"(avg_confidence={avg_confidence:.2f}, "
+                f"trust_warning_ratio={trust_warning_ratio:.0%})"
+            )
+
     # General scoring (counterfactual placeholder = 0.5 neutral)
     c_placeholder = 0.5
     score = W_TEMPORAL * t + W_MAGNITUDE * m + W_SCOPE * s + W_COUNTER * c_placeholder
     score = round(score, 3)
+
+    # ---------------------------------------------------------------
+    # World-coverage confidence cap (Anti-Pattern 6.4 enforcement)
+    # ---------------------------------------------------------------
+    coverage_cap = None
+    if evidence is not None:
+        metadata = evidence.get("metadata", {})
+        worlds_covered = metadata.get("worlds_covered", [])
+        worlds_not_covered = metadata.get("worlds_not_covered", [])
+        n_covered = len(worlds_covered)
+        n_total = n_covered + len(worlds_not_covered)
+
+        if n_total > 0:
+            coverage_cap = round(n_covered / n_total, 3)
+            if score > coverage_cap:
+                score = coverage_cap
 
     if score >= 0.7:
         decision = "promote_to_primary"
@@ -479,11 +552,25 @@ def compute_composite(temporal: dict, magnitude: dict, scope: dict) -> dict:
     else:
         decision = "reject_as_primary_cause"
 
-    return {
-        "composite_score": score,
+    result = {
+        "composite_score": round(score, 3),
         "composite_score_note": "反事实层使用占位分0.5，最终分数需LLM完成反事实校验后调整",
         "decision": decision,
     }
+
+    if reliability_note:
+        result["reliability_note"] = reliability_note
+    if temporal_degraded:
+        result["temporal_reliability"] = "degraded"
+    if coverage_cap is not None:
+        result["coverage_cap"] = coverage_cap
+        if score <= coverage_cap:
+            result["coverage_cap_note"] = (
+                f"世界覆盖率上限: {coverage_cap} "
+                f"(covered={n_covered}/{n_total})"
+            )
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -515,7 +602,7 @@ def run(evidence: dict, checks: list[str], config: dict) -> list[dict]:
             h_result["scope"] = scope
 
         if "all" in checks and temporal and magnitude and scope:
-            h_result["composite"] = compute_composite(temporal, magnitude, scope)
+            h_result["composite"] = compute_composite(temporal, magnitude, scope, evidence)
 
         all_results.append(h_result)
 
