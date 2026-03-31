@@ -163,39 +163,23 @@ Evidence Builder 是一个 **事实层构建器**。
 
 ### Phase C：多源证据采集
 
-**通过 Capability Pool 进入具体世界。**
+按数据源逐个采集。大部分世界用 Agent 的天然能力进入（`grep`、`git`、`kubectl` 等），
+少数世界需要专门的 skill（见能力池）。
 
-Evidence Builder 自身不知道"怎么查 trace"或"怎么看部署记录"。
-它通过 Shadow Claw 提供的能力（来自 Capability Pool）访问每个世界。
+| 数据源 | 怎么进入 | 产出类型 |
+|--------|---------|---------|
+| 工单/告警 | 直接读取 | 状态事实 + 时间事实 |
+| 应用日志 | `grep` / `cat` / aliyun-sls-trace | 时间事实 + 阶段事实 + 状态事实 |
+| 分布式追踪 | aliyun-sls-trace (按 trace_id 查询) | 时间事实 + 阶段事实 + 可信度事实 |
+| 监控指标 | `curl` Prometheus API / 读 Grafana | 时间事实 + 背景事实 |
+| 发布记录 | `git log` / `kubectl get events` | 时间事实 + 背景事实 |
+| 配置变更 | `diff` / 读配置文件 | 时间事实 + 背景事实 |
+| 扩缩容记录 | `kubectl get pods` / `kubectl describe hpa` | 时间事实 + 背景事实 |
+| 代码变更 | `git diff` / `git log` | 背景事实 |
+| 网络指标 | `ss` / `netstat` / `ping` | 背景事实 + 可信度事实 |
+| 数据库 | mysql-readonly-query | 状态事实 + 背景事实 |
 
-```
-Shadow Claw: "请采集 trace 世界，用 sls-trace-query 能力"
-    |
-    v
-Evidence Builder:
-    1. 调用 sls-trace-query (aliyun-sls-trace skill)
-    2. 传入 entity_refs + time_window
-    3. 收到原始 trace 数据
-    4. 结构化为 evidence_items
-    5. 追加到 Evidence Pack
-```
-
-按数据源逐个采集：
-
-| 数据源 | 对应世界 | Capability Pool 中的能力 | 产出类型 |
-|--------|---------|------------------------|---------|
-| 工单/告警 | ticket | (直接读取) | 状态事实 + 时间事实 |
-| 应用日志 | log | sls-trace-query, local-log-grep | 时间事实 + 阶段事实 + 状态事实 |
-| 分布式追踪 | trace | sls-trace-query | 时间事实 + 阶段事实 + 可信度事实 |
-| 监控指标 | metric | prometheus-query | 时间事实 + 背景事实 |
-| 发布记录 | deploy | git-recent-commits, kubectl-events | 时间事实 + 背景事实 |
-| 配置变更 | config | sls-config-resolve, config-diff | 时间事实 + 背景事实 |
-| 扩缩容记录 | scaling | kubectl-pod-history, kubectl-hpa | 时间事实 + 背景事实 |
-| 代码变更 | code | git-diff | 背景事实 |
-| 网络指标 | network | network-stats | 背景事实 + 可信度事实 |
-| 数据库 | database | mysql-readonly-query | 状态事实 + 背景事实 |
-
-**当某个世界没有对应能力时**，生成一条 `capability_gap` 证据而不是静默跳过。
+**当某个世界进不去时**（没权限/没工具），不要静默跳过，记录为缺失事实。
 
 ### Phase D：结构化与标注
 
@@ -303,5 +287,5 @@ Evidence Builder:
 ## 参考文档
 
 - 证据包 Schema 详解：见 `hypothesis_validator/references/evidence-pack-schema.md`
-- 能力池（世界入口注册表）：见 `shadow_claw/references/capability-pool.md`
+- 能力池（哪些世界需要专门的 skill）：见 `shadow_claw/references/capability-pool.md`
 
