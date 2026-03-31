@@ -265,40 +265,13 @@ which new evidence changed the picture.
 
 ---
 
-## 7. Integration with Real Data Sources via Capability Pool
+## 7. Integration with Real Data Sources
 
 When Shadow Claw operates on real systems, world expansion goes through
 the Capability Pool (see `capability-pool.md`):
 
-```
-Validator says: "need deploy world"
-  → Shadow Claw queries Capability Pool
-  → Pool returns: git-recent-commits (for any env), kubectl-events (for k8s)
-  → Shadow Claw picks best match for current environment
-  → Evidence Builder invokes the capability
-  → Raw data → structured evidence
-```
-
-The Capability Pool decouples "what world to enter" from "how to enter it":
-
-| World | Example Capabilities | Notes |
-|-------|---------------------|-------|
-| log | sls-trace-query (Aliyun), local-log-grep (any) | Environment-dependent |
-| trace | sls-trace-query (Aliyun) | `aliyun-sls-trace` skill |
-| metric | prometheus-query | PromQL range queries |
-| deploy | git-recent-commits, kubectl-events | Git for code changes, K8s for deploy events |
-| scaling | kubectl-pod-history, kubectl-hpa | Kubernetes specific |
-| config | sls-config-resolve, config-diff | Environment-dependent |
-| code | git-diff, git-recent-commits | Available everywhere with Git |
-| network | network-stats | Linux specific (ss, netstat) |
-| database | mysql-readonly-query | Database specific |
-
-When a world has **no registered capability** in the current environment,
-this is itself an evidence item (`capability_gap`) — the system explicitly
-records "I cannot see into this world" rather than silently ignoring it.
-
-See `capability-pool.md` for the full registry schema and how to register
-new capabilities.
+When a world **cannot be entered** (no tool, no permission), record this as
+an absence fact. Don't silently ignore it.
 
 ---
 
@@ -306,34 +279,30 @@ new capabilities.
 
 After convergence (Phase 5), the system enters Phase 6 (Resolution).
 
-### 8.1 Resolution Plan Generation
+### 8.1 Resolution Plan
 
-Based on the promoted hypothesis, generate a 4-tier plan:
+Generate a 4-tier plan in **markdown format** (not JSON — it's for humans):
 
-| Tier | Purpose | Timeframe | Example |
-|------|---------|-----------|---------|
-| immediate | Stop the bleeding | Minutes | Scale down concurrent tasks |
-| short_term | Fix root cause | Hours-Days | Add distributed lock |
-| long_term | Prevent recurrence | Weeks-Months | Redesign startup sequence |
-| monitoring | Verify fix + alert on recurrence | Ongoing | Add concurrency alert |
+| Tier | Purpose | Timeframe |
+|------|---------|-----------|
+| Immediate | Stop the bleeding | Minutes |
+| Short-term | Fix root cause | Hours to days |
+| Long-term | Prevent recurrence | Weeks to months |
+| Monitoring | Verify fix + alert on recurrence | Ongoing |
 
-### 8.2 Resolution Capability Lookup
+### 8.2 Execution by Side Effect Level
 
-For automatable actions, query the Capability Pool for `resolution` type capabilities:
+Not "never execute" — decide based on side effects:
 
-```
-Plan: "rollback deployment"
-  → Pool lookup: resolution, action=rollback
-  → Found: kubectl-rollback
-  → Generate command: kubectl rollout undo deployment/app-service -n production
-  → Mark: requires_confirmation=true, risk=high
-```
+| Side Effect | Action |
+|-------------|--------|
+| None (read-only, analysis, create branch) | Execute directly |
+| Low (local config, new branch + commit) | Execute directly |
+| Medium (scale, rate-limit) | Ask user, then execute |
+| High (rollback, restart) | Ask user, then execute |
+| Critical (production DB/config) | Only suggest, user executes |
 
-### 8.3 Safety Rules
+### 8.3 After Resolution
 
-1. **Never auto-execute** — Only generate the plan, human decides
-2. **Risk labels required** — Every action gets low/medium/high
-3. **Rollback plan required** — Every action needs a corresponding undo
-4. **Dry-run first** — If capability supports it, suggest dry-run before real execution
-5. **Scope awareness** — Resolution scope must match the diagnosed scope
+Write valuable findings to project-cognition for future reference.
 
