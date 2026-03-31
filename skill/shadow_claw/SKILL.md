@@ -100,9 +100,10 @@ Shadow Claw 是整个调查系统的 **编排器和循环驱动器**。
 
 第一轮采集所有直接可见的数据源（log / trace / metric / ticket）。
 如果需要进入 trace 世界，使用 aliyun-sls-trace skill；如果需要查数据库，使用 mysql-readonly-query。
-其他世界直接用基本操作进入。
+其他执行能力池发现。
 
 **关键**: 不仅采集"有什么"，还要主动检查"没有什么"（缺失事实）。
+不可达的世界直接记录为缺失事实，影响后续的置信度上限。
 
 ---
 
@@ -158,7 +159,8 @@ python3 hypothesis_validator/scripts/validate_hypothesis.py --input evidence.jso
 
 #### 扩展世界
 
-收集所有假设的 `next_worlds_to_query`，通过能力池（或天然能力）进入对应世界采集新证据。
+收集所有假设的 `next_worlds_to_query`，按**判别性信息增益**排序（见 investigation-loop-protocol.md Section 2.2），
+选择最能区分竞争假设的世界进行扩展，通过能力池（或天然能力）进入对应世界采集新证据。
 新证据增量追加到 Evidence Pack，然后重新生成/验证假设。
 
 **如果某个世界进不去**（缺少工具/权限），记录为缺失事实，不要假装它不存在。
