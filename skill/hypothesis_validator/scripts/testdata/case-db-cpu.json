@@ -1,0 +1,147 @@
+{
+  "case_id": "case-2024-0315-db-cpu",
+  "anomaly_summary": {
+    "description": "DB CPU 从 50% 跳到 100%",
+    "start_time": "2024-03-15T10:24:00Z",
+    "end_time": "2024-03-15T11:05:00Z",
+    "severity": "critical",
+    "affected_entities": ["db-instance-01", "pod-app-01", "pod-app-02", "pod-app-03", "pod-app-04", "pod-app-05", "pod-app-06", "pod-app-07", "pod-app-08"]
+  },
+  "hypotheses": [
+    {
+      "id": "h1",
+      "text": "代码某处低效导致 DB CPU 升高",
+      "source": "code_review",
+      "proposed_cause_time": "2024-03-15T10:20:00Z",
+      "proposed_cause_end_time": null,
+      "proposed_scope": "single_request_path",
+      "proposed_scope_level": "L1",
+      "proposed_magnitude": "cpu_increase_5pct",
+      "supporting_evidence_ids": ["ev-05"],
+      "tags": ["code", "small_code_diff"]
+    },
+    {
+      "id": "h2",
+      "text": "发版扩容后 8 个 Pod 并发全量任务导致 DB CPU 爆满",
+      "source": "metric_anomaly",
+      "proposed_cause_time": "2024-03-15T10:22:00Z",
+      "proposed_cause_end_time": "2024-03-15T11:00:00Z",
+      "proposed_scope": "全量 Pod + DB 全局",
+      "proposed_scope_level": "L4",
+      "proposed_magnitude": "pod_scale_with_task",
+      "supporting_evidence_ids": ["ev-01", "ev-02", "ev-03"],
+      "tags": ["scaling", "job", "pod_scale_with_task"]
+    }
+  ],
+  "evidence_items": [
+    {
+      "id": "ev-01",
+      "source_type": "deploy_record",
+      "ts_start": "2024-03-15T10:20:00Z",
+      "ts_end": "2024-03-15T10:22:00Z",
+      "entity_refs": ["app-service", "pod-app-01", "pod-app-02", "pod-app-03", "pod-app-04", "pod-app-05", "pod-app-06", "pod-app-07", "pod-app-08"],
+      "fact_text": "10:20 开始发版 v2.3.1→v2.3.2，10:22 完成",
+      "confidence": 0.95,
+      "layer": "deploy",
+      "tags": ["support", "deploy"]
+    },
+    {
+      "id": "ev-02",
+      "source_type": "scaling_event",
+      "ts_start": "2024-03-15T10:22:00Z",
+      "entity_refs": ["app-service"],
+      "fact_text": "Pod 从 1 扩到 8",
+      "confidence": 0.95,
+      "layer": "deploy",
+      "tags": ["support", "scaling"]
+    },
+    {
+      "id": "ev-03",
+      "source_type": "job_schedule",
+      "ts_start": "2024-03-15T10:23:00Z",
+      "entity_refs": ["pod-app-01", "pod-app-02", "pod-app-03", "pod-app-04", "pod-app-05", "pod-app-06", "pod-app-07", "pod-app-08"],
+      "fact_text": "8 个 Pod 同时启动 full-sync-task",
+      "confidence": 0.90,
+      "layer": "app",
+      "tags": ["support", "anomaly"]
+    },
+    {
+      "id": "ev-04",
+      "source_type": "metric",
+      "ts_start": "2024-03-15T10:24:00Z",
+      "entity_refs": ["db-instance-01"],
+      "fact_text": "DB CPU 从 50% 阶跃到 100%",
+      "confidence": 0.95,
+      "layer": "database",
+      "tags": ["anomaly"]
+    },
+    {
+      "id": "ev-05",
+      "source_type": "code_diff",
+      "ts_start": "2024-03-15T10:20:00Z",
+      "entity_refs": ["app-service"],
+      "fact_text": "代码 diff 很小，仅涉及一个查询路径的微调",
+      "confidence": 0.80,
+      "layer": "app",
+      "tags": ["support"]
+    },
+    {
+      "id": "ev-06",
+      "source_type": "metric",
+      "ts_start": "2024-03-15T10:24:00Z",
+      "entity_refs": ["app-service"],
+      "fact_text": "QPS 从 120 跳到 850，与 Pod 数增加近似同步",
+      "confidence": 0.90,
+      "layer": "app",
+      "tags": ["support", "anomaly"]
+    }
+  ],
+  "world_summaries": {
+    "deploy": {
+      "recent_deploys": [
+        {
+          "time": "2024-03-15T10:20:00Z",
+          "service": "app-service",
+          "change_summary": "版本 v2.3.1 → v2.3.2, 小优化",
+          "diff_size": "small"
+        }
+      ]
+    },
+    "scaling": {
+      "events": [
+        {
+          "time": "2024-03-15T10:22:00Z",
+          "service": "app-service",
+          "from_replicas": 1,
+          "to_replicas": 8,
+          "trigger": "deploy"
+        }
+      ]
+    },
+    "job": {
+      "tasks": [
+        {
+          "name": "full-sync-task",
+          "trigger_time": "2024-03-15T10:23:00Z",
+          "trigger": "pod_startup",
+          "concurrency": 8,
+          "estimated_load": "high"
+        }
+      ]
+    },
+    "config": {
+      "changes": []
+    },
+    "metrics_snapshot": {
+      "db_cpu": {
+        "baseline_window": "10:00-10:20",
+        "baseline_mean": 0.50,
+        "anomaly_window": "10:24-11:00",
+        "anomaly_mean": 0.95,
+        "anomaly_peak": 1.00,
+        "change_point": "2024-03-15T10:24:00Z"
+      }
+    }
+  }
+}
+
