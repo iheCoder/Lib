@@ -163,19 +163,39 @@ Evidence Builder 是一个 **事实层构建器**。
 
 ### Phase C：多源证据采集
 
+**通过 Capability Pool 进入具体世界。**
+
+Evidence Builder 自身不知道"怎么查 trace"或"怎么看部署记录"。
+它通过 Shadow Claw 提供的能力（来自 Capability Pool）访问每个世界。
+
+```
+Shadow Claw: "请采集 trace 世界，用 sls-trace-query 能力"
+    |
+    v
+Evidence Builder:
+    1. 调用 sls-trace-query (aliyun-sls-trace skill)
+    2. 传入 entity_refs + time_window
+    3. 收到原始 trace 数据
+    4. 结构化为 evidence_items
+    5. 追加到 Evidence Pack
+```
+
 按数据源逐个采集：
 
-| 数据源 | 采集方法 | 产出类型 |
-|--------|---------|---------|
-| 工单/告警 | 读取 ticket 文件/API | 状态事实 + 时间事实 |
-| 应用日志 | grep/query by entity+time | 时间事实 + 阶段事实 + 状态事实 |
-| 分布式追踪 | 按 trace_id 查询 | 时间事实 + 阶段事实 + 可信度事实 |
-| 监控指标 | 按 entity+time 查询 | 时间事实 + 背景事实 |
-| 发布记录 | 查询 deploy 系统 | 时间事实 + 背景事实 |
-| 配置变更 | 查询 config 系统 | 时间事实 + 背景事实 |
-| 扩缩容记录 | 查询 K8s/调度系统 | 时间事实 + 背景事实 |
-| 代码变更 | 读取 diff | 背景事实 |
-| 网络指标 | 查询 node exporter | 背景事实 + 可信度事实 |
+| 数据源 | 对应世界 | Capability Pool 中的能力 | 产出类型 |
+|--------|---------|------------------------|---------|
+| 工单/告警 | ticket | (直接读取) | 状态事实 + 时间事实 |
+| 应用日志 | log | sls-trace-query, local-log-grep | 时间事实 + 阶段事实 + 状态事实 |
+| 分布式追踪 | trace | sls-trace-query | 时间事实 + 阶段事实 + 可信度事实 |
+| 监控指标 | metric | prometheus-query | 时间事实 + 背景事实 |
+| 发布记录 | deploy | git-recent-commits, kubectl-events | 时间事实 + 背景事实 |
+| 配置变更 | config | sls-config-resolve, config-diff | 时间事实 + 背景事实 |
+| 扩缩容记录 | scaling | kubectl-pod-history, kubectl-hpa | 时间事实 + 背景事实 |
+| 代码变更 | code | git-diff | 背景事实 |
+| 网络指标 | network | network-stats | 背景事实 + 可信度事实 |
+| 数据库 | database | mysql-readonly-query | 状态事实 + 背景事实 |
+
+**当某个世界没有对应能力时**，生成一条 `capability_gap` 证据而不是静默跳过。
 
 ### Phase D：结构化与标注
 
@@ -283,4 +303,5 @@ Evidence Builder 是一个 **事实层构建器**。
 ## 参考文档
 
 - 证据包 Schema 详解：见 `hypothesis_validator/references/evidence-pack-schema.md`
+- 能力池（世界入口注册表）：见 `shadow_claw/references/capability-pool.md`
 

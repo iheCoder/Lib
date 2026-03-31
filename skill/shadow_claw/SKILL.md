@@ -44,6 +44,33 @@ Shadow Claw 是整个调查系统的 **编排器和循环驱动器**。
 
 > **Evidence Builder 不会主动扩展世界。是 Hypothesis Validator 在"逼它去扩展世界"。**
 
+### 第四个角色：Capability Pool（能力池）
+
+每个"世界"是抽象的（trace / deploy / scaling / network / config / code / ...），
+但进入世界需要具体的工具。**Capability Pool 就是世界入口的注册表。**
+
+```
+Validator: "证据不足，需要进入 trace 世界"
+     |
+     v
+Shadow Claw 查 Capability Pool: "谁能进入 trace 世界？"
+     |
+     v
+Pool 返回: aliyun-sls-trace skill
+     |
+     v
+Evidence Builder 用 aliyun-sls-trace 采集，转为结构化证据
+```
+
+能力分两类：
+
+| 类型 | 用途 | 例子 |
+|------|------|------|
+| **observation** | 进入世界，采集证据 | aliyun-sls-trace, kubectl, prometheus, git log |
+| **resolution** | 修复问题，执行处置 | kubectl rollback, config revert, service restart |
+
+详见 [references/capability-pool.md](references/capability-pool.md)。
+
 ## 何时使用
 
 - 用户报告系统故障、性能异常、请求超时等
@@ -228,14 +255,25 @@ python3 hypothesis_validator/scripts/validate_hypothesis.py --input evidence.jso
 
 **这是整个系统最关键的一步。**
 
-收集所有假设的 `next_worlds_to_query`，去重后调用 Evidence Builder:
+收集所有假设的 `next_worlds_to_query`，去重后 **查询 Capability Pool** 找到对应的能力:
+
+```
+1. next_worlds_to_query = ["deploy", "scaling", "trace"]
+2. 查 Capability Pool:
+     deploy  → git-recent-commits, kubectl-events
+     scaling → kubectl-pod-history, kubectl-hpa
+     trace   → aliyun-sls-trace (sls-trace-query)
+3. 调用 Evidence Builder，传入世界 + 对应能力
+```
+
+当某个世界 **没有注册能力** 时，生成一条能力缺口证据:
 
 ```json
 {
-  "mode": "expand",
-  "worlds_to_query": ["deploy", "scaling", "job"],
-  "entities": ["..."],
-  "time_window": {"start": "...", "end": "..."}
+  "id": "ev-gap-01",
+  "source_type": "capability_gap",
+  "fact_text": "无法进入 network 世界: 当前环境没有注册 network 类型的能力",
+  "tags": ["absence", "trust_warning"]
 }
 ```
 
@@ -274,6 +312,88 @@ Evidence Builder 返回新增证据，**增量追加** 到 Evidence Pack。
 **6. 事件时间线** — 关键事件按时间排列。
 
 **7. 调查日志** — 完整的调查轮次记录。
+
+---
+
+### Phase 6: 处置建议 (Resolve)
+
+**找到问题不等于解决问题。这一步把诊断结论转化为可执行的处置方案。**
+
+当 Phase 5 收敛后（convergence_type = `promote_to_primary` 或 `max_rounds_reached`），
+进入处置阶段。
+
+#### 6.1 处置方案生成
+
+基于确认的根因（或最优假设），生成分层处置方案:
+
+```json
+{
+  "resolution_plan": {
+    "immediate_actions": [
+      {
+        "action": "限制 full-sync-task 并发数为 1",
+        "type": "mitigation",
+        "priority": "P0",
+        "reasoning": "立即降低 DB 负载，阻止 CPU 继续 100%",
+        "capability": "kubectl-scale",
+        "risk": "medium",
+        "requires_confirmation": true
+      }
+    ],
+    "short_term_fixes": [
+      {
+        "action": "为 full-sync-task 增加分布式锁，确保全局只有 1 个实例运行",
+        "type": "fix",
+        "priority": "P1",
+        "reasoning": "防止扩容时多 Pod 同时触发全量任务"
+      }
+    ],
+    "long_term_improvements": [
+      {
+        "action": "review 发版扩容流程，新 Pod 启动时不自动触发全量任务",
+        "type": "prevention",
+        "priority": "P2",
+        "reasoning": "从流程上杜绝同类问题"
+      }
+    ],
+    "monitoring_actions": [
+      {
+        "action": "为 full-sync-task 并发数添加告警（阈值 > 2）",
+        "type": "monitor",
+        "priority": "P1"
+      }
+    ]
+  }
+}
+```
+
+#### 6.2 处置方案的层级
+
+| 层级 | 含义 | 时间框架 |
+|------|------|---------|
+| **immediate** | 止血 — 现在就做，阻止影响扩大 | 分钟级 |
+| **short_term** | 修复 — 解决根因 | 小时到天 |
+| **long_term** | 预防 — 从流程/架构上杜绝 | 周到月 |
+| **monitoring** | 观测 — 确保修复有效 + 预警复发 | 持续 |
+
+#### 6.3 处置能力查找
+
+对于可自动化的处置动作，查询 Capability Pool 中的 resolution 类能力:
+
+```
+处置方案: "回滚到上一版本"
+  → 查 Capability Pool: resolution 类, action=rollback
+  → 找到: kubectl-rollback
+  → 生成执行命令: kubectl rollout undo deployment/app-service -n production
+  → 标记: requires_confirmation=true, risk_level=high
+```
+
+#### 6.4 安全约束
+
+1. **永远不自动执行处置** — 只生成方案，由人决定是否执行
+2. **标注风险等级** — 每个动作都标 low/medium/high
+3. **提供回滚方案** — 每个处置动作都要有对应的回滚方式
+4. **如果不确定就说不确定** — 宁可只给方向，不给错误的具体命令
 
 ---
 
@@ -335,16 +455,26 @@ Evidence Builder 返回新增证据，**增量追加** 到 Evidence Pack。
 ```
 shadow-claw (编排器)
   |
+  +-- capability-pool (能力池)
+  |     +-- observation 类: aliyun-sls-trace, kubectl, git, prometheus, ...
+  |     +-- resolution 类: kubectl-rollback, kubectl-scale, config-revert, ...
+  |     +-- 世界 -> 能力映射表
+  |
   +-- evidence-builder (事实层)
-  |     +-- 初始采集: Phase 1
-  |     +-- 扩展采集: Phase 4a (由 Validator 触发)
+  |     +-- 初始采集: Phase 1 (用 capability-pool 中的 observation 能力)
+  |     +-- 扩展采集: Phase 4a (由 Validator 触发, 通过 capability-pool 查找入口)
   |
   +-- [hypothesis generation] (猜测层, shadow-claw 自身 LLM 推理)
   |     +-- Phase 2
   |
   +-- hypothesis-validator (审判层)
-        +-- 四层校验: Phase 3
-        +-- 输出 next_worlds_to_query -> 驱动世界扩展
+  |     +-- 四层校验: Phase 3
+  |     +-- 输出 next_worlds_to_query -> 驱动世界扩展
+  |
+  +-- [resolution advisor] (处置层, shadow-claw 自身 LLM 推理)
+        +-- Phase 6: 基于确认根因生成处置方案
+        +-- 查 capability-pool 中的 resolution 能力
+        +-- 永远不自动执行, 只建议
 ```
 
 ---
@@ -353,5 +483,6 @@ shadow-claw (编排器)
 
 - Evidence Builder: [../evidence_builder/SKILL.md](../evidence_builder/SKILL.md)
 - Hypothesis Validator: [../hypothesis_validator/SKILL.md](../hypothesis_validator/SKILL.md)
+- 能力池规范: [references/capability-pool.md](references/capability-pool.md)
 - 调查循环协议: [references/investigation-loop-protocol.md](references/investigation-loop-protocol.md)
 - 系统设计理念: [ref_im.md](ref_im.md)

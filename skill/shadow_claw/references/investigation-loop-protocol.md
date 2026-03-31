@@ -15,9 +15,12 @@ INTAKE -> OBSERVING -> HYPOTHESIZING -> VALIDATING -> DECIDING
                               +-----------+-------------+
                               |           |             |
                           EXPANDING   CONVERGED     NEW_ROUND
-                              |                         |
-                              v                         v
-                          OBSERVING               HYPOTHESIZING
+                              |           |             |
+                              v           v             v
+                          OBSERVING   RESOLVING    HYPOTHESIZING
+                                        |
+                                        v
+                                      DONE
 ```
 
 ### State Definitions
@@ -25,13 +28,15 @@ INTAKE -> OBSERVING -> HYPOTHESIZING -> VALIDATING -> DECIDING
 | State | Description |
 |-------|-------------|
 | INTAKE | Extracting entities, time window, symptoms from user input |
-| OBSERVING | Evidence Builder is collecting data |
+| OBSERVING | Evidence Builder is collecting data (via Capability Pool) |
 | HYPOTHESIZING | Generating candidate hypotheses from current evidence |
 | VALIDATING | Hypothesis Validator is running 4-layer checks |
 | DECIDING | Evaluating validation results to determine next action |
-| EXPANDING | Evidence Builder is collecting data from new worlds |
+| EXPANDING | Evidence Builder is collecting data from new worlds (via Capability Pool) |
 | CONVERGED | Investigation complete, generating report |
+| RESOLVING | Generating resolution plan using Capability Pool resolution entries |
 | NEW_ROUND | Starting a new round with updated evidence/hypotheses |
+| DONE | Resolution plan delivered, investigation complete |
 
 ---
 
@@ -260,22 +265,75 @@ which new evidence changed the picture.
 
 ---
 
-## 7. Integration with Real Data Sources
+## 7. Integration with Real Data Sources via Capability Pool
 
-When Shadow Claw operates on real systems (not simulated worlds), the
-Evidence Builder adapts its collection methods:
+When Shadow Claw operates on real systems, world expansion goes through
+the Capability Pool (see `capability-pool.md`):
 
-| World | Real Source | Collection Method |
-|-------|-----------|-------------------|
-| log | SLS/Loki/ELK | Query by entity + time window |
-| trace | Jaeger/SLS Trace | Query by trace_id or service + time |
-| metric | Prometheus/Grafana | PromQL range query |
-| deploy | CI/CD system | API query for recent deployments |
-| scaling | Kubernetes API | Query HPA/replica events |
-| job | Scheduler/CronJob | Query task execution history |
-| config | Config center | Query change history |
-| code | Git | Query recent commits/diffs |
+```
+Validator says: "need deploy world"
+  → Shadow Claw queries Capability Pool
+  → Pool returns: git-recent-commits (for any env), kubectl-events (for k8s)
+  → Shadow Claw picks best match for current environment
+  → Evidence Builder invokes the capability
+  → Raw data → structured evidence
+```
 
-The `aliyun-sls-trace` skill can be used as the trace/log data source
-when working with Alibaba Cloud infrastructure.
+The Capability Pool decouples "what world to enter" from "how to enter it":
+
+| World | Example Capabilities | Notes |
+|-------|---------------------|-------|
+| log | sls-trace-query (Aliyun), local-log-grep (any) | Environment-dependent |
+| trace | sls-trace-query (Aliyun) | `aliyun-sls-trace` skill |
+| metric | prometheus-query | PromQL range queries |
+| deploy | git-recent-commits, kubectl-events | Git for code changes, K8s for deploy events |
+| scaling | kubectl-pod-history, kubectl-hpa | Kubernetes specific |
+| config | sls-config-resolve, config-diff | Environment-dependent |
+| code | git-diff, git-recent-commits | Available everywhere with Git |
+| network | network-stats | Linux specific (ss, netstat) |
+| database | mysql-readonly-query | Database specific |
+
+When a world has **no registered capability** in the current environment,
+this is itself an evidence item (`capability_gap`) — the system explicitly
+records "I cannot see into this world" rather than silently ignoring it.
+
+See `capability-pool.md` for the full registry schema and how to register
+new capabilities.
+
+---
+
+## 8. Resolution Protocol
+
+After convergence (Phase 5), the system enters Phase 6 (Resolution).
+
+### 8.1 Resolution Plan Generation
+
+Based on the promoted hypothesis, generate a 4-tier plan:
+
+| Tier | Purpose | Timeframe | Example |
+|------|---------|-----------|---------|
+| immediate | Stop the bleeding | Minutes | Scale down concurrent tasks |
+| short_term | Fix root cause | Hours-Days | Add distributed lock |
+| long_term | Prevent recurrence | Weeks-Months | Redesign startup sequence |
+| monitoring | Verify fix + alert on recurrence | Ongoing | Add concurrency alert |
+
+### 8.2 Resolution Capability Lookup
+
+For automatable actions, query the Capability Pool for `resolution` type capabilities:
+
+```
+Plan: "rollback deployment"
+  → Pool lookup: resolution, action=rollback
+  → Found: kubectl-rollback
+  → Generate command: kubectl rollout undo deployment/app-service -n production
+  → Mark: requires_confirmation=true, risk=high
+```
+
+### 8.3 Safety Rules
+
+1. **Never auto-execute** — Only generate the plan, human decides
+2. **Risk labels required** — Every action gets low/medium/high
+3. **Rollback plan required** — Every action needs a corresponding undo
+4. **Dry-run first** — If capability supports it, suggest dry-run before real execution
+5. **Scope awareness** — Resolution scope must match the diagnosed scope
 
