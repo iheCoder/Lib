@@ -1,0 +1,79 @@
+{
+  "meta": {
+    "sector": "中国半导体",
+    "market": "CN",
+    "benchmark": "沪深300",
+    "as_of": "2026-03-28",
+    "as_of_time": "15:00 CST",
+    "basket_note": "申万半导体叠加核心设备/设计/材料龙头"
+  },
+  "price": {
+    "ret_1d": 0.029,
+    "ret_3d": 0.071,
+    "ret_5d": 0.093,
+    "ret_20d": 0.184,
+    "ret_60d": 0.327,
+    "rs_1d": 0.021,
+    "rs_3d": 0.053,
+    "close_strength_1d": 0.84,
+    "up_day_ratio_5d": 0.8,
+    "max_drawdown_3d": 0.021,
+    "max_drawdown_20d": 0.058,
+    "trend_smoothness_5d": 0.73,
+    "distance_to_breakout_level": 0.015,
+    "distance_to_52w_high": 0.034,
+    "breakout": true
+  },
+  "flow": {
+    "turnover_ratio_1d": 1.62,
+    "turnover_ratio_3d": 1.44,
+    "volume_ratio_1d": 1.71,
+    "volume_ratio_3d": 1.58,
+    "net_flow_1d_pct": 0.011,
+    "net_flow_3d_pct": 0.027,
+    "positive_flow_days_ratio_3d": 1.0,
+    "net_flow_acceleration": 0.41,
+    "etf_flow_confirm_score": 0.68,
+    "northbound_confirm_score": 0.57,
+    "margin_confirm_score": 0.54,
+    "leader_flow_share_pct": 0.42,
+    "follower_participation_ratio": 0.66,
+    "pullback_resilience_score": 0.71
+  },
+  "narrative": {
+    "mention_burst_3d": 0.76,
+    "catalyst_count_3d": 3,
+    "thesis_alignment": 0.78,
+    "source_diversity_score": 0.69,
+    "thesis_upgrade_score": 0.72,
+    "earnings_revision_score": 0.34,
+    "narrative_freshness": 0.58
+  },
+  "breadth": {
+    "advancers_ratio_1d": 0.71,
+    "advancers_ratio_3d": 0.76,
+    "median_ret_1d": 0.018,
+    "median_ret_3d": 0.052,
+    "layer_diffusion_score": 0.74,
+    "subtheme_resonance_ratio": 0.67,
+    "non_leader_participation_ratio": 0.69,
+    "leader_contribution_pct": 0.39
+  },
+  "crowding": {
+    "valuation_percentile_5y": 0.73,
+    "short_term_spike_3d": 0.071,
+    "short_term_spike_10d": 0.109,
+    "rsi_14": 72,
+    "turnover_share_percentile_1y": 0.77,
+    "narrative_crowding_score": 0.66,
+    "second_line_mania_score": 0.52,
+    "event_risk_score": 0.41
+  },
+  "compare": {
+    "peer_overall_percentile": 0.81,
+    "peer_price_percentile": 0.86,
+    "peer_flow_percentile": 0.78,
+    "peer_narrative_percentile": 0.73,
+    "peer_breadth_percentile": 0.84
+  }
+}

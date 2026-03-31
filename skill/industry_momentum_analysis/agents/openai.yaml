@@ -1,0 +1,4 @@
+interface:
+  display_name: "Industry Momentum Analysis"
+  short_description: "Analyze sector momentum, breadth, and crowding"
+  default_prompt: "Use $industry-momentum-analysis to assess whether the current semiconductor theme still has investable momentum and what risks matter most."
