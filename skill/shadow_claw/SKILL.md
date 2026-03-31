@@ -44,30 +44,18 @@ Shadow Claw 是整个调查系统的 **编排器和循环驱动器**。
 
 > **Evidence Builder 不会主动扩展世界。是 Hypothesis Validator 在"逼它去扩展世界"。**
 
-### 第四个角色：Capability Pool（能力池）
+### Capability Pool（能力池）
 
-每个"世界"是抽象的（trace / deploy / scaling / network / config / code / ...），
-但进入世界需要具体的工具。**Capability Pool 就是世界入口的注册表。**
+进入不同"世界"需要不同的工具。大部分工具是 Agent 天然具备的（`grep`、`git`、`kubectl`），
+但有些需要专门的 skill 才能进入：
 
-```
-Validator: "证据不足，需要进入 trace 世界"
-     |
-     v
-Shadow Claw 查 Capability Pool: "谁能进入 trace 世界？"
-     |
-     v
-Pool 返回: aliyun-sls-trace skill
-     |
-     v
-Evidence Builder 用 aliyun-sls-trace 采集，转为结构化证据
-```
+| 外部能力 | 能进入的世界 | 说明 |
+|---------|------------|------|
+| aliyun-sls-trace | trace, log | 阿里云链路追踪与日志查询 |
+| mysql-readonly-query | database | MySQL 只读查询 |
+| web-access | external_knowledge | 外部信息获取与网页浏览 |
 
-能力分两类：
-
-| 类型 | 用途 | 例子 |
-|------|------|------|
-| **observation** | 进入世界，采集证据 | aliyun-sls-trace, kubectl, prometheus, git log |
-| **resolution** | 修复问题，执行处置 | kubectl rollback, config revert, service restart |
+其他世界（code / deploy / scaling / config / network / metric / environment）用基本操作就能进入。
 
 详见 [references/capability-pool.md](references/capability-pool.md)。
 
@@ -85,10 +73,12 @@ Evidence Builder 用 aliyun-sls-trace 采集，转为结构化证据
 ### 总览
 
 ```
-输入(症状) -> 循环 { 采集 -> 假设 -> 验证 -> [扩展世界] } -> 输出(报告)
+输入(症状) -> 循环 { 采集 -> 假设 -> 验证 -> [扩展世界] } -> 报告 -> 处置
 ```
 
 最多执行 **5 轮**循环（可配置），每轮世界都会变大，认知都会升级。
+
+调查过程中 **随时可以询问用户**：用户可能知道"最近改过什么"、"这个问题以前出现过吗"等关键信息。不要闭门造车。
 
 ---
 
@@ -98,29 +88,9 @@ Evidence Builder 用 aliyun-sls-trace 采集，转为结构化证据
 
 **执行**:
 
-1. 从症状中提取关键信息:
-   - **实体**: 服务名、接口路径、Pod名、DB名、request_id、trace_id
-   - **时间窗**: 首次出现时间、持续时间、频率
-   - **环境**: 集群、命名空间、区域
-   - **症状描述**: 用户/系统看到的现象（不是根因）
-
-2. 创建调查上下文 (Investigation Context):
-
-```json
-{
-  "investigation_id": "inv-2024-0315-001",
-  "symptom": "DB CPU 从 50% 跳到 100%",
-  "entities": ["app-service", "db-instance-01"],
-  "time_window": { "start": "2024-03-15T10:00:00Z", "end": "2024-03-15T11:30:00Z" },
-  "round": 0,
-  "max_rounds": 5,
-  "status": "active",
-  "current_world_coverage": [],
-  "hypotheses": [],
-  "evidence_pack": null,
-  "investigation_log": []
-}
-```
+1. 从症状中提取: 实体、时间窗、环境、症状描述
+2. **向用户确认**：提取是否准确？有没有遗漏的上下文？
+3. 检查 project-cognition 中是否有相关的历史经验
 
 ---
 
@@ -128,32 +98,11 @@ Evidence Builder 用 aliyun-sls-trace 采集，转为结构化证据
 
 **调用 Evidence Builder** 进行初始采集。
 
-第一轮时，采集所有 **直接可见** 的数据源:
+第一轮采集所有直接可见的数据源（log / trace / metric / ticket）。
+如果需要进入 trace 世界，使用 aliyun-sls-trace skill；如果需要查数据库，使用 mysql-readonly-query。
+其他世界直接用基本操作进入。
 
-```json
-{
-  "mode": "initial",
-  "entities": ["..."],
-  "time_window": {"start": "...", "end": "..."},
-  "sources": ["log", "trace", "metric", "ticket"]
-}
-```
-
-Evidence Builder 返回初始 Evidence Pack。
-
-**关键检查**:
-
-- 是否提取了时间事实?
-- 是否检测了缺失事实?
-- 是否标注了观测可信度?
-- 是否有 world_summaries?（初始轮可能没有 deploy/scaling/job）
-
-记录:
-
-```
-[Round 1] 初始采集完成: 6 条证据, 覆盖世界: [log, trace, metric]
-[Round 1] 未覆盖: [deploy, scaling, job, config]
-```
+**关键**: 不仅采集"有什么"，还要主动检查"没有什么"（缺失事实）。
 
 ---
 
@@ -163,32 +112,14 @@ Evidence Builder 返回初始 Evidence Pack。
 
 基于当前证据包，生成候选假设。
 
-#### 规则:
+**规则**:
 
-1. **至少生成 3 个假设**，涵盖不同层级
-2. 每个假设必须有结构化格式
-3. **不允许只有一个假设** — 这意味着你还没真正思考
-4. 假设应覆盖不同层级的可能性（不要全猜在同一层）
-5. 每个假设必须能被证伪（否则不是假设，是废话）
+- 不能只有一个假设 — 至少要有竞争假设来保持诚实
+- 假设应覆盖不同层级的可能性（不要全猜在同一层）
+- 每个假设必须能被证伪（否则不是假设，是废话）
+- 从经验/直觉出发的强假设也可以，不必刻意凑数量
 
-#### 假设格式:
-
-```json
-{
-  "id": "h1",
-  "text": "具体假设描述",
-  "source": "log_analysis|metric_anomaly|code_review|engineer_intuition|pattern_match",
-  "proposed_cause_time": "ISO8601",
-  "proposed_cause_end_time": "ISO8601 or null",
-  "proposed_scope": "影响范围描述",
-  "proposed_scope_level": "L1-L5",
-  "proposed_magnitude": "预期影响量级",
-  "tags": ["关键词"],
-  "reasoning": "为什么提出这个假设（一句话）"
-}
-```
-
-#### 层级覆盖清单:
+层级覆盖参考:
 
 | 层级 | 典型假设方向 |
 |------|------------|
@@ -203,7 +134,7 @@ Evidence Builder 返回初始 Evidence Pack。
 
 ### Phase 3: 假设验证 (Validate)
 
-**调用 Hypothesis Validator** 对每个假设进行四层校验。
+**调用 Hypothesis Validator** 对每个假设进行四层校验（时间 → 量级 → 范围 → 反事实）。
 
 可以用脚本做规则+统计校验:
 
@@ -213,268 +144,189 @@ python3 hypothesis_validator/scripts/validate_hypothesis.py --input evidence.jso
 
 然后由 LLM 补充反事实校验（第 4 层）。
 
-#### 验证后，对每个假设得到:
-
-```json
-{
-  "hypothesis_id": "h1",
-  "temporal_fit": 0.35,
-  "magnitude_fit": 0.10,
-  "scope_fit": 0.20,
-  "counterfactual_fit": 0.29,
-  "composite_score": 0.225,
-  "decision": "reject_as_primary_cause",
-  "next_worlds_to_query": ["deploy", "scaling"]
-}
-```
-
 ---
 
 ### Phase 4: 决策 (Decide)
 
-根据验证结果，做出下一步决策。
+根据验证结果，做出下一步决策:
 
-#### 决策树:
+- **有假设被 promote** → 收敛，进入 Phase 5
+- **证据不足 (insufficient_evidence)** → 扩展世界，回到 Phase 1
+- **有 retain 但无法区分** → 扩展世界获取更多证据
+- **全部 reject** → 生成新假设或带不确定性收敛
+- **到达最大轮次** → 带不确定性收敛
 
-```
-有 promote_to_primary?
-  YES -> Phase 5 (收敛), score < 0.8 时标注 "moderate confidence"
-  NO  -> 继续判断
-    有 insufficient_evidence?
-      YES -> 收集 next_worlds_to_query -> Phase 4a (扩展世界)
-      NO  -> 继续判断
-        有 retain_as_candidate?
-          YES -> 需要更多证据区分 -> Phase 4a (扩展世界)
-          NO  -> 所有假设都被 reject
-            已达 max_rounds?
-              YES -> Phase 5 (带不确定性收敛)
-              NO  -> 生成新假设 -> 回到 Phase 2
-```
+#### 扩展世界
 
-#### Phase 4a: 扩展世界
+收集所有假设的 `next_worlds_to_query`，通过能力池（或天然能力）进入对应世界采集新证据。
+新证据增量追加到 Evidence Pack，然后重新生成/验证假设。
 
-**这是整个系统最关键的一步。**
-
-收集所有假设的 `next_worlds_to_query`，去重后 **查询 Capability Pool** 找到对应的能力:
-
-```
-1. next_worlds_to_query = ["deploy", "scaling", "trace"]
-2. 查 Capability Pool:
-     deploy  → git-recent-commits, kubectl-events
-     scaling → kubectl-pod-history, kubectl-hpa
-     trace   → aliyun-sls-trace (sls-trace-query)
-3. 调用 Evidence Builder，传入世界 + 对应能力
-```
-
-当某个世界 **没有注册能力** 时，生成一条能力缺口证据:
-
-```json
-{
-  "id": "ev-gap-01",
-  "source_type": "capability_gap",
-  "fact_text": "无法进入 network 世界: 当前环境没有注册 network 类型的能力",
-  "tags": ["absence", "trust_warning"]
-}
-```
-
-Evidence Builder 返回新增证据，**增量追加** 到 Evidence Pack。
-
-然后:
-
-1. 基于新证据，可能生成新假设（回到 Phase 2）
-2. 对所有存活假设重新验证（回到 Phase 3）
-3. round++
+**如果某个世界进不去**（缺少工具/权限），记录为缺失事实，不要假装它不存在。
 
 ---
 
 ### Phase 5: 收敛与报告 (Converge)
 
-调查结束条件:
+调查收敛后，输出调查报告。**报告是给人看的，用 markdown 格式**。
 
-1. **有假设被 promote_to_primary** — 正常收敛
-2. **达到 max_rounds** — 超时收敛
-3. **所有假设被 reject 且无法生成新假设** — 死胡同收敛
+报告结构:
 
-#### 输出: 调查报告
+#### 1. 一句话结论
 
-报告必须包含以下全部部分:
+> DB CPU 爆满的主因是发版扩容后 8 个 Pod 同时启动 full-sync-task，负载成倍放大。
 
-**1. 一句话结论** — 用一句话概括根因。
+#### 2. 关键证据链
 
-**2. 关键证据链** — 按时间排列的因果链，每环节引用具体证据。
+按时间排列的因果链:
 
-**3. 被推翻的假设** — 每个被推翻的假设 + 推翻理由（这证明调查是严谨的）。
+- **10:20** — 开始发版 v2.3.1→v2.3.2
+- **10:22** — Pod 从 1 扩到 8
+- **10:23** — 8 个 Pod 同时启动 full-sync-task
+- **10:24** — DB CPU 从 50% 阶跃到 100%
 
-**4. 剩余不确定性** — 明确说还有什么不确定的。
+#### 3. 被推翻的假设
 
-**5. 解决方案 / 排查方向** — 至少给出可操作的下一步。
+- ~~代码小问题导致 CPU 升高~~ — 量级不足（预期 +5%，实际 +50%），范围不匹配（L1 vs L4）
 
-**6. 事件时间线** — 关键事件按时间排列。
+#### 4. 剩余不确定性
 
-**7. 调查日志** — 完整的调查轮次记录。
+- 代码变更是否有微弱叠加影响，尚未完全排除
 
----
+#### 5. 调查过程摘要
 
-### Phase 6: 处置建议 (Resolve)
-
-**找到问题不等于解决问题。这一步把诊断结论转化为可执行的处置方案。**
-
-当 Phase 5 收敛后（convergence_type = `promote_to_primary` 或 `max_rounds_reached`），
-进入处置阶段。
-
-#### 6.1 处置方案生成
-
-基于确认的根因（或最优假设），生成分层处置方案:
-
-```json
-{
-  "resolution_plan": {
-    "immediate_actions": [
-      {
-        "action": "限制 full-sync-task 并发数为 1",
-        "type": "mitigation",
-        "priority": "P0",
-        "reasoning": "立即降低 DB 负载，阻止 CPU 继续 100%",
-        "capability": "kubectl-scale",
-        "risk": "medium",
-        "requires_confirmation": true
-      }
-    ],
-    "short_term_fixes": [
-      {
-        "action": "为 full-sync-task 增加分布式锁，确保全局只有 1 个实例运行",
-        "type": "fix",
-        "priority": "P1",
-        "reasoning": "防止扩容时多 Pod 同时触发全量任务"
-      }
-    ],
-    "long_term_improvements": [
-      {
-        "action": "review 发版扩容流程，新 Pod 启动时不自动触发全量任务",
-        "type": "prevention",
-        "priority": "P2",
-        "reasoning": "从流程上杜绝同类问题"
-      }
-    ],
-    "monitoring_actions": [
-      {
-        "action": "为 full-sync-task 并发数添加告警（阈值 > 2）",
-        "type": "monitor",
-        "priority": "P1"
-      }
-    ]
-  }
-}
-```
-
-#### 6.2 处置方案的层级
-
-| 层级 | 含义 | 时间框架 |
-|------|------|---------|
-| **immediate** | 止血 — 现在就做，阻止影响扩大 | 分钟级 |
-| **short_term** | 修复 — 解决根因 | 小时到天 |
-| **long_term** | 预防 — 从流程/架构上杜绝 | 周到月 |
-| **monitoring** | 观测 — 确保修复有效 + 预警复发 | 持续 |
-
-#### 6.3 处置能力查找
-
-对于可自动化的处置动作，查询 Capability Pool 中的 resolution 类能力:
-
-```
-处置方案: "回滚到上一版本"
-  → 查 Capability Pool: resolution 类, action=rollback
-  → 找到: kubectl-rollback
-  → 生成执行命令: kubectl rollout undo deployment/app-service -n production
-  → 标记: requires_confirmation=true, risk_level=high
-```
-
-#### 6.4 安全约束
-
-1. **永远不自动执行处置** — 只生成方案，由人决定是否执行
-2. **标注风险等级** — 每个动作都标 low/medium/high
-3. **提供回滚方案** — 每个处置动作都要有对应的回滚方式
-4. **如果不确定就说不确定** — 宁可只给方向，不给错误的具体命令
+每轮做了什么、看了什么、推翻了什么。
 
 ---
 
-## 收敛类型与对应行为
+### Phase 6: 处置 (Resolve)
 
-| 收敛类型 | 含义 | 输出要求 |
-|---------|------|---------|
-| `promote_to_primary` | 找到高置信度主因 | 完整报告 + 解决方案 |
-| `max_rounds_reached` | 循环次数用尽 | 当前最优解释 + 明确标注不确定性 + 建议人工排查方向 |
-| `all_rejected_no_new` | 所有假设被推翻且无法生成新的 | 坦率说明当前证据不足以定位 + 建议扩大排查范围 |
-| `evidence_unreliable` | 关键证据可信度太低 | 标注哪些证据不可信 + 建议先修复观测能力 |
+**找到问题不等于解决问题。这一步把诊断结论转化为行动。**
+
+#### 处置方案格式（markdown，给人看的）
+
+```markdown
+## 处置方案
+
+### 🔴 立即止血（现在就做）
+
+1. **限制 full-sync-task 并发数为 1**
+   - 原因: 立即降低 DB 负载
+   - 风险: 低 — 只是限制并发，不影响功能
+   - → 可以直接执行
+
+### 🟡 短期修复（今天内）
+
+2. **为 full-sync-task 增加分布式锁**
+   - 原因: 确保全局只有 1 个实例运行全量任务
+   - 建议: 在 master 分支开 fix 分支，实现后提 PR
+
+### 🔵 长期预防（本周）
+
+3. **改造发版扩容流程**
+   - 原因: 新 Pod 启动时不应自动触发全量任务
+   - 建议: 改为延迟启动或主动触发
+
+### 📊 持续监控
+
+4. **为 full-sync-task 并发数添加告警**
+   - 阈值: 并发 > 2 时告警
+```
+
+#### 处置的执行原则
+
+不是"永远不执行"，也不是"什么都自动执行"。原则是 **按副作用分级**:
+
+| 动作类型 | 副作用 | 处理方式 |
+|---------|--------|---------|
+| 只读查询、分析、生成报告 | 无 | 直接执行 |
+| 创建 fix 分支、写代码、提交到新分支 | 无（不影响主线） | 直接执行 |
+| 修改配置文件（本地/非生产） | 低 | 直接执行 |
+| 扩缩容、限流调整 | 中 | **征询用户后执行** |
+| 回滚版本、重启服务 | 高 | **征询用户后执行** |
+| 修改生产数据库/配置 | 高危 | **只给方案，用户自行执行** |
+
+核心:
+- **无副作用或可逆操作 → 直接做**（如开 fix 分支修复代码并提交）
+- **有副作用但可控 → 征询用户确认后执行**
+- **高危不可逆 → 只建议，不碰**
 
 ---
 
-## 调查日志 (Investigation Log)
+## 调查中的用户交互
 
-每一步操作都必须记录，包含: 轮次(round)、阶段(phase)、具体操作、输出摘要、决策理由。
+调查不是闭门造车。以下时机 **应该主动与用户交互**:
 
-示例:
+| 时机 | 问什么 |
+|------|--------|
+| Phase 0 (Intake) | "我理解的对吗？还有什么上下文？" |
+| 假设生成后 | "你觉得还有可能是什么方向？" |
+| 证据不足时 | "你有某某系统的权限/数据吗？" |
+| 两个假设无法区分时 | "根据你的经验，更可能是哪个？" |
+| 处置方案生成后 | "这个方案可以吗？需要调整吗？" |
+| 需要执行有副作用的操作时 | "确认要执行吗？" |
 
-```
-[Round 0] INTAKE: 收到症状 "DB CPU 100%", 提取实体 [app-service, db-instance-01]
-[Round 1] OBSERVE: 初始采集 6 条证据, 覆盖 [log, trace, metric]
-[Round 1] HYPOTHESIZE: 生成 4 个假设 [H1-H4]
-[Round 1] VALIDATE: H1=reject(0.23), H2=retain(0.65), H3=retain(0.40), H4=insufficient
-[Round 1] DECIDE: 需要扩展世界 [deploy, scaling, job, config]
-[Round 2] OBSERVE: 扩展采集 4 条新证据, 覆盖新增 [deploy, scaling, job]
-[Round 2] HYPOTHESIZE: 基于新证据调整假设, 保留 H2/H3, 新增 H5
-[Round 2] VALIDATE: H2=promote(0.88), H3=reject(0.35), H5=retain(0.50)
-[Round 2] DECIDE: H2 晋升为主因, 调查收敛
-[Round 2] CONVERGE: 输出报告
-```
+**但不要问无意义的问题**。如果你能自己查到，就不要问用户。
+
+---
+
+## 经验沉淀
+
+调查结束后，如果发现了有价值的模式，应沉淀到 project-cognition:
+
+- **新的排障模式** → `project_cognition/runbooks/`
+- **新的系统知识** → `project_cognition/domain-knowledge/`
+- **新的原则/禁区** → `project_cognition/core-manifest/`
+
+例如: "full-sync-task 在扩容时会并发启动" 这个知识，值得写入 domain-knowledge，
+下次再遇到类似问题时可以更快定位。
 
 ---
 
 ## 安全约束
 
-### 绝对不做
+### 不做
 
 1. **不在证据不足时给唯一结论** — 宁可说"我还不确定"
-2. **不跳过假设生成直接给答案** — 必须有竞争假设
-3. **不忽略被推翻的假设** — 推翻理由是报告的重要组成部分
-4. **不无限循环** — 最多 5 轮，超时就带不确定性输出
-5. **不忽略 Validator 的 insufficient_evidence** — 必须去扩展世界
+2. **不跳过假设直接给答案** — 必须有竞争假设
+3. **不忽略被推翻的假设** — 推翻理由是调查严谨性的证明
+4. **不无限循环** — 最多 5 轮
+5. **不忽略 insufficient_evidence** — 必须去扩展世界
+6. **不在用户不知情的情况下执行有副作用的操作**
 
 ### 始终做到
 
-1. **每轮都记录调查日志**
-2. **每个假设都经过四层校验**
-3. **缺失事实必须显式标注**
-4. **报告中包含推翻过程** — 这比最终结论还重要
-5. **报告中包含剩余不确定性**
-6. **报告中包含可操作的解决方案或排查方向**
+1. **每轮都记录做了什么**
+2. **缺失事实必须显式标注**
+3. **报告中包含推翻过程**
+4. **报告中包含剩余不确定性**
+5. **处置方案必须可操作**
+6. **有价值的经验要沉淀**
 
 ---
 
-## 与子 Skill 的调用关系
+## 与子 Skill 的关系
 
 ```
 shadow-claw (编排器)
   |
-  +-- capability-pool (能力池)
-  |     +-- observation 类: aliyun-sls-trace, kubectl, git, prometheus, ...
-  |     +-- resolution 类: kubectl-rollback, kubectl-scale, config-revert, ...
-  |     +-- 世界 -> 能力映射表
-  |
   +-- evidence-builder (事实层)
-  |     +-- 初始采集: Phase 1 (用 capability-pool 中的 observation 能力)
-  |     +-- 扩展采集: Phase 4a (由 Validator 触发, 通过 capability-pool 查找入口)
-  |
-  +-- [hypothesis generation] (猜测层, shadow-claw 自身 LLM 推理)
-  |     +-- Phase 2
+  |     +-- 初始采集: Phase 1
+  |     +-- 扩展采集: Phase 4 (由 Validator 触发)
+  |     +-- 使用能力池中的外部能力 (aliyun-sls-trace 等)
+  |     +-- 使用天然能力 (grep, git, kubectl 等)
   |
   +-- hypothesis-validator (审判层)
   |     +-- 四层校验: Phase 3
   |     +-- 输出 next_worlds_to_query -> 驱动世界扩展
   |
-  +-- [resolution advisor] (处置层, shadow-claw 自身 LLM 推理)
-        +-- Phase 6: 基于确认根因生成处置方案
-        +-- 查 capability-pool 中的 resolution 能力
-        +-- 永远不自动执行, 只建议
+  +-- project-cognition (经验层)
+  |     +-- 调查前: 读取历史经验
+  |     +-- 调查后: 沉淀新发现
+  |
+  +-- 用户 (人类层)
+        +-- 提供上下文、经验判断
+        +-- 确认处置方案
+        +-- 授权有副作用的操作
 ```
 
 ---
@@ -483,6 +335,6 @@ shadow-claw (编排器)
 
 - Evidence Builder: [../evidence_builder/SKILL.md](../evidence_builder/SKILL.md)
 - Hypothesis Validator: [../hypothesis_validator/SKILL.md](../hypothesis_validator/SKILL.md)
-- 能力池规范: [references/capability-pool.md](references/capability-pool.md)
+- 能力池: [references/capability-pool.md](references/capability-pool.md)
 - 调查循环协议: [references/investigation-loop-protocol.md](references/investigation-loop-protocol.md)
 - 系统设计理念: [ref_im.md](ref_im.md)
