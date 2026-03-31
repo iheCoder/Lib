@@ -50,21 +50,112 @@ World expansion is triggered when:
 2. Multiple hypotheses are `retain_as_candidate` and cannot be distinguished
 3. Evidence completeness metadata shows significant gaps
 
-### 2.2 Expansion Priority
+### 2.2 Expansion Priority — Discriminative Observation Design
 
-When multiple worlds need expansion, prioritize by information gain:
+**不要按固定优先级堆证据，而是设计最能区分竞争假设的观测。**
 
-| Priority | World | Why |
-|----------|-------|-----|
-| P0 | deploy | Most common cause of sudden changes |
-| P0 | scaling | Directly affects magnitude calculations |
-| P1 | job | Can explain concurrent load amplification |
-| P1 | config | Can explain sudden behavior changes |
-| P2 | upstream | Needed when dependency issues suspected |
-| P2 | network | Needed when transport issues suspected |
-| P3 | metrics_baseline | Needed for magnitude validation |
-| P3 | code | Needed for code-level hypotheses |
-| P4 | environment | Rarely the primary cause, check last |
+排查的目标不是"多看几个世界"，而是回答三个问题：
+
+1. **H1 对不对？** — 这个世界的证据能直接证实或证伪 H1 吗？
+2. **H2 和 H1 谁更合理？** — 这个世界的证据能让两个假设的分数产生差异吗？
+3. **哪个观测最能一锤子把它们分开？** — 信息增益最大的世界是哪个？
+
+#### 核心原则
+
+> 每一次世界扩展都是一次实验。好的实验不是堆数据，而是设计一个**能区分 competing explanations 的观测**。
+
+#### 信息增益排序算法
+
+对每个候选世界，计算它对存活假设集的**区分力（Discriminative Power）**：
+
+```
+输入:
+  surviving_hypotheses: 所有 retain/insufficient 的假设
+  covered_worlds: 已经扩展过的世界集合
+  all_candidate_worlds: 所有可到达的世界 - covered_worlds
+
+对每个候选世界 W:
+  distinguishing_power = 0
+  diagnostic_value = 0
+
+  对每对存活假设 (Hi, Hj):
+    // 如果 Hi 预测 W 中会看到 X，但 Hj 预测不会 → 这个世界能区分它们
+    if W 在 Hi.next_worlds_to_query 中 XOR W 在 Hj.next_worlds_to_query 中:
+      distinguishing_power += 1
+    // 即使两个假设都需要 W，它们对 W 中证据的预测可能不同
+    elif Hi 对 W 的预期与 Hj 对 W 的预期矛盾:
+      distinguishing_power += 0.5
+
+  // 某些世界对特定校验层有直接价值
+  for layer in [temporal, magnitude, scope]:
+    if 某个假设在 layer 得到 insufficient_evidence 且 W 能补充该 layer 的数据:
+      diagnostic_value += 1
+
+  W.score = distinguishing_power * 2 + diagnostic_value
+
+按 score 降序排列，取 top-3
+```
+
+#### 设计判别性观测（Discriminative Observation）
+
+选定世界后，不是简单"去看看有什么"，而是**带着预测去看**：
+
+```
+对每个待扩展的世界 W:
+  观测设计 = {
+    "world": W,
+    "what_to_look_for": [
+      {
+        "if_H1_true": "应该看到 X（例：deploy 记录在异常前 2min 内）",
+        "if_H2_true": "应该看到 Y（例：无 deploy 记录，但有上游抖动）",
+        "if_neither": "看到 Z（例：两者都没有 → 需要新假设）",
+        "observation_type": "binary_discriminator | magnitude_check | absence_check"
+      }
+    ],
+    "success_criteria": "如果看到 X 则 H1 +0.3，H2 -0.2；如果看到 Y 则反之"
+  }
+```
+
+这样 Evidence Builder 采集时就有明确的**观测目标**，而不是漫无目的地扫描。
+
+#### 回退规则：当无法计算信息增益时
+
+如果当前只有 1 个存活假设（没有竞争），或假设的 `next_worlds_to_query` 为空，
+退化为以下启发式优先级（仅作为 fallback）：
+
+| Fallback Priority | World | Rationale |
+|-------------------|-------|-----------|
+| F0 | 假设明确要求的世界 | 假设的 `next_worlds_to_query` 直接指定 |
+| F1 | insufficient_evidence 层缺的数据源 | 补全校验层的缺失数据 |
+| F2 | deploy, scaling | 突变类异常的经验性高频原因 |
+| F3 | 其他未覆盖世界 | 按与症状的相关性排序 |
+
+#### 扩展请求格式（增强版）
+
+```json
+{
+  "mode": "expand",
+  "worlds_to_query": ["deploy", "scaling"],
+  "entities": ["app-service", "db-instance-01"],
+  "time_window": {
+    "start": "2024-03-15T10:00:00Z",
+    "end": "2024-03-15T11:30:00Z"
+  },
+  "context": "H2 needs deploy/scaling data to validate magnitude",
+  "discriminative_design": {
+    "deploy": {
+      "if_H1_true": "应在 10:20-10:25 之间有发版记录",
+      "if_H2_true": "该窗口内无发版，仅有上游错误率上升",
+      "observation_goal": "区分 H1(发版触发) 和 H2(上游传导)"
+    },
+    "scaling": {
+      "if_H1_true": "Pod 数从 N 变为 M，且 M*单任务负载 ≈ 观测负载",
+      "if_H2_true": "Pod 数无变化",
+      "observation_goal": "验证 H1 的量级是否成立"
+    }
+  }
+}
+```
 
 ### 2.3 Expansion Rules
 
