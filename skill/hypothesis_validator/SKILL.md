@@ -190,7 +190,7 @@ python3 scripts/validate_hypothesis.py --check scope --input evidence.json
 
 - 时间线不完整（关键事件时间缺失）
 - 量级估计缺失（无 metrics 对比基线）
-- 世界还没扩展到 deploy/config/job
+- 相关世界还没扩展到能够区分当前假设的层级
 - 证据可信度普遍偏低
 
 此时必须同时输出 `next_worlds_to_query`，告诉上游应该去拉取什么新证据。
