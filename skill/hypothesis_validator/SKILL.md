@@ -16,6 +16,19 @@ Hypothesis Validator 是一个 **因果合理性审查器**。
 
 > 凡是一个假设解释不了 **"为什么是现在、为什么这么大、为什么这么广"**，它就不配当主因。
 
+### 与 Shadow Claw 的对接
+
+Hypothesis Validator 接收来自 Shadow Claw 的：
+- **假设列表**：从多视角世界模型生成的假设
+- **证据包**：来自 Evidence Builder 的结构化证据
+- **故障族**：当前识别的故障族
+- **操作边界**：当前的边界状态
+
+Hypothesis Validator 输出给 Shadow Claw 的：
+- **假设判定**：reject / retain / promote / insufficient_evidence
+- **方向建议**：如果证据不足，应该往哪个方向扩展？
+- **边界推进建议**：下一步应该验证操作边界的哪一跳？
+
 ## 何时使用
 
 - 排障流程已产出一个或多个候选假设
@@ -62,9 +75,36 @@ Hypothesis Validator 是一个 **因果合理性审查器**。
 - **config**: 配置变更记录
 - **metrics**: 关键指标时序快照（CPU、QPS、RT、错误率）
 
-## 工作流：四层校验
+## 工作流：五层校验
 
-**严格按顺序执行**，每一层的结果决定是否继续深入。
+**按顺序执行**，但根据故障族可以调整重点。
+
+### 第 0 层：操作边界校验（Boundary Validation）
+
+**新增的第一层，用于检查假设与操作边界是否一致。**
+
+核心问题：
+> **这个假设能解释"操作卡在哪里"吗？**
+
+规则检查：
+1. **边界一致性**：假设的故障点是否在"第一处未确认边界"或之前？
+2. **跳跃检测**：假设是否跳过了未验证的边界直接指向更远的节点？
+3. **边界推进**：接受这个假设后，操作边界能推进吗？
+
+示例：
+```
+操作边界：Pod → DNS → IP → TCP → HTTP → 上游
+                      ^
+                      第一处未确认
+
+假设 H1："上游服务处理慢"
+→ 边界校验失败：跳过了 IP→TCP→HTTP 直接指向上游
+
+假设 H2："IP 从 Pod 网络不可达"
+→ 边界校验通过：直接解释了"第一处未确认边界"
+```
+
+**如果假设跳过了未验证的边界，降低其优先级，除非有证据支持中间边界都正常。**
 
 ### 第 1 层：时间校验（Temporal Validation）
 
@@ -163,6 +203,9 @@ python3 scripts/validate_hypothesis.py --check scope --input evidence.json
 ```json
 {
   "hypothesis": "代码小问题导致 DB CPU 爆满",
+  "fault_family": "资源/竞争",
+  "boundary_fit": 0.30,
+  "boundary_notes": "假设跳过了 DB 连接层直接指向 CPU，但连接层未验证",
   "temporal_fit": 0.35,
   "magnitude_fit": 0.10,
   "scope_fit": 0.20,
@@ -173,7 +216,11 @@ python3 scripts/validate_hypothesis.py --check scope --input evidence.json
   ],
   "decision": "reject_as_primary_cause",
   "confidence": 0.85,
-  "next_worlds_to_query": ["deploy", "scaling", "job"]
+  "expansion_suggestion": {
+    "fault_family": "配置/变更",
+    "boundary_to_verify": "发版 → 服务启动 → DB 连接",
+    "observation_needed": "检查发版时间和配置变更"
+  }
 }
 ```
 
@@ -190,10 +237,25 @@ python3 scripts/validate_hypothesis.py --check scope --input evidence.json
 
 - 时间线不完整（关键事件时间缺失）
 - 量级估计缺失（无 metrics 对比基线）
-- 相关世界还没扩展到能够区分当前假设的层级
+- 操作边界停滞（无法推进到下一跳）
+- 多个假设无法区分（需要更多证据）
 - 证据可信度普遍偏低
 
-此时必须同时输出 `next_worlds_to_query`，告诉上游应该去拉取什么新证据。
+此时必须同时输出扩展建议：
+
+```json
+{
+  "decision": "insufficient_evidence",
+  "expansion_suggestion": {
+    "fault_family": "网络/连接",
+    "boundary_to_verify": "DNS 解析后 → TCP 连接",
+    "observation_needed": "从 Pod 内部验证目标 IP 可达性",
+    "world_to_enter": "Pod 终端 (通过部署平台)"
+  }
+}
+```
+
+**不是固定的 `["deploy", "scaling", "job"]`，而是基于故障族和操作边界的具体建议。**
 
 ## 多假设比较
 
@@ -207,10 +269,19 @@ python3 scripts/validate_hypothesis.py --check scope --input evidence.json
 综合分数建议权重（可调）：
 
 ```
-score = 0.25 * temporal_fit + 0.30 * magnitude_fit + 0.25 * scope_fit + 0.20 * counterfactual_fit
+score = 0.20 * boundary_fit + 0.20 * temporal_fit + 0.25 * magnitude_fit + 0.20 * scope_fit + 0.15 * counterfactual_fit
 ```
 
-量级权重最高，因为"解释不了量级"是最常见的假阳性来源。
+- **boundary_fit（边界一致性）**：假设是否解释了操作边界卡住的位置
+- **magnitude_fit（量级）**：权重最高，"解释不了量级"是最常见的假阳性来源
+- **temporal_fit（时间）**：因果时序是硬约束
+- **scope_fit（范围）**：现象范围与解释范围是否匹配
+- **counterfactual_fit（反事实）**：预测是否被证据支持
+
+**根据故障族调整权重**：
+- 网络/连接族：boundary_fit 权重提高
+- 配置/变更族：temporal_fit 权重提高
+- 资源/竞争族：magnitude_fit 权重提高
 
 ## 安全约束
 
