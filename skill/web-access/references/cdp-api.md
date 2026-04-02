@@ -7,6 +7,51 @@
 - 启动后持续运行，不建议主动停止（重启需 Chrome 重新授权）
 - 强制停止：`pkill -f cdp-proxy.mjs`
 
+## Chrome 调试连接方式
+
+有两种方式让 Chrome 开启远程调试：
+
+### 方式一：命令行参数启动（推荐）
+
+用 `--remote-debugging-port` 参数启动 Chrome：
+
+```bash
+# macOS
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222
+
+# 或使用 chrome-profile-cdp-skill 的克隆模式（推荐，不影响当前浏览器）
+bash /path/to/chrome-profile-cdp-skill/scripts/start_profiled_debug_chrome.sh https://example.com
+```
+
+**优点**：
+- 不会弹出授权确认框
+- CDP 连接直接可用
+- 可以使用克隆 profile 保留登录态
+
+**缺点**：
+- 需要单独启动一个 Chrome 实例
+- clone 模式可能丢失部分 session 状态
+
+### 方式二：chrome://inspect 开启
+
+1. 打开 `chrome://inspect/#remote-debugging`
+2. 勾选 "Allow remote debugging for this browser instance"
+
+**优点**：
+- 可以直接在当前浏览器上操作
+- 登录态完全保留
+
+**缺点**：
+- **每次 CDP 连接都会弹出授权确认框**
+- 需要用户手动点击"允许"
+
+### 避免重复授权的策略
+
+如果使用 `chrome://inspect` 方式：
+- **保持 CDP Proxy 长期运行**，不要频繁重启
+- Proxy 只要不断开 WebSocket 连接，就不会再弹授权框
+- 如果 Proxy 意外断开，重新连接时会再次弹窗
+
 ## API 端点
 
 ### GET /health
@@ -104,3 +149,49 @@ curl -s "http://localhost:3456/screenshot?target=ID&file=/tmp/shot.png"
 | `attach 失败` | targetId 无效或 tab 已关闭 | 用 `/targets` 获取最新列表 |
 | `CDP 命令超时` | 页面长时间未响应 | 重试或检查 tab 状态 |
 | `端口已被占用` | 另一个 proxy 已在运行 | 已有实例可直接复用 |
+
+## 操作 xterm.js 终端
+
+部分平台内嵌了 xterm.js 终端。通过 `/eval` 发送键盘事件来输入命令：
+
+### 发送命令到终端
+
+```javascript
+// 通过 /eval 执行以下 JS
+(() => {
+  const textarea = document.querySelector(".xterm-helper-textarea");
+  if (!textarea) return { error: "未找到终端" };
+  
+  textarea.focus();
+  
+  // 发送字符（用 keypress）
+  const text = "ls -la";
+  for (const char of text) {
+    const pressEvent = new KeyboardEvent("keypress", {
+      key: char,
+      charCode: char.charCodeAt(0),
+      bubbles: true
+    });
+    textarea.dispatchEvent(pressEvent);
+  }
+  
+  // 发送 Enter 执行（用 keydown）
+  const enterDown = new KeyboardEvent("keydown", {
+    key: "Enter",
+    code: "Enter",
+    keyCode: 13,
+    which: 13,
+    bubbles: true
+  });
+  textarea.dispatchEvent(enterDown);
+  
+  return { sent: text };
+})()
+```
+
+### 注意事项
+
+- **不要同时发 keydown + keypress**：会导致字符重复
+- **字符用 keypress，Enter 用 keydown**
+- xterm 可能在 iframe 或 shadow DOM 中，需要先定位正确的 document
+- 如果终端未聚焦，先点击终端区域：`/clickAt` + `.terminal.xterm`
