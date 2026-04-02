@@ -45,12 +45,17 @@ bash /path/to/chrome-profile-cdp-skill/scripts/start_profiled_debug_chrome.sh ht
 - **每次 CDP 连接都会弹出授权确认框**
 - 需要用户手动点击"允许"
 
-### 避免重复授权的策略
+### 推荐策略：保持 Proxy 常驻
 
 如果使用 `chrome://inspect` 方式：
 - **保持 CDP Proxy 长期运行**，不要频繁重启
 - Proxy 只要不断开 WebSocket 连接，就不会再弹授权框
 - 如果 Proxy 意外断开，重新连接时会再次弹窗
+
+**实践建议**：
+1. 使用 `nohup` 或 `&` 后台运行 Proxy
+2. 不要在每次调用 skill 时重启 Proxy
+3. 通过 `/health` 检查 Proxy 是否存活，存活则复用
 
 ## API 端点
 
