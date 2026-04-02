@@ -86,6 +86,25 @@ bash ./scripts/check-deps.sh --launch-clone
 - `--launch-clone` 会尝试调用同工作区下的 `chrome-profile-cdp-skill`
 - 除非用户明确接受，不要主动替用户拉起新的 Chrome 实例
 
+### 保持 Proxy 常驻（推荐）
+
+使用 `chrome://inspect` 方式时，每次新建 WebSocket 连接都会弹出 Chrome 授权确认框。
+
+**避免重复弹窗的方法**：保持 CDP Proxy 常驻运行。
+
+```bash
+# 检查 Proxy 是否存活
+curl -s http://localhost:3456/health | grep -q '"connected":true' && echo "Proxy 已运行"
+
+# 只有不存在时才启动
+curl -s http://localhost:3456/health | grep -q '"connected":true' || node ./scripts/cdp-proxy.mjs &
+```
+
+**注意**：
+- Proxy 存活期间复用同一个 WebSocket 连接，不会再弹授权框
+- 只有 Proxy 重启或 Chrome 重启时才需要重新授权
+- 建议将 Proxy 作为长期后台进程运行
+
 ## Proxy API
 
 ```bash
