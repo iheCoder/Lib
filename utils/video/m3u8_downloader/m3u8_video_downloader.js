@@ -33,6 +33,8 @@
 // @updateURL https://update.greasyfork.org/scripts/449581/m3u8%E8%A7%86%E9%A2%91%E4%BE%A6%E6%B5%8B%E4%B8%8B%E8%BD%BD%E5%99%A8%E3%80%90%E8%87%AA%E5%8A%A8%E5%97%85%E6%8E%A2%E3%80%91.meta.js
 // ==/UserScript==
 
+/* global m3u8Parser */
+
 (function () {
     'use strict';
 
@@ -59,9 +61,13 @@
         }
     };
     let l = navigator.language || "en";
-    if (l.startsWith("en-")) l = "en";
-    else if (l.startsWith("zh-")) l = "zh-CN";
-    else l = "en";
+    if (l.startsWith("en-")) {
+        l = "en";
+    } else if (l.startsWith("zh-")) {
+        l = "zh-CN";
+    } else {
+        l = "en";
+    }
     const T = T_langs[l] || T_langs["zh-CN"];
 
     if (location.host.endsWith('mail.qq.com')) {
@@ -898,7 +904,9 @@
     rootDiv.style = `
         position: fixed;
         z-index: 9999999999999999;
-        opacity: 0.9;
+        width: min(420px, calc(100vw - 24px));
+        max-height: calc(100vh - 24px);
+        pointer-events: none;
     `;
     rootDiv.style.display = "none";
     document.documentElement.appendChild(rootDiv);
@@ -911,28 +919,26 @@
     // 指示器
     const bar = document.createElement("div");
     bar.style = `
-        text-align: right;
+        display: flex;
+        justify-content: flex-end;
     `;
     bar.innerHTML = `
         <span
             class="number-indicator"
             data-number="0"
+            role="button"
+            tabindex="0"
+            aria-label="Toggle downloader panel"
             style="
                 display: inline-flex;
-                width: 25px;
-                height: 25px;
-                background: black;
-                padding: 10px;
-                border-radius: 100px;
-                margin-bottom: 5px;
-                cursor: pointer;
-                border: 3px solid #83838382;
+                align-items: center;
+                justify-content: center;
+                width: 42px;
+                height: 42px;
             "
         >
             <svg
-            style="
-                filter: invert(1);
-            "
+            class="indicator-icon"
             version="1.1" id="Capa_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 585.913 585.913" style="enable-background:new 0 0 585.913 585.913;" xml:space="preserve">
                 <g>
                     <path d="M11.173,46.2v492.311l346.22,47.402V535.33c0.776,0.058,1.542,0.109,2.329,0.109h177.39
@@ -958,88 +964,439 @@
             </svg>
         </span>
     `;
-
-    wrapper.appendChild(bar);
-
     // 样式
     const style = document.createElement("style");
 
     style.innerHTML = `
+        :host {
+            --wt-panel-bg: rgba(12, 16, 24, 0.94);
+            --wt-panel-bg-strong: rgba(9, 13, 19, 0.98);
+            --wt-panel-stroke: rgba(255, 255, 255, 0.08);
+            --wt-panel-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+            --wt-accent: #7dd3fc;
+            --wt-accent-strong: #38bdf8;
+            --wt-text: rgba(248, 250, 252, 0.96);
+            --wt-text-muted: rgba(148, 163, 184, 0.92);
+            --wt-row-bg: rgba(255,255,255,0.03);
+            --wt-row-border: rgba(255,255,255,0.06);
+            --wt-chip-bg: rgba(56, 189, 248, 0.12);
+            --wt-chip-text: #b8e7ff;
+            --wt-btn-bg: rgba(255,255,255,0.04);
+            --wt-btn-border: rgba(255,255,255,0.08);
+            --wt-btn-text: rgba(241, 245, 249, 0.96);
+            --wt-btn-primary-bg: #f8fafc;
+            --wt-btn-primary-text: #0f172a;
+            --wt-btn-danger-bg: rgba(239, 68, 68, 0.14);
+            --wt-btn-danger-text: #fecaca;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                transition: none !important;
+                animation: none !important;
+            }
+        }
+
+        #panel-anchor {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+            pointer-events: auto;
+        }
+
+        #panel-shell {
+            pointer-events: auto;
+            position: relative;
+            width: min(360px, calc(100vw - 24px));
+            border-radius: 18px;
+            overflow: hidden;
+            background: var(--wt-panel-bg);
+            border: 1px solid var(--wt-panel-stroke);
+            box-shadow: var(--wt-panel-shadow);
+            backdrop-filter: blur(16px) saturate(135%);
+            -webkit-backdrop-filter: blur(16px) saturate(135%);
+            transform-origin: top right;
+            transition: opacity 160ms ease, transform 180ms ease;
+        }
+
+        #panel-content {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            font-family: "SF Pro Display", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 12px 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            background: linear-gradient(180deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0.01) 100%);
+        }
+
+        .panel-heading {
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .panel-title {
+            color: var(--wt-text);
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+        }
+
+        .panel-subtitle {
+            color: var(--wt-text-muted);
+            font-size: 11px;
+            line-height: 1.35;
+            margin-top: 2px;
+        }
+
+        .panel-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 0 0 auto;
+        }
+
+        .panel-control {
+            appearance: none;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.04);
+            color: var(--wt-text-muted);
+            min-width: 28px;
+            height: 28px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 700;
+            transition: background 140ms ease, color 140ms ease, border-color 140ms ease, transform 140ms ease;
+        }
+
+        .panel-control:hover {
+            background: rgba(255,255,255,0.08);
+            color: var(--wt-text);
+            border-color: rgba(255,255,255,0.12);
+        }
+
+        .panel-control:active {
+            transform: scale(0.97);
+        }
+
+        #panel-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: min(56vh, 480px);
+            overflow: auto;
+            padding: 10px;
+        }
+
+        #panel-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #panel-list::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.16);
+            border-radius: 999px;
+        }
+
         .number-indicator{
-            position:relative;
+            position: relative;
+            cursor: pointer;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(15, 23, 42, 0.8);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+            color: var(--wt-text);
+            transform: translateY(0) scale(1);
+            transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease;
+            touch-action: manipulation;
+        }
+
+        .number-indicator:hover{
+            transform: translateY(-1px) scale(1.02);
+            border-color: rgba(125,211,252,0.22);
+            background: rgba(15, 23, 42, 0.92);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
+        }
+
+        .number-indicator:active{
+            transform: scale(0.97);
+        }
+
+        .number-indicator:focus-visible,
+        .m3u8-action:focus-visible,
+        .wtmzjk-btn:focus-visible{
+            outline: 2px solid rgba(108,231,255,0.78);
+            outline-offset: 2px;
+        }
+
+        .indicator-icon{
+            width: 17px;
+            height: 17px;
+            fill: currentColor;
         }
 
         .number-indicator::after{
             content: attr(data-number);
             position: absolute;
-            bottom: 0;
-            right: 0;
-            color: #40a9ff;
-            font-size: 14px;
-            font-weight: bold;
-            background: #000;
-            border-radius: 10px;
-            padding: 3px 5px;
+            top: -4px;
+            right: -4px;
+            min-width: 18px;
+            height: 18px;
+            display: grid;
+            place-items: center;
+            color: #e0f2fe;
+            font-size: 10px;
+            line-height: 1;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            background: rgba(56, 189, 248, 0.16);
+            border: 1px solid rgba(125,211,252,0.22);
+            border-radius: 999px;
+            padding: 0 5px;
         }
 
-        .copy-link:active{
-            color: #ccc;
+        .m3u8-action{
+            appearance: none;
+            border: 1px solid var(--wt-btn-border);
+            background: var(--wt-btn-bg);
+            color: var(--wt-btn-text);
+            min-height: 38px;
+            padding: 0 14px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            transition: transform 180ms ease, background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+            white-space: nowrap;
         }
 
-        .download-btn:hover{
-            text-decoration: underline;
-        }
-        .download-btn:active{
-            opacity: 0.9;
-        }
-
-        .stop-btn:hover{
-            text-decoration: underline;
-        }
-        .stop-btn:active{
-            opacity: 0.9;
+        .m3u8-action:hover{
+            transform: translateY(-1px);
+            border-color: rgba(255,255,255,0.18);
+            background: rgba(255,255,255,0.12);
+            box-shadow: 0 10px 20px rgba(15,23,42,0.22);
         }
 
-        .m3u8-item{
-            color: white;
-            margin-bottom: 5px;
+        .m3u8-action:active{
+            transform: scale(0.98);
+        }
+
+        .m3u8-action.primary{
+            background: var(--wt-btn-primary-bg);
+            color: var(--wt-btn-primary-text);
+            border-color: rgba(255,255,255,0.14);
+            box-shadow: none;
+        }
+
+        .m3u8-action.danger{
+            background: var(--wt-btn-danger-bg);
+            color: var(--wt-btn-danger-text);
+            border-color: rgba(248,113,113,0.14);
+            box-shadow: none;
+        }
+
+        .m3u8-meta{
             display: flex;
-            flex-direction: row;
-            background: black;
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-size: 14px;
-            user-select: none;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
         }
 
-        [data-shown="false"] {
-            opacity: 0.8;
-            zoom: 0.8;
+        .m3u8-kind{
+            flex: 0 0 auto;
+            display: inline-flex;
+            align-items: center;
+            min-height: 26px;
+            padding: 0 10px;
+            border-radius: 999px;
+            background: var(--wt-chip-bg);
+            color: var(--wt-chip-text);
+            border: 1px solid rgba(98, 232, 255, 0.14);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
         }
 
-        [data-shown="false"]:hover{
-            opacity: 1;
+        .m3u8-url{
+            min-width: 0;
+            color: var(--wt-text);
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
-        [data-shown="false"] .m3u8-item{
+        .m3u8-duration{
+            color: var(--wt-text-muted);
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .m3u8-actions{
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .progress{
+            display: none;
+            align-items: center;
+            min-height: 38px;
+            padding: 0 12px;
+            border-radius: 999px;
+            background: rgba(108, 231, 255, 0.08);
+            color: #d9fbff;
+            border: 1px solid rgba(108, 231, 255, 0.16);
+            font-size: 12px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+
+        .stop-btn{
             display: none;
         }
 
+        .m3u8-item{
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            color: var(--wt-text);
+            padding: 12px;
+            border-radius: 14px;
+            background: var(--wt-row-bg);
+            border: 1px solid var(--wt-row-border);
+            user-select: none;
+            transition: border-color 140ms ease, background 140ms ease;
+        }
+
+        .m3u8-item:hover{
+            border-color: rgba(125,211,252,0.14);
+            background: rgba(255,255,255,0.045);
+        }
+
+        [data-shown="false"] {
+            opacity: 1;
+        }
+
+        [data-shown="false"] #panel-shell{
+            display: none;
+        }
+
+        [data-hidden="true"] #panel-shell,
+        [data-hidden="true"] .number-indicator{
+            display: none;
+        }
+
+        /* 本页关闭：隐藏面板主体，但保留托盘图标以便随时恢复 */
+        [data-dismissed="true"] #panel-shell{
+            display: none;
+        }
+
+        .number-indicator[data-number="0"]::after{
+            display: none;
+        }
+
+        @media (max-width: 640px){
+            #panel-shell{
+                width: min(340px, calc(100vw - 20px));
+            }
+
+            .m3u8-item{
+                padding: 12px;
+            }
+
+            .m3u8-meta{
+                flex-wrap: wrap;
+            }
+
+            .m3u8-actions{
+                justify-content: stretch;
+            }
+
+            .m3u8-actions > *{
+                flex: 1 1 auto;
+                justify-content: center;
+            }
+        }
     `;
 
+    wrapper.innerHTML = `
+        <div id="panel-anchor">
+            <div id="panel-shell">
+                <div id="panel-content">
+                    <div class="panel-header">
+                        <div class="panel-heading">
+                            <div class="panel-title">Captured Media</div>
+                            <div class="panel-subtitle">Compact capture tray for links and streams</div>
+                        </div>
+                        <div class="panel-controls">
+                            <button class="panel-control" type="button" data-panel-action="collapse" title="Collapse">-</button>
+                            <button class="panel-control" type="button" data-panel-action="hide" title="Hide">x</button>
+                        </div>
+                    </div>
+                    <div id="panel-list"></div>
+                </div>
+            </div>
+        </div>
+    `;
     wrapper.appendChild(style);
-
-
-
-
+    const panelAnchor = wrapper.querySelector("#panel-anchor");
+    panelAnchor.appendChild(bar);
+    const panelShell = wrapper.querySelector("#panel-shell");
+    const panelList = wrapper.querySelector("#panel-list");
+    const collapseBtn = wrapper.querySelector('[data-panel-action="collapse"]');
+    const hideBtn = wrapper.querySelector('[data-panel-action="hide"]');
     const barBtn = bar.querySelector(".number-indicator");
+    let count = 0;
 
     // 关于显隐和移动
 
     (async function () {
 
         let shown = await GM_getValue("shown", true);
+        let hidden = await GM_getValue("hidden", false);
+        let dismissed = false; // 仅当前页有效，不持久化；关闭面板主体但保留托盘图标
+
+        // ── 版本迁移 ──────────────────────────────────────────────────────
+        // v1.6.0 将"x"按钮改为页面级 dismissed，hidden 仅由 Alt+Shift+D 写入。
+        // 旧版若通过"x"写入了 hidden=true，启动时自动重置，避免面板永久消失。
+        const _MIGRATION_KEY = "wt_migrated_v1_6_0";
+        const _migrated = await GM_getValue(_MIGRATION_KEY, false);
+        if (!_migrated) {
+            if (hidden) {
+                hidden = false;
+                mgmapi.setValue("hidden", false);
+            }
+            mgmapi.setValue(_MIGRATION_KEY, true);
+        }
+        // ─────────────────────────────────────────────────────────────────
         wrapper.setAttribute("data-shown", shown);
+        wrapper.setAttribute("data-hidden", hidden);
+        wrapper.setAttribute("data-dismissed", dismissed);
 
 
         let x = await GM_getValue("x", 10);
@@ -1053,6 +1410,17 @@
 
         rootDiv.style.top = `${y}px`;
         rootDiv.style.right = `${x}px`;
+
+        function setPanelVisibility() {
+            wrapper.setAttribute("data-shown", shown);
+            wrapper.setAttribute("data-hidden", hidden);
+            wrapper.setAttribute("data-dismissed", dismissed);
+            collapseBtn.textContent = shown ? "−" : "+";
+            collapseBtn.title = shown ? "Collapse" : "Expand";
+            rootDiv.style.display = (hidden || !count) ? "none" : "block";
+        }
+
+        setPanelVisibility();
 
         barBtn.addEventListener("mousedown", e => {
             let startX = e.pageX;
@@ -1080,9 +1448,18 @@
                     mgmapi.setValue("x", x);
                     mgmapi.setValue("y", y);
                 } else {
-                    shown = !shown;
-                    mgmapi.setValue("shown", shown);
-                    wrapper.setAttribute("data-shown", shown);
+                    if (dismissed) {
+                        // 从本页关闭状态恢复：清除 dismissed，并确保面板展开
+                        dismissed = false;
+                        if (!shown) {
+                            shown = true;
+                            mgmapi.setValue("shown", shown);
+                        }
+                    } else {
+                        shown = !shown;
+                        mgmapi.setValue("shown", shown);
+                    }
+                    setPanelVisibility();
                 }
 
                 removeEventListener("mousemove", mousemove);
@@ -1091,10 +1468,58 @@
             addEventListener("mousemove", mousemove);
             addEventListener("mouseup", mouseup);
         });
+
+        barBtn.addEventListener("keydown", e => {
+            if (e.key !== "Enter" && e.key !== " ") return;
+            e.preventDefault();
+            if (dismissed) {
+                dismissed = false;
+                if (!shown) {
+                    shown = true;
+                    mgmapi.setValue("shown", shown);
+                }
+            } else {
+                shown = !shown;
+                mgmapi.setValue("shown", shown);
+            }
+            setPanelVisibility();
+        });
+
+        collapseBtn.addEventListener("click", () => {
+            shown = !shown;
+            mgmapi.setValue("shown", shown);
+            setPanelVisibility();
+        });
+
+        hideBtn.addEventListener("click", () => {
+            // 仅关闭当前页的面板，不持久化；托盘图标保持可见，点击即可恢复
+            dismissed = true;
+            setPanelVisibility();
+        });
+
+        window.addEventListener("keydown", (e) => {
+            if (!e.altKey || !e.shiftKey || String(e.key).toLowerCase() !== "d") return;
+            hidden = !hidden;
+            mgmapi.setValue("hidden", hidden);
+            if (!hidden) {
+                shown = true;
+                dismissed = false;
+                mgmapi.setValue("shown", shown);
+            }
+            setPanelVisibility();
+            mgmapi.message(hidden ? "已永久隐藏下载组件（Alt+Shift+D 恢复）" : "已恢复下载组件", 2500);
+        });
+
+        rootDiv.__setPanelVisibility = setPanelVisibility;
+
+        // 检测到新资源时调用：清除本页关闭状态，让面板重新弹出
+        rootDiv.__onNewResource = () => {
+            dismissed = false;
+            setPanelVisibility();
+        };
     })();
 
 
-    let count = 0;
     // 统一资源索引：
     // 以后无论是 m3u8、直链视频，还是其他可下载资源，都可以往这个 store 里挂统一元数据，
     // 避免继续依赖单一 Set/数组导致状态越来越散。
@@ -1307,55 +1732,17 @@
         let div = document.createElement("div");
         div.className = "m3u8-item";
         div.innerHTML = `
-            <span ${type == "m3u8" ? "style=\"color:#40a9ff\"" : ""}>${type}</span>
-            <span
-                title="${url}"
-                style="
-                    color: #ccc;
-                    font-size: small;
-                    max-width: 200px;
-                    text-overflow: ellipsis;
-                    white-space: nowrap;
-                    overflow: hidden;
-                    margin-left: 10px;
-                "
-            >${url.pathname}</span>
-            <span
-                style="
-                    color: #ccc;
-                    margin-left: 10px;
-                    flex-grow: 1;
-                "
-            >${duration}</span>
-            <span
-                class="copy-link"
-                title="${url}"
-                style="
-                    margin-left: 10px;
-                    cursor: pointer;
-                "
-            >${T.copy}</span>
-            <span
-                class="download-btn"
-                style="
-                    margin-left: 10px;
-                    cursor: pointer;
-            ">${T.download}</span>
-            <span>
-                <span
-                    class="progress"
-                    style="
-                        display: none;
-                        margin-left: 10px;
-                    "
-                ></span>
-            <span
-                class="stop-btn"
-                style="
-                    display: none;
-                    margin-left: 10px;
-                    cursor: pointer;
-            ">${T.stop}</span>
+            <div class="m3u8-meta">
+                <span class="m3u8-kind">${type}</span>
+                <span class="m3u8-url" title="${url.href}">${url.pathname || url.href}</span>
+                <span class="m3u8-duration">${duration}</span>
+            </div>
+            <div class="m3u8-actions">
+                <button class="m3u8-action copy-link" type="button" title="${url.href}">${T.copy}</button>
+                <button class="m3u8-action primary download-btn" type="button">${T.download}</button>
+                <span class="progress"></span>
+                <button class="m3u8-action danger stop-btn" type="button">${T.stop}</button>
+            </div>
         `;
 
 
@@ -1380,16 +1767,15 @@
             cancelDownload && cancelDownload();
         });
 
-        rootDiv.style.display = "block";
-
         count++;
 
         // UI 展示成功后再登记，避免失败分支把资源永久标记为“已展示”。
         markResourceRendered(type, url.href);
 
         bar.querySelector(".number-indicator").setAttribute("data-number", count);
+        rootDiv.__onNewResource?.();
 
-        wrapper.appendChild(div);
+        panelList.appendChild(div);
 
         return {
             // 通过这个方法让下载逻辑把状态同步回 UI。
@@ -1477,10 +1863,18 @@
             .wtmzjk-btn-group {
                 display: inline-flex;
                 align-items: center;
-                margin: 2px 8px;
-                border-radius: 6px; /* 整体圆角 */
-                overflow: hidden;   /* 确保子元素不溢出圆角 */
-                box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+                gap: 8px;
+                margin: 4px 10px;
+                padding: 4px;
+                border-radius: 999px;
+                border: 1px solid rgba(255,255,255,0.12);
+                background:
+                    linear-gradient(180deg, rgba(12,17,31,0.9) 0%, rgba(8,12,24,0.96) 100%);
+                box-shadow:
+                    0 14px 30px rgba(15, 23, 42, 0.24),
+                    inset 0 1px 0 rgba(255,255,255,0.1);
+                backdrop-filter: blur(18px) saturate(150%);
+                -webkit-backdrop-filter: blur(18px) saturate(150%);
                 vertical-align: middle;
                 font-size: 12px;
                 line-height: 1;
@@ -1492,35 +1886,47 @@
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                padding: 6px 10px;
+                min-height: 36px;
+                padding: 0 14px;
+                border-radius: 999px;
                 cursor: pointer;
-                background: #306eff;; /* 主色调，可调整 */
-                color: white;
-                border: none;
-                font-family: sans-serif;
+                background: rgba(255,255,255,0.08);
+                color: rgba(247,250,255,0.96);
+                border: 1px solid rgba(255,255,255,0.1);
+                font-family: "SF Pro Display", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
                 font-size: inherit;
-                font-weight: 600;
-                transition: background 0.2s, filter 0.2s;
+                font-weight: 700;
+                letter-spacing: 0.02em;
+                transition: transform 180ms ease, background 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
                 text-decoration: none;
-                height: 24px;
                 box-sizing: border-box;
             }
 
             .wtmzjk-btn:hover {
-                background: #497dfd; /* Hover 深色 */
+                transform: translateY(-1px);
+                background: rgba(255,255,255,0.12);
+                border-color: rgba(108,231,255,0.2);
+                box-shadow: 0 8px 18px rgba(15,23,42,0.22);
             }
 
             .wtmzjk-btn:active {
-                background: #1e5ced; /* Active 更深 */
+                transform: scale(0.98);
+            }
+
+            .wtmzjk-btn[data-wtmzjk-action="play"] {
+                background: linear-gradient(135deg, #6ce7ff 0%, #4f8dff 100%);
+                color: #061320;
+                border-color: rgba(113,220,255,0.3);
+                box-shadow: 0 10px 22px rgba(79, 141, 255, 0.32);
             }
 
             /* 图标样式 */
             .wtmzjk-btn svg, .wtmzjk-btn img {
                 height: 14px;
                 width: 14px;
-                fill: white;
+                fill: currentColor;
                 pointer-events: none;
-                margin-right: 4px; /* 图标与文字间距 */
+                margin-right: 6px;
             }
 
             /* 仅图标模式修正 */
@@ -1528,9 +1934,9 @@
                 margin-right: 0;
             }
 
-            /* 分割线：通过右边框实现 */
-            .wtmzjk-btn:not(:last-child) {
-                border-right: 1px solid rgba(255, 255, 255, 0.3);
+            .wtmzjk-btn:focus-visible {
+                outline: 2px solid rgba(108,231,255,0.78);
+                outline-offset: 2px;
             }
         `);
 
@@ -1572,10 +1978,11 @@
                 // 实现复制功能
                 mgmapi.copyText(url).then(() => {
                     // 简单的视觉反馈
-                    const originalText = target.querySelector('span').innerText;
-                    target.querySelector('span').innerText = T.copied;
+                    const label = target.querySelector('span') || target;
+                    const originalText = label.innerText;
+                    label.innerText = T.copied;
                     setTimeout(() => {
-                        target.querySelector('span').innerText = originalText;
+                        label.innerText = originalText;
                     }, 2000);
                 }).catch(err => {
                     console.error('Copy failed', err);
@@ -1747,19 +2154,25 @@
     }
 
     function whenDOMReady(f) {
-        if (document.body) f();
-        else window.addEventListener("DOMContentLoaded", function l() {
-            window.removeEventListener("DOMContentLoaded", l);
+        if (document.body) {
             f();
-        });
+        } else {
+            window.addEventListener("DOMContentLoaded", function l() {
+                window.removeEventListener("DOMContentLoaded", l);
+                f();
+            });
+        }
     }
 
     function whenLoad(f) {
-        if (document.body) f();
-        else window.addEventListener("load", function l() {
-            window.removeEventListener("load", l);
+        if (document.body) {
             f();
-        });
+        } else {
+            window.addEventListener("load", function l() {
+                window.removeEventListener("load", l);
+                f();
+            });
+        }
     }
 
     function sleep(t) {
