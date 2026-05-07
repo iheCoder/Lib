@@ -714,6 +714,32 @@
     // queue 记录真正待消费的任务体。
     const pendingM3UDetections = new Set();
     const queuedM3UDetections = new Map();
+    // 捕获上下文窗口：
+    // 多数播放站点会在用户点击某一集、某张卡片或播放按钮后的短时间内请求 m3u8。
+    // 因此这里记录最近一次用户交互附近的可见文案，并只在有限时间内复用，
+    // 避免很久之前点过的标题误标到后续自动预加载的视频上。
+    const MEDIA_CONTEXT_TTL = 15000;
+    const MAX_CONTEXT_TEXT_LENGTH = 96;
+    const MAX_DESCRIPTION_TEXT_LENGTH = 120;
+    const MEDIA_CONTEXT_SELECTOR = [
+        "article",
+        "[role='article']",
+        "li",
+        "section",
+        "[role='listitem']",
+        "[data-title]",
+        "[data-name]",
+        ".video",
+        ".video-item",
+        ".episode",
+        ".playlist",
+        ".card",
+        ".item"
+    ].join(",");
+    let lastUserMediaContext = null;
+    let panelRootElement = null;
+    const mediaDisplayCounters = new Map();
+    const usedMediaContextRoots = new WeakSet();
     
     // 资源 URL 规范化：
     // 1. 兼容相对路径；
@@ -759,6 +785,214 @@
         return String(input);
     }
 
+    // HTML 转义只用于把页面可见文案安全放回 innerHTML 模板。
+    // m3u8 捕获上下文来自目标站点 DOM，不能假设它是可信字符串。
+    function escapeHtml(value) {
+        return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            "\"": "&quot;",
+            "'": "&#39;"
+        }[char]));
+    }
+
+    // 统一清理展示文案：
+    // 去掉多余空白和控制字符，保证标题在紧凑面板里可读，也避免超长卡片文案撑爆布局。
+    function normalizeDisplayText(value, maxLength = MAX_CONTEXT_TEXT_LENGTH) {
+        const text = String(value || "")
+            .replace(/[\u0000-\u001f\u007f]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+        if (!text) return "";
+        return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+    }
+
+    // 媒体标题清洗只处理高置信度噪声：
+    // 1. 浏览器标题里的未读计数，例如 "(21) 标题"；
+    // 2. 社交站点常见的纯账号括号，例如 "标题 (@handle)"。
+    // 不尝试“猜测”内容含义，避免把真实片名误删。
+    function normalizeMediaTitle(value) {
+        const text = normalizeDisplayText(value)
+            .replace(/^\(\d+\)\s*/, "")
+            .replace(/\s*\(@[A-Za-z0-9_]{2,}\)\s*$/, "")
+            .trim();
+        return normalizeDisplayText(text || value);
+    }
+
+    // 图片地址可能是相对路径、blob 或站点自定义占位值。
+    // 统一在这里解析，失败就放弃预览，不让某个坏 src 影响资源捕获。
+    function resolveOptionalUrl(value) {
+        if (!value) return "";
+        try {
+            return new URL(value, location.href).href;
+        } catch {
+            return "";
+        }
+    }
+
+    // 判断候选卡片是否真的在当前视口附近。
+    // 信息流页面会保留大量离屏 DOM，直接扫全文会把不相关的视频描述混进来。
+    function isElementNearViewport(element) {
+        if (!(element instanceof Element)) return false;
+        const rect = element.getBoundingClientRect();
+        if (rect.width < 24 || rect.height < 24) return false;
+        return rect.bottom >= -innerHeight * 0.25
+            && rect.top <= innerHeight * 1.25
+            && rect.right >= 0
+            && rect.left <= innerWidth;
+    }
+
+    // 读取媒体预览图。
+    // 对真正的 <video> 优先用 poster；信息流站点常把视频封面作为普通 <img> 放在同一卡片里。
+    function readPreviewImage(root) {
+        if (!(root instanceof Element)) return "";
+        const video = root.matches("video") ? root : root.querySelector("video");
+        const poster = video?.getAttribute("poster");
+        const posterUrl = resolveOptionalUrl(poster);
+        if (posterUrl) return posterUrl;
+
+        const image = Array.from(root.querySelectorAll("img"))
+            .find((img) => {
+                const rect = img.getBoundingClientRect();
+                return (img.currentSrc || img.src) && rect.width >= 48 && rect.height >= 48;
+            });
+        return image ? resolveOptionalUrl(image.currentSrc || image.src) : "";
+    }
+
+    // 作者/账号是比页面标题更可靠的媒体归属信号。
+    // 这里优先读常见语义节点；如果站点没有结构化标记，就保持为空，不硬猜。
+    function readMediaAuthor(root) {
+        if (!(root instanceof Element)) return "";
+        const author = root.querySelector(
+            "[data-testid='User-Name'], [rel='author'], [itemprop='author'], [class*='author'], [class*='user'], [class*='name']"
+        );
+        return normalizeMediaTitle(author?.innerText || author?.textContent || "");
+    }
+
+    // 正文描述优先来自常见正文节点。
+    // 兜底读卡片文本时会过滤按钮与过短文案，避免再次出现“Posts liked by”这类页面级噪声。
+    function readMediaDescription(root) {
+        if (!(root instanceof Element)) return "";
+        const textNode = root.querySelector(
+            "[data-testid='tweetText'], [itemprop='description'], [class*='description'], [class*='desc'], [class*='caption'], p"
+        );
+        const primaryText = normalizeDisplayText(textNode?.innerText || textNode?.textContent || "", MAX_DESCRIPTION_TEXT_LENGTH);
+        if (primaryText) return primaryText;
+
+        const fallbackText = normalizeDisplayText(root.innerText || root.textContent || "", MAX_DESCRIPTION_TEXT_LENGTH);
+        const lowSignal = /^(posts liked by|for you|following|copy link|download|play|share|like|reply)$/i;
+        return fallbackText && !lowSignal.test(fallbackText) ? fallbackText : "";
+    }
+
+    // 从一个 DOM 根生成“人类可读”的媒体上下文。
+    // 目标不是精确反解网络请求，而是给下载列表提供足够接近视频实体的线索：
+    // 预览图 > 作者 > 正文描述，页面标题不参与这里的主判断。
+    function readMediaContextFromRoot(root) {
+        if (!(root instanceof Element)) return null;
+        const author = readMediaAuthor(root);
+        const description = readMediaDescription(root);
+        const previewUrl = readPreviewImage(root);
+        if (!author && !description && !previewUrl) return null;
+
+        return {
+            title: author || "页面视频",
+            source: description || "可见媒体卡片",
+            previewUrl,
+            root,
+            capturedAt: Date.now()
+        };
+    }
+
+    // 在没有明确点击上下文时，从视口内的媒体卡片里拿一个候选。
+    // 每个根节点只消费一次，避免一批 m3u8 全部被同一条推文/卡片描述刷屏；
+    // 如果同一个视频确实有多条线路，下面的“线路 N”仍能区分。
+    function pickVisibleMediaContext() {
+        const roots = Array.from(document.querySelectorAll(MEDIA_CONTEXT_SELECTOR))
+            .filter((root) => !usedMediaContextRoots.has(root) && isElementNearViewport(root));
+
+        for (const root of roots) {
+            const context = readMediaContextFromRoot(root);
+            if (!context) continue;
+            usedMediaContextRoots.add(root);
+            return context;
+        }
+
+        return null;
+    }
+
+    // 读取一个元素最像“媒体标题”的文案。
+    // 顺序上先看结构化属性和标题节点，再退回到容器可见文本；
+    // 这样能避开按钮自身只有“播放/下载”这类低信息量文案的问题。
+    function readMediaContextText(element) {
+        if (!(element instanceof Element)) return "";
+
+        const attrText = ["data-title", "data-name", "aria-label", "title", "alt"]
+            .map((name) => element.getAttribute(name))
+            .find(Boolean);
+        if (attrText) return normalizeMediaTitle(attrText);
+
+        const heading = element.querySelector("h1,h2,h3,h4,h5,h6,[data-title],[title],[aria-label]");
+        if (heading && heading !== element) {
+            const headingText = readMediaContextText(heading) || heading.textContent;
+            const normalizedHeading = normalizeMediaTitle(headingText);
+            if (normalizedHeading) return normalizedHeading;
+        }
+
+        return normalizeMediaTitle(element.innerText || element.textContent);
+    }
+
+    // 记录最近交互上下文。
+    // 这里只在事件发生时做少量 DOM 读取，不放在网络拦截热路径里，避免每个请求都扫描页面。
+    function rememberUserMediaContext(event) {
+        const target = event.target instanceof Element ? event.target : event.target?.parentElement;
+        if (!target) return;
+        if (panelRootElement && panelRootElement.contains(target)) return;
+
+        const root = target.closest(MEDIA_CONTEXT_SELECTOR) || target;
+        const context = readMediaContextFromRoot(root);
+        const label = context?.title || readMediaContextText(root);
+        if (!label && !context?.previewUrl) return;
+
+        lastUserMediaContext = {
+            title: label || "页面视频",
+            source: context?.source || "最近点击的媒体卡片",
+            previewUrl: context?.previewUrl || "",
+            capturedAt: Date.now()
+        };
+    }
+
+    // 为资源生成最终展示上下文。
+    // 设计上故意不把原始 URL 放进可见文案：视频 CDN 路径通常是随机哈希，
+    // 对人类判断“我要下哪一个视频”没有帮助，只适合放在 hover 与复制链接里排查。
+    function createMediaDisplayContext(rawUrl) {
+        const now = Date.now();
+        const userContextIsFresh = lastUserMediaContext
+            && (now - lastUserMediaContext.capturedAt) <= MEDIA_CONTEXT_TTL;
+        const visibleContext = userContextIsFresh ? null : pickVisibleMediaContext();
+        const context = userContextIsFresh ? lastUserMediaContext : visibleContext;
+
+        return {
+            title: context?.title || "页面视频",
+            source: context?.source || "未识别描述，可复制链接核对",
+            previewUrl: context?.previewUrl || "",
+            rawUrl,
+            capturedAt: now
+        };
+    }
+
+    // 同一个人类标题可能对应多个 m3u8：主备线路、不同 CDN、不同清晰度清单都会这样。
+    // 这里按标题分组生成“线路 N”，让列表项可区分，但不暴露随机哈希路径。
+    function nextMediaDisplayIndex(type, title) {
+        const key = `${type}:${normalizeDisplayText(title, 64).toLowerCase()}`;
+        const nextIndex = (mediaDisplayCounters.get(key) || 0) + 1;
+        mediaDisplayCounters.set(key, nextIndex);
+        return nextIndex;
+    }
+
+    window.addEventListener("pointerdown", rememberUserMediaContext, true);
+    window.addEventListener("click", rememberUserMediaContext, true);
+
     // URL 层面的轻量启发式判断。
     // 这里只是用来缩小候选范围，不要求百分之百准确。
     function isLikelyM3U8Url(rawUrl) {
@@ -792,7 +1026,11 @@
         }
 
         // 用 Set/Map 做去重和排队，避免同一资源被 fetch 与 XHR 双重命中后重复解析。
-        queuedM3UDetections.set(normalizedUrl, { url: normalizedUrl, content });
+        queuedM3UDetections.set(normalizedUrl, {
+            url: normalizedUrl,
+            content,
+            context: createMediaDisplayContext(normalizedUrl)
+        });
         pendingM3UDetections.add(normalizedUrl);
 
         if (!m3uQueueScheduled) {
@@ -901,6 +1139,7 @@
     }
 
     const rootDiv = document.createElement("div");
+    panelRootElement = rootDiv;
     rootDiv.style = `
         position: fixed;
         z-index: 9999999999999999;
@@ -1214,8 +1453,38 @@
         .m3u8-meta{
             display: flex;
             align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .m3u8-preview{
+            flex: 0 0 58px;
+            width: 58px;
+            height: 58px;
+            border-radius: 10px;
+            object-fit: cover;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .m3u8-preview[hidden]{
+            display: none;
+        }
+
+        .m3u8-info{
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+
+        .m3u8-main{
+            display: flex;
+            align-items: center;
             gap: 8px;
             min-width: 0;
+            width: 100%;
         }
 
         .m3u8-kind{
@@ -1234,18 +1503,31 @@
             text-transform: uppercase;
         }
 
-        .m3u8-url{
+        .m3u8-title{
             min-width: 0;
             color: var(--wt-text);
             font-size: 13px;
-            font-weight: 600;
+            font-weight: 750;
             letter-spacing: 0.01em;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
 
+        .m3u8-source{
+            min-width: 0;
+            width: 100%;
+            color: var(--wt-text-muted);
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1.35;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         .m3u8-duration{
+            flex: 0 0 auto;
             color: var(--wt-text-muted);
             font-size: 12px;
             font-weight: 600;
@@ -1330,6 +1612,16 @@
             }
 
             .m3u8-meta{
+                gap: 7px;
+            }
+
+            .m3u8-preview{
+                flex-basis: 52px;
+                width: 52px;
+                height: 52px;
+            }
+
+            .m3u8-main{
                 flex-wrap: wrap;
             }
 
@@ -1578,10 +1870,14 @@
         if (!shouldRenderResource("video", video.src)) return;
 
         const src = video.src;
+        const context = createMediaDisplayContext(src);
 
         let { updateDownloadState } = showVideo({
             type: "video",
             url: new URL(src),
+            title: context.title,
+            source: context.source,
+            previewUrl: context.previewUrl,
             duration: `${Math.ceil(video.duration * 10 / 60) / 10} ${T.mins}`,
             download() {
                 const details = {
@@ -1678,7 +1974,7 @@
 
     // 处理一个已经确认或高度怀疑为 m3u8 的资源。
     // 这一步负责 URL 规范化、清单解析和面板项渲染，不负责网络层拦截。
-    async function doM3U({ url, content }) {
+    async function doM3U({ url, content, context }) {
 
         url = new URL(url, location.href);
         const normalizedUrl = normalizeResourceUrl(url.href);
@@ -1704,9 +2000,13 @@
             manifest.duration = duration;
         }
 
+        const displayContext = context || createMediaDisplayContext(url.href);
         showVideo({
             type: "m3u8",
             url,
+            title: displayContext.title,
+            source: displayContext.source,
+            previewUrl: displayContext.previewUrl,
             duration: manifest.duration ? `${Math.ceil(manifest.duration * 10 / 60) / 10} ${T.mins}` : manifest.playlists ? `${T.multiLine}(${manifest.playlists.length})` : "未知(unknown)",
             async download() {
                 mgmapi.openInTab(
@@ -1724,21 +2024,33 @@
     // 渲染一个资源条目到悬浮面板。
     // 这里既是 UI 创建点，也是 UI 与下载任务之间的连接点。
     function showVideo({
-                           type,
-                           url,
-                           duration,
-                           download
-                       }) {
+        type,
+        url,
+        title,
+        source,
+        previewUrl,
+        duration,
+        download
+    }) {
         let div = document.createElement("div");
         div.className = "m3u8-item";
+        const displayTitle = title || "未命名视频";
+        const displayIndex = nextMediaDisplayIndex(type, displayTitle);
+        const displaySource = `${type === "m3u8" ? "线路" : "视频"} ${displayIndex} · ${source || "当前页面捕获"}`;
         div.innerHTML = `
             <div class="m3u8-meta">
-                <span class="m3u8-kind">${type}</span>
-                <span class="m3u8-url" title="${url.href}">${url.pathname || url.href}</span>
-                <span class="m3u8-duration">${duration}</span>
+                <img class="m3u8-preview" ${previewUrl ? `src="${escapeHtml(previewUrl)}"` : "hidden"} alt="">
+                <div class="m3u8-info">
+                    <div class="m3u8-main">
+                        <span class="m3u8-kind">${escapeHtml(type)}</span>
+                        <span class="m3u8-title" title="${escapeHtml(displayTitle)}">${escapeHtml(displayTitle)}</span>
+                        <span class="m3u8-duration">${escapeHtml(duration)}</span>
+                    </div>
+                    <div class="m3u8-source" title="${escapeHtml(url.href)}">${escapeHtml(displaySource)}</div>
+                </div>
             </div>
             <div class="m3u8-actions">
-                <button class="m3u8-action copy-link" type="button" title="${url.href}">${T.copy}</button>
+                <button class="m3u8-action copy-link" type="button" title="${escapeHtml(url.href)}">${T.copy}</button>
                 <button class="m3u8-action primary download-btn" type="button">${T.download}</button>
                 <span class="progress"></span>
                 <button class="m3u8-action danger stop-btn" type="button">${T.stop}</button>
