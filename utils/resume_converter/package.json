@@ -1,0 +1,31 @@
+{
+  "name": "md-resume-pdf",
+  "version": "1.0.0",
+  "description": "Export readable, adaptive one-page resume PDFs from Markdown.",
+  "type": "module",
+  "bin": {
+    "md-resume-pdf": "./bin/md-resume-pdf.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "web",
+    "README.md",
+    "export_resume_one_page.sh"
+  ],
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test",
+    "test:integration": "MD_RESUME_PDF_INTEGRATION=1 node --test test/integration.test.js"
+  },
+  "dependencies": {
+    "@phosphor-icons/web": "2.1.2",
+    "marked": "18.0.4",
+    "pdf-lib": "1.17.1",
+    "playwright": "1.60.0",
+    "sanitize-html": "2.17.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

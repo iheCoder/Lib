@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guided Studio · 单页简历工作台</title>
+  <link rel="stylesheet" href="/icons/regular/style.css">
+  <link rel="stylesheet" href="/icons/fill/style.css">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="journey-panel">
+      <header class="brand">
+        <span class="brand-mark">G</span>
+        <div><strong>Guided Studio</strong><span>Markdown 简历 · 一页 PDF 工作室</span></div>
+      </header>
+      <nav class="steps" aria-label="简历导出步骤">
+        <button class="step is-active" data-step="1"><span class="step-number">1</span><span><strong>导入内容</strong><small>上传或编辑 Markdown</small></span><i class="ph ph-caret-right"></i></button>
+        <button class="step" data-step="2"><span class="step-number">2</span><span><strong>检查结构</strong><small id="structure-summary">等待识别简历结构</small></span><i class="ph ph-caret-right"></i></button>
+        <button class="step" data-step="3"><span class="step-number">3</span><span><strong>调整版式</strong><small>优化版式与可读性</small></span><i class="ph ph-caret-right"></i></button>
+        <button class="step" data-step="4"><span class="step-number">4</span><span><strong>导出 PDF</strong><small>生成一页高质量 PDF</small></span><i class="ph ph-caret-right"></i></button>
+      </nav>
+      <div class="privacy-note"><i class="ph ph-lightbulb"></i><p><strong>本地优先</strong><span>文件仅在本机处理，不会上传到外部服务。</span></p></div>
+    </aside>
+
+    <main class="workspace">
+      <section class="fit-strip" aria-live="polite">
+        <div class="fit-state"><span class="status-dot"><i class="ph-fill ph-check-circle"></i></span><p><strong id="fit-title">等待导入内容</strong><span id="fit-description">上传 Markdown 后开始一页适配</span></p></div>
+        <div class="usage"><strong id="usage-value">—</strong><span>页面利用率</span></div>
+        <div class="largest"><strong id="largest-title">尚未分析</strong><span id="largest-description">系统会指出占用最多的章节</span></div>
+      </section>
+      <section class="preview-stage">
+        <div class="preview-toolbar"><span><i class="ph ph-file-text"></i><strong id="filename-label">未命名简历.md</strong></span><div><button id="refresh-button" class="icon-button" title="重新计算"><i class="ph ph-arrow-clockwise"></i></button><button id="edit-button" class="secondary-button"><i class="ph ph-pencil-simple"></i> 编辑 Markdown</button></div></div>
+        <div id="empty-state" class="empty-state"><span class="upload-icon"><i class="ph ph-upload-simple"></i></span><h1>从 Markdown 开始</h1><p>拖入现有简历，或加载示例内容体验实时排版。</p><div><button id="upload-hero" class="primary-button"><i class="ph ph-folder-open"></i> 选择 Markdown</button><button id="sample-button" class="secondary-button">加载示例</button></div></div>
+        <div id="preview-wrap" class="preview-wrap" hidden><iframe id="resume-preview" title="A4 简历实时预览"></iframe></div>
+      </section>
+    </main>
+
+    <aside class="context-panel">
+      <div id="panel-content"></div>
+      <footer class="context-footer"><button id="previous-button" class="secondary-button">上一步</button><button id="next-button" class="primary-button">下一步 <i class="ph ph-arrow-right"></i></button></footer>
+    </aside>
+  </div>
+  <input id="file-input" type="file" accept=".md,.markdown,text/markdown,text/plain" hidden>
+  <dialog id="editor-dialog">
+    <form method="dialog" class="dialog-shell"><header><div><strong>编辑 Markdown</strong><span>修改后将重新计算一页适配</span></div><button class="icon-button" value="cancel"><i class="ph ph-x"></i></button></header><textarea id="markdown-editor" spellcheck="false"></textarea><footer><button class="secondary-button" value="cancel">取消</button><button id="apply-editor" class="primary-button" value="default">应用修改</button></footer></form>
+  </dialog>
+  <div id="toast" role="status"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
