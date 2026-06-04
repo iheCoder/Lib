@@ -50,7 +50,10 @@ export async function renderPreview(html, options) {
     const layout = await fitOnePage(page, options);
     // The DOM is already semantically enhanced. Removing the bootstrap script
     // prevents the iframe from wrapping the finalized structure a second time.
-    await page.evaluate(() => document.querySelectorAll("script").forEach((script) => script.remove()));
+    await page.evaluate(() => {
+      document.documentElement.classList.add("preview-mode");
+      document.querySelectorAll("script").forEach((script) => script.remove());
+    });
     return { html: await page.content(), layout };
   } finally {
     await browser.close();

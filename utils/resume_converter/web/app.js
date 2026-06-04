@@ -48,8 +48,20 @@ GitHub: https://github.com/example
 const state = {
   filename: "未命名简历.md",
   markdown: "",
-  options: { accent: "#215fbd", marginMm: 8, maxFontPt: 10.5, minFontPt: 9 },
+  options: {
+    accent: "#215fbd",
+    listFactor: 0.55,
+    listLineHeight: 1.3,
+    lineHeight: 1.44,
+    marginMm: 9,
+    maxFontPt: 10.5,
+    minFontPt: 9,
+    paragraphFactor: 1,
+    sectionFactor: 1.08,
+    subheadingFactor: 1.05,
+  },
   layout: null,
+  preset: "balanced",
   step: 1,
 };
 
@@ -60,6 +72,7 @@ const elements = {
   empty: $("#empty-state"),
   fileInput: $("#file-input"),
   panel: $("#panel-content"),
+  paper: $("#preview-paper"),
   preview: $("#resume-preview"),
   previewWrap: $("#preview-wrap"),
   toast: $("#toast"),
@@ -76,6 +89,7 @@ function initialize() {
   $("#sample-button").addEventListener("click", () => setMarkdown(SAMPLE, "示例简历.md"));
   $("#edit-button").addEventListener("click", openEditor);
   $("#refresh-button").addEventListener("click", refreshPreview);
+  $("#fit-preview-button").addEventListener("click", fitPreviewToWindow);
   $("#apply-editor").addEventListener("click", () => setMarkdown(elements.editor.value, state.filename));
   $("#previous-button").addEventListener("click", () => setStep(state.step - 1));
   $("#next-button").addEventListener("click", handleNext);
@@ -84,6 +98,7 @@ function initialize() {
     event.preventDefault();
     loadFile(event.dataTransfer.files[0]);
   });
+  new ResizeObserver(fitPreviewToWindow).observe(elements.previewWrap);
   renderPanel();
 }
 
@@ -155,18 +170,25 @@ function renderStructurePanel() {
 }
 
 function renderDesignPanel() {
-  const preset = state.options.marginMm >= 10 ? "relaxed" : state.options.marginMm <= 6 ? "compact" : "balanced";
   return `<div class="panel-heading"><h2>调整版式</h2><p>从阅读体验出发，再让内容适配一页。</p></div>
   <div class="field-group"><strong>版式预设</strong><div class="preset-grid">
-    ${presetButton("relaxed", "舒展", "留白更多", preset)}
-    ${presetButton("balanced", "平衡", "信息完整", preset)}
-    ${presetButton("compact", "紧凑", "内容更密集", preset)}
+    ${presetButton("relaxed", "舒展", "章节更舒展", state.preset)}
+    ${presetButton("balanced", "平衡", "层级清晰", state.preset)}
+    ${presetButton("compact", "紧凑", "列表更紧凑", state.preset)}
   </div></div>
   <div class="field-group"><strong>主题色</strong><div class="swatches">${["#215fbd","#17365d","#168178","#426b46","#8a5f32","#684783"].map((color) => `<button class="swatch ${state.options.accent === color ? "is-active" : ""}" style="--color:${color}" data-accent="${color}" title="${color}"></button>`).join("")}</div></div>
   <div class="field-group">
     ${rangeControl("页面边距", "marginMm", state.options.marginMm, 4, 18, "mm")}
     ${rangeControl("最低可读字号", "minFontPt", state.options.minFontPt, 8, 12, "pt")}
     ${rangeControl("首选正文字号", "maxFontPt", state.options.maxFontPt, 9, 14, "pt")}
+    ${rangeControl("正文行高", "lineHeight", state.options.lineHeight, 1.25, 1.65, "×", 0.01)}
+  </div>
+  <div class="field-group"><strong>排版节奏</strong>
+    ${rangeControl("章节间距", "sectionFactor", state.options.sectionFactor, 0.7, 1.6, "×", 0.05)}
+    ${rangeControl("子标题间距", "subheadingFactor", state.options.subheadingFactor, 0.7, 1.6, "×", 0.05)}
+    ${rangeControl("段落间距", "paragraphFactor", state.options.paragraphFactor, 0.7, 1.5, "×", 0.05)}
+    ${rangeControl("列表项间距", "listFactor", state.options.listFactor, 0.1, 1.4, "×", 0.05)}
+    ${rangeControl("列表行高", "listLineHeight", state.options.listLineHeight, 1.2, 1.55, "×", 0.01)}
   </div>`;
 }
 
@@ -175,19 +197,26 @@ function renderExportPanel() {
   const fit = layout?.status === "fit";
   return `<div class="panel-heading"><h2>导出 PDF</h2><p>最终文件会经过严格单页校验后下载。</p></div>
   <div class="field-group"><div class="diagnostic"><strong>${fit ? "已准备好导出" : "尚未满足单页要求"}</strong><p>${fit ? `当前使用 ${layout.settings.fontPt.toFixed(2)}pt，页面利用率 ${usagePercent()}%。` : "返回调整版式，或精简占用最多的章节。"}</p></div></div>
-  <div class="field-group"><strong>导出检查</strong><div class="structure-list"><div class="structure-row"><span>PDF 页数</span><strong>${fit ? "1 页" : "待适配"}</strong></div><div class="structure-row"><span>主题色</span><strong>${state.options.accent}</strong></div><div class="structure-row"><span>页面边距</span><strong>${state.options.marginMm} mm</strong></div></div></div>`;
+  <div class="field-group"><strong>导出检查</strong><div class="structure-list"><div class="structure-row"><span>PDF 页数</span><strong>${fit ? "1 页" : "待适配"}</strong></div><div class="structure-row"><span>主题色</span><strong>${state.options.accent}</strong></div><div class="structure-row"><span>页面边距</span><strong>${state.options.marginMm} mm</strong></div></div></div>
+  <button class="primary-button export-primary" data-action="export" ${fit ? "" : "disabled"}><i class="ph ph-download-simple"></i> 导出一页 PDF</button>`;
 }
 
 function bindPanelActions() {
   elements.panel.querySelectorAll("[data-action=upload]").forEach((button) => button.addEventListener("click", openFilePicker));
   elements.panel.querySelectorAll("[data-action=edit]").forEach((button) => button.addEventListener("click", openEditor));
+  elements.panel.querySelectorAll("[data-action=export]").forEach((button) => button.addEventListener("click", exportPdf));
   elements.panel.querySelectorAll("[data-preset]").forEach((button) => button.addEventListener("click", () => applyPreset(button.dataset.preset)));
   elements.panel.querySelectorAll("[data-accent]").forEach((button) => button.addEventListener("click", () => updateOption("accent", button.dataset.accent)));
   elements.panel.querySelectorAll("input[type=range]").forEach((input) => input.addEventListener("input", () => updateOption(input.name, Number(input.value))));
 }
 
 function applyPreset(preset) {
-  const presets = { relaxed: { marginMm: 11, minFontPt: 9.5, maxFontPt: 11 }, balanced: { marginMm: 8, minFontPt: 9, maxFontPt: 10.5 }, compact: { marginMm: 5, minFontPt: 8, maxFontPt: 9.5 } };
+  const presets = {
+    relaxed: { lineHeight: 1.52, listFactor: 0.55, listLineHeight: 1.38, marginMm: 12, minFontPt: 9.5, maxFontPt: 11, paragraphFactor: 1.3, sectionFactor: 1.45, subheadingFactor: 1.3 },
+    balanced: { lineHeight: 1.44, listFactor: 0.38, listLineHeight: 1.3, marginMm: 9, minFontPt: 9, maxFontPt: 10.5, paragraphFactor: 1.12, sectionFactor: 1.2, subheadingFactor: 1.12 },
+    compact: { lineHeight: 1.34, listFactor: 0.25, listLineHeight: 1.22, marginMm: 6, minFontPt: 8, maxFontPt: 9.5, paragraphFactor: 0.88, sectionFactor: 1, subheadingFactor: 0.92 },
+  };
+  state.preset = preset;
   Object.assign(state.options, presets[preset]);
   renderPanel();
   schedulePreview();
@@ -195,6 +224,7 @@ function applyPreset(preset) {
 
 function updateOption(key, value) {
   state.options[key] = value;
+  state.preset = "custom";
   if (key === "minFontPt" && value > state.options.maxFontPt) state.options.maxFontPt = value;
   renderPanel();
   schedulePreview();
@@ -221,11 +251,29 @@ async function refreshPreview() {
     elements.previewWrap.hidden = false;
     updateFitStatus();
     renderPanel();
+    requestAnimationFrame(fitPreviewToWindow);
   } catch (error) {
     showToast(error.message);
   } finally {
     document.body.classList.remove("is-loading");
   }
+}
+
+/** Scale the complete A4 sheet into the visible stage without clipping its bottom. */
+function fitPreviewToWindow() {
+  if (elements.previewWrap.hidden) return;
+  const styles = getComputedStyle(elements.previewWrap);
+  const availableWidth =
+    elements.previewWrap.clientWidth -
+    Number.parseFloat(styles.paddingLeft) -
+    Number.parseFloat(styles.paddingRight);
+  const availableHeight =
+    elements.previewWrap.clientHeight -
+    Number.parseFloat(styles.paddingTop) -
+    Number.parseFloat(styles.paddingBottom);
+  const scale = Math.max(0.36, Math.min(1, availableWidth / 794, availableHeight / 1123));
+  elements.paper.style.setProperty("--preview-scale", scale.toFixed(3));
+  elements.previewWrap.scrollTo({ left: 0, top: 0, behavior: "smooth" });
 }
 
 function updateFitStatus() {
@@ -270,8 +318,8 @@ function presetButton(key, title, description, active) {
   return `<button class="preset ${active === key ? "is-active" : ""}" data-preset="${key}"><strong>${title}</strong><span>${description}</span></button>`;
 }
 
-function rangeControl(label, name, value, min, max, unit) {
-  return `<div class="control"><label><span>${label}</span><strong>${value} ${unit}</strong></label><input type="range" name="${name}" value="${value}" min="${min}" max="${max}" step=".5"></div>`;
+function rangeControl(label, name, value, min, max, unit, step = 0.5) {
+  return `<div class="control"><label><span>${label}</span><strong>${value} ${unit}</strong></label><input type="range" name="${name}" value="${value}" min="${min}" max="${max}" step="${step}"></div>`;
 }
 
 function escapeHtml(value) {

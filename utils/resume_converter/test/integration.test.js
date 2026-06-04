@@ -32,9 +32,11 @@ integration("expands spacing for a short resume while keeping the preferred font
 
   const layout = await exportPdf(buildResumeHtml(markdown, options), options);
 
-  assert.equal(layout.settings.fontPt, DEFAULT_OPTIONS.maxFontPt);
+  assert.ok(layout.settings.fontPt >= DEFAULT_OPTIONS.maxFontPt);
   assert.ok(layout.settings.sectionFactor > 1.3);
-  assert.ok(layout.settings.spaceFactor > 1.3);
+  assert.ok(layout.settings.subheadingFactor > 1.3);
+  assert.ok(layout.settings.paragraphFactor > 1.2);
+  assert.ok(layout.settings.listFactor < layout.settings.sectionFactor);
 });
 
 integration("rejects overflow and leaves no PDF", async () => {
@@ -55,7 +57,9 @@ integration("web studio previews and exports a Chinese filename", async () => {
   const payload = {
     filename: "张三 简历.md",
     markdown: "# 张三\n\n北京\n\n## 工作经历\n\n- 交付稳定系统。",
-    options: {},
+    // 0.25 is the compact preset's real value. This specifically guards
+    // against silently rejecting it and falling back to the looser default.
+    options: { listFactor: 0.25, sectionFactor: 1.3, subheadingFactor: 1.2 },
   };
   try {
     const preview = await fetch(`http://127.0.0.1:${port}/api/preview`, {
@@ -64,7 +68,10 @@ integration("web studio previews and exports a Chinese filename", async () => {
       body: JSON.stringify(payload),
     });
     assert.equal(preview.status, 200);
-    assert.equal((await preview.json()).layout.status, "fit");
+    const previewPayload = await preview.json();
+    assert.equal(previewPayload.layout.status, "fit");
+    assert.ok(previewPayload.layout.settings.sectionFactor > previewPayload.layout.settings.listFactor);
+    assert.ok(previewPayload.layout.settings.listFactor < 0.6);
 
     const exported = await fetch(`http://127.0.0.1:${port}/api/export`, {
       method: "POST",

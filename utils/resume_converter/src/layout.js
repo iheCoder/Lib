@@ -1,6 +1,15 @@
 const A4_HEIGHT_MM = 297;
 const PX_PER_MM = 96 / 25.4;
 const PRINT_SAFETY_PX = 6;
+const MAX_EXPANSION_FACTOR = 4;
+const EXPANSION_LIMITS = Object.freeze({
+  fontPt: 14,
+  lineHeight: 1.68,
+  listLineHeight: 1.48,
+  paragraphFactor: 2.1,
+  sectionFactor: 3.4,
+  subheadingFactor: 2.6,
+});
 
 /**
  * Measure the rendered document, then tune only bounded CSS variables. The
@@ -14,9 +23,12 @@ export async function fitOnePage(page, options) {
   const fitHeight = availableHeight - PRINT_SAFETY_PX;
   const comfortable = {
     fontPt: options.maxFontPt,
-    lineHeight: 1.44,
-    sectionFactor: 1,
-    spaceFactor: 1,
+    lineHeight: options.lineHeight,
+    listFactor: options.listFactor,
+    listLineHeight: options.listLineHeight,
+    paragraphFactor: options.paragraphFactor,
+    sectionFactor: options.sectionFactor,
+    subheadingFactor: options.subheadingFactor,
   };
   let measurement = await applyAndMeasure(page, comfortable, fitHeight, availableHeight);
 
@@ -27,7 +39,17 @@ export async function fitOnePage(page, options) {
 
   // Compression happens in perceptual order: remove excess whitespace first,
   // then tighten line height, and only then reduce type toward its hard floor.
-  const compact = { ...comfortable, lineHeight: 1.36, sectionFactor: 0.72, spaceFactor: 0.72 };
+  // Preserve heading hierarchy under pressure. Lists and paragraphs tighten
+  // first; section boundaries remain visibly stronger than list-item gaps.
+  const compact = {
+    ...comfortable,
+    lineHeight: Math.min(comfortable.lineHeight, 1.36),
+    listFactor: Math.max(0.1, comfortable.listFactor * 0.62),
+    listLineHeight: Math.max(1.2, comfortable.listLineHeight - 0.08),
+    paragraphFactor: Math.max(0.65, comfortable.paragraphFactor * 0.78),
+    sectionFactor: Math.max(0.9, comfortable.sectionFactor * 0.86),
+    subheadingFactor: Math.max(0.85, comfortable.subheadingFactor * 0.84),
+  };
   measurement = await applyAndMeasure(page, compact, fitHeight, availableHeight);
   if (measurement.fits) {
     return { ...measurement, status: "fit" };
@@ -68,17 +90,24 @@ async function findBestFontFit(page, compact, fitHeight, availableHeight, option
 /** Spend spare vertical room on rhythm while preserving the preferred font. */
 async function findLargestFit(page, base, fitHeight, availableHeight) {
   let low = 1;
-  let high = 1.35;
+  let high = MAX_EXPANSION_FACTOR;
   let best = await applyAndMeasure(page, base, fitHeight, availableHeight);
-  for (let attempt = 0; attempt < 10; attempt += 1) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
     const factor = (low + high) / 2;
     const candidate = await applyAndMeasure(
       page,
       {
         ...base,
-        lineHeight: 1.44 + (factor - 1) * 0.24,
-        sectionFactor: factor,
-        spaceFactor: factor,
+        // Compact presets often leave more spare room than comfortable ones.
+        // These caps let every preset spend that room without allowing any
+        // single rhythm variable to become visually exaggerated.
+        fontPt: Math.min(EXPANSION_LIMITS.fontPt, base.fontPt * (1 + (factor - 1) * 0.18)),
+        lineHeight: Math.min(EXPANSION_LIMITS.lineHeight, base.lineHeight + (factor - 1) * 0.18),
+        listFactor: base.listFactor + (factor - 1) * 0.08,
+        listLineHeight: Math.min(EXPANSION_LIMITS.listLineHeight, base.listLineHeight + (factor - 1) * 0.05),
+        paragraphFactor: Math.min(EXPANSION_LIMITS.paragraphFactor, base.paragraphFactor + (factor - 1) * 0.6),
+        sectionFactor: Math.min(EXPANSION_LIMITS.sectionFactor, base.sectionFactor + (factor - 1) * 1.2),
+        subheadingFactor: Math.min(EXPANSION_LIMITS.subheadingFactor, base.subheadingFactor + (factor - 1) * 0.9),
       },
       fitHeight,
       availableHeight,
@@ -100,8 +129,11 @@ async function applyAndMeasure(page, settings, fitHeight, availableHeight) {
       const root = document.documentElement;
       root.style.setProperty("--font-size", `${next.fontPt}pt`);
       root.style.setProperty("--line-height", String(next.lineHeight));
+      root.style.setProperty("--list-factor", String(next.listFactor));
+      root.style.setProperty("--list-line-height", String(next.listLineHeight));
+      root.style.setProperty("--paragraph-factor", String(next.paragraphFactor));
       root.style.setProperty("--section-factor", String(next.sectionFactor));
-      root.style.setProperty("--space-factor", String(next.spaceFactor));
+      root.style.setProperty("--subheading-factor", String(next.subheadingFactor));
 
       const resume = document.querySelector("#resume");
       const contentHeight = resume.scrollHeight;

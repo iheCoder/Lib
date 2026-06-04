@@ -31,9 +31,9 @@
         <div class="largest"><strong id="largest-title">尚未分析</strong><span id="largest-description">系统会指出占用最多的章节</span></div>
       </section>
       <section class="preview-stage">
-        <div class="preview-toolbar"><span><i class="ph ph-file-text"></i><strong id="filename-label">未命名简历.md</strong></span><div><button id="refresh-button" class="icon-button" title="重新计算"><i class="ph ph-arrow-clockwise"></i></button><button id="edit-button" class="secondary-button"><i class="ph ph-pencil-simple"></i> 编辑 Markdown</button></div></div>
+        <div class="preview-toolbar"><span><i class="ph ph-file-text"></i><strong id="filename-label">未命名简历.md</strong></span><div><button id="fit-preview-button" class="secondary-button"><i class="ph ph-arrows-in"></i> 适应整页</button><button id="refresh-button" class="icon-button" title="重新计算"><i class="ph ph-arrow-clockwise"></i></button><button id="edit-button" class="secondary-button"><i class="ph ph-pencil-simple"></i> 编辑 Markdown</button></div></div>
         <div id="empty-state" class="empty-state"><span class="upload-icon"><i class="ph ph-upload-simple"></i></span><h1>从 Markdown 开始</h1><p>拖入现有简历，或加载示例内容体验实时排版。</p><div><button id="upload-hero" class="primary-button"><i class="ph ph-folder-open"></i> 选择 Markdown</button><button id="sample-button" class="secondary-button">加载示例</button></div></div>
-        <div id="preview-wrap" class="preview-wrap" hidden><iframe id="resume-preview" title="A4 简历实时预览"></iframe></div>
+        <div id="preview-wrap" class="preview-wrap" hidden><div id="preview-paper" class="preview-paper"><iframe id="resume-preview" title="A4 简历实时预览"></iframe></div></div>
       </section>
     </main>
 

@@ -79,9 +79,15 @@ function normalizeWebOptions(raw = {}) {
   return {
     ...DEFAULT_OPTIONS,
     accent,
+    listFactor: numberInRange(raw.listFactor, DEFAULT_OPTIONS.listFactor, 0.1, 1.4),
+    listLineHeight: numberInRange(raw.listLineHeight, DEFAULT_OPTIONS.listLineHeight, 1.2, 1.55),
+    lineHeight: numberInRange(raw.lineHeight, DEFAULT_OPTIONS.lineHeight, 1.25, 1.65),
     marginMm: numberInRange(raw.marginMm, DEFAULT_OPTIONS.marginMm, 4, 18),
     maxFontPt,
     minFontPt,
+    paragraphFactor: numberInRange(raw.paragraphFactor, DEFAULT_OPTIONS.paragraphFactor, 0.7, 1.5),
+    sectionFactor: numberInRange(raw.sectionFactor, DEFAULT_OPTIONS.sectionFactor, 0.7, 1.6),
+    subheadingFactor: numberInRange(raw.subheadingFactor, DEFAULT_OPTIONS.subheadingFactor, 0.7, 1.6),
   };
 }
 
