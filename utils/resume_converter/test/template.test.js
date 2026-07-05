@@ -19,3 +19,16 @@ test("removes executable raw HTML from public Markdown input", () => {
   assert.doesNotMatch(html, /globalThis\.compromised/);
   assert.doesNotMatch(html, /<script>globalThis/);
 });
+
+test("normalizes loose Markdown list paragraphs inside resume bullets", () => {
+  const html = buildResumeHtml(
+    "# 张三\n\n## 工作经历\n\n- 第一条较长经历。\n\n- 第二条较长经历。\n",
+    DEFAULT_OPTIONS,
+  );
+
+  // Blank lines between Markdown bullets create <li><p>...</p></li>. The
+  // resume theme must cancel paragraph margins there so loose and tight lists
+  // render with the same compact rhythm.
+  assert.match(html, /<li><p>第一条较长经历。<\/p>\s*<\/li>/);
+  assert.match(html, /li > p \{\n  margin: 0;/);
+});

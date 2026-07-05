@@ -79,8 +79,8 @@ function normalizeWebOptions(raw = {}) {
   return {
     ...DEFAULT_OPTIONS,
     accent,
-    listFactor: numberInRange(raw.listFactor, DEFAULT_OPTIONS.listFactor, 0.1, 1.4),
-    listLineHeight: numberInRange(raw.listLineHeight, DEFAULT_OPTIONS.listLineHeight, 1.2, 1.55),
+    listFactor: numberInRange(raw.listFactor, DEFAULT_OPTIONS.listFactor, 0, 1),
+    listLineHeight: numberInRange(raw.listLineHeight, DEFAULT_OPTIONS.listLineHeight, 1.12, 1.4),
     lineHeight: numberInRange(raw.lineHeight, DEFAULT_OPTIONS.lineHeight, 1.25, 1.65),
     marginMm: numberInRange(raw.marginMm, DEFAULT_OPTIONS.marginMm, 4, 18),
     maxFontPt,

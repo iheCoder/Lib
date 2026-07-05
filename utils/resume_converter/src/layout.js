@@ -1,11 +1,12 @@
 const A4_HEIGHT_MM = 297;
 const PX_PER_MM = 96 / 25.4;
-const PRINT_SAFETY_PX = 6;
+const PRINT_SAFETY_PX = 28;
 const MAX_EXPANSION_FACTOR = 4;
 const EXPANSION_LIMITS = Object.freeze({
   fontPt: 14,
   lineHeight: 1.68,
-  listLineHeight: 1.48,
+  listFactor: 0.28,
+  listLineHeight: 1.24,
   paragraphFactor: 2.1,
   sectionFactor: 3.4,
   subheadingFactor: 2.6,
@@ -44,8 +45,8 @@ export async function fitOnePage(page, options) {
   const compact = {
     ...comfortable,
     lineHeight: Math.min(comfortable.lineHeight, 1.36),
-    listFactor: Math.max(0.1, comfortable.listFactor * 0.62),
-    listLineHeight: Math.max(1.2, comfortable.listLineHeight - 0.08),
+    listFactor: Math.max(0, comfortable.listFactor * 0.62),
+    listLineHeight: Math.max(1.12, comfortable.listLineHeight - 0.08),
     paragraphFactor: Math.max(0.65, comfortable.paragraphFactor * 0.78),
     sectionFactor: Math.max(0.9, comfortable.sectionFactor * 0.86),
     subheadingFactor: Math.max(0.85, comfortable.subheadingFactor * 0.84),
@@ -99,12 +100,13 @@ async function findLargestFit(page, base, fitHeight, availableHeight) {
       {
         ...base,
         // Compact presets often leave more spare room than comfortable ones.
-        // These caps let every preset spend that room without allowing any
-        // single rhythm variable to become visually exaggerated.
+        // Spend that room on hierarchy and readable type, not on list rhythm:
+        // long Chinese bullets wrap frequently, and expanded list line-height
+        // makes the gap between bullet groups look far larger than intended.
         fontPt: Math.min(EXPANSION_LIMITS.fontPt, base.fontPt * (1 + (factor - 1) * 0.18)),
         lineHeight: Math.min(EXPANSION_LIMITS.lineHeight, base.lineHeight + (factor - 1) * 0.18),
-        listFactor: base.listFactor + (factor - 1) * 0.08,
-        listLineHeight: Math.min(EXPANSION_LIMITS.listLineHeight, base.listLineHeight + (factor - 1) * 0.05),
+        listFactor: Math.min(EXPANSION_LIMITS.listFactor, base.listFactor + (factor - 1) * 0.02),
+        listLineHeight: Math.min(EXPANSION_LIMITS.listLineHeight, base.listLineHeight + (factor - 1) * 0.01),
         paragraphFactor: Math.min(EXPANSION_LIMITS.paragraphFactor, base.paragraphFactor + (factor - 1) * 0.6),
         sectionFactor: Math.min(EXPANSION_LIMITS.sectionFactor, base.sectionFactor + (factor - 1) * 1.2),
         subheadingFactor: Math.min(EXPANSION_LIMITS.subheadingFactor, base.subheadingFactor + (factor - 1) * 0.9),

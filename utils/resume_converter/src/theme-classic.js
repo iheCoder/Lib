@@ -81,9 +81,15 @@ ul, ol {
   padding-left: 1.25em;
 }
 li {
-  margin-bottom: calc(1px * var(--list-factor));
+  margin-bottom: calc(.65px * var(--list-factor));
   padding-left: .12em;
   line-height: var(--list-line-height);
+}
+li > p {
+  margin: 0;
+}
+li > p + p {
+  margin-top: calc(2px * var(--paragraph-factor));
 }
 li:last-child { margin-bottom: 0; }
 p + ul, p + ol { margin-top: calc(-1px * var(--paragraph-factor)); }

@@ -9,8 +9,8 @@ export const DEFAULT_OPTIONS = Object.freeze({
   paragraphFactor: 1,
   sectionFactor: 1,
   subheadingFactor: 1,
-  listFactor: 0.38,
-  listLineHeight: 1.32,
+  listFactor: 0.18,
+  listLineHeight: 1.2,
   lineHeight: 1.44,
   theme: "classic",
 });

@@ -50,8 +50,8 @@ const state = {
   markdown: "",
   options: {
     accent: "#215fbd",
-    listFactor: 0.55,
-    listLineHeight: 1.3,
+    listFactor: 0.18,
+    listLineHeight: 1.2,
     lineHeight: 1.44,
     marginMm: 9,
     maxFontPt: 10.5,
@@ -187,8 +187,8 @@ function renderDesignPanel() {
     ${rangeControl("章节间距", "sectionFactor", state.options.sectionFactor, 0.7, 1.6, "×", 0.05)}
     ${rangeControl("子标题间距", "subheadingFactor", state.options.subheadingFactor, 0.7, 1.6, "×", 0.05)}
     ${rangeControl("段落间距", "paragraphFactor", state.options.paragraphFactor, 0.7, 1.5, "×", 0.05)}
-    ${rangeControl("列表项间距", "listFactor", state.options.listFactor, 0.1, 1.4, "×", 0.05)}
-    ${rangeControl("列表行高", "listLineHeight", state.options.listLineHeight, 1.2, 1.55, "×", 0.01)}
+    ${rangeControl("列表项间距", "listFactor", state.options.listFactor, 0, 1, "×", 0.02)}
+    ${rangeControl("列表行高", "listLineHeight", state.options.listLineHeight, 1.12, 1.4, "×", 0.01)}
   </div>`;
 }
 
@@ -212,9 +212,9 @@ function bindPanelActions() {
 
 function applyPreset(preset) {
   const presets = {
-    relaxed: { lineHeight: 1.52, listFactor: 0.55, listLineHeight: 1.38, marginMm: 12, minFontPt: 9.5, maxFontPt: 11, paragraphFactor: 1.3, sectionFactor: 1.45, subheadingFactor: 1.3 },
-    balanced: { lineHeight: 1.44, listFactor: 0.38, listLineHeight: 1.3, marginMm: 9, minFontPt: 9, maxFontPt: 10.5, paragraphFactor: 1.12, sectionFactor: 1.2, subheadingFactor: 1.12 },
-    compact: { lineHeight: 1.34, listFactor: 0.25, listLineHeight: 1.22, marginMm: 6, minFontPt: 8, maxFontPt: 9.5, paragraphFactor: 0.88, sectionFactor: 1, subheadingFactor: 0.92 },
+    relaxed: { lineHeight: 1.52, listFactor: 0.24, listLineHeight: 1.22, marginMm: 12, minFontPt: 9.5, maxFontPt: 11, paragraphFactor: 1.3, sectionFactor: 1.45, subheadingFactor: 1.3 },
+    balanced: { lineHeight: 1.44, listFactor: 0.16, listLineHeight: 1.18, marginMm: 9, minFontPt: 9, maxFontPt: 10.5, paragraphFactor: 1.12, sectionFactor: 1.2, subheadingFactor: 1.12 },
+    compact: { lineHeight: 1.34, listFactor: 0.08, listLineHeight: 1.15, marginMm: 6, minFontPt: 8, maxFontPt: 9.5, paragraphFactor: 0.88, sectionFactor: 1, subheadingFactor: 0.92 },
   };
   state.preset = preset;
   Object.assign(state.options, presets[preset]);
