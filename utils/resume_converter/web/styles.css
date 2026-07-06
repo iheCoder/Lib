@@ -23,7 +23,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .app-shell { display: grid; grid-template-columns: 300px minmax(520px, 1fr) 340px; height: 100dvh; min-height: 0; overflow: hidden; }
 .journey-panel, .context-panel { position: relative; z-index: 2; display: flex; min-height: 0; flex-direction: column; background: #fff; }
 .journey-panel { border-right: 1px solid var(--border); }
-.context-panel { border-left: 1px solid var(--border); }
+.context-panel { height: 100dvh; overflow: hidden; border-left: 1px solid var(--border); }
 .brand { display: flex; gap: 12px; align-items: center; height: 112px; padding: 0 22px; border-bottom: 1px solid var(--border); }
 .brand-mark { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; background: var(--accent); color: #fff; font-size: 20px; font-weight: 800; }
 .brand div { display: grid; gap: 4px; }
@@ -86,7 +86,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .structure-list { display: grid; gap: 0; border-top: 1px solid var(--border); }
 .structure-row { display: flex; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid var(--border); }
 .structure-row span { color: var(--muted); font-size: 12px; }
-.preset-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.preset-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .preset { min-height: 78px; padding: 10px 7px; border: 1px solid #d8dde3; border-radius: 8px; background: #fff; cursor: pointer; }
 .preset strong, .preset span { display: block; }
 .preset span { margin-top: 5px; color: var(--muted); font-size: 10px; line-height: 1.4; }
@@ -100,7 +100,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 .diagnostic { padding: 14px; border-radius: 9px; background: #f5f8fc; }
 .diagnostic strong { display: block; margin-bottom: 5px; }
 .diagnostic p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
-.context-footer { display: flex; flex: 0 0 auto; gap: 10px; justify-content: flex-end; padding: 14px 22px; border-top: 1px solid var(--border); background: #fff; }
+.context-footer { position: sticky; z-index: 4; bottom: 0; display: flex; flex: 0 0 auto; gap: 10px; justify-content: flex-end; padding: 14px 22px; border-top: 1px solid var(--border); background: #fff; box-shadow: 0 -8px 18px rgba(32,40,50,.04); }
 .context-footer .primary-button { flex: 1; }
 .export-primary { width: 100%; min-height: 44px; }
 dialog { width: min(860px, calc(100vw - 40px)); padding: 0; border: 0; border-radius: 14px; box-shadow: 0 24px 80px rgba(23,31,40,.24); }

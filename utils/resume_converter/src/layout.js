@@ -1,6 +1,7 @@
 const A4_HEIGHT_MM = 297;
 const PX_PER_MM = 96 / 25.4;
 const PRINT_SAFETY_PX = 28;
+const TARGET_USAGE_FLOOR = 0.95;
 const MAX_EXPANSION_FACTOR = 4;
 const EXPANSION_LIMITS = Object.freeze({
   fontPt: 14,
@@ -53,12 +54,14 @@ export async function fitOnePage(page, options) {
   };
   measurement = await applyAndMeasure(page, compact, fitHeight, availableHeight);
   if (measurement.fits) {
-    return { ...measurement, status: "fit" };
+    const expanded = await findLargestFit(page, compact, fitHeight, availableHeight);
+    return { ...expanded, status: "fit" };
   }
 
   const best = await findBestFontFit(page, compact, fitHeight, availableHeight, options);
   if (best) {
-    return { ...best, status: "fit" };
+    const expanded = await findLargestFit(page, best.settings, fitHeight, availableHeight);
+    return { ...expanded, status: "fit" };
   }
 
   const failed = await applyAndMeasure(
@@ -127,7 +130,7 @@ async function findLargestFit(page, base, fitHeight, availableHeight) {
 /** Apply one layout candidate and return both fit status and useful diagnostics. */
 async function applyAndMeasure(page, settings, fitHeight, availableHeight) {
   return page.evaluate(
-    ({ availableHeight: pageHeight, fitHeight: heightLimit, settings: next }) => {
+    ({ availableHeight: pageHeight, fitHeight: heightLimit, settings: next, targetUsageFloor }) => {
       const root = document.documentElement;
       root.style.setProperty("--font-size", `${next.fontPt}pt`);
       root.style.setProperty("--line-height", String(next.lineHeight));
@@ -155,12 +158,15 @@ async function applyAndMeasure(page, settings, fitHeight, availableHeight) {
         availableHeight: Math.round(pageHeight * 10) / 10,
         contentHeight: Math.round(contentHeight * 10) / 10,
         fits: contentHeight <= heightLimit,
+        isNearTarget: contentHeight / pageHeight >= targetUsageFloor,
         overflowPercent: Math.max(0, Math.round((contentHeight / pageHeight - 1) * 1000) / 10),
+        printSafetyPx: Math.round((pageHeight - heightLimit) * 10) / 10,
+        safeHeight: Math.round(heightLimit * 10) / 10,
         sections: sections.sort((a, b) => b.height - a.height),
         settings: next,
         suggestions,
       };
     },
-    { availableHeight, fitHeight, settings },
+    { availableHeight, fitHeight, settings, targetUsageFloor: TARGET_USAGE_FLOOR },
   );
 }

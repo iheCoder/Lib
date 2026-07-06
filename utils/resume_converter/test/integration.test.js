@@ -52,6 +52,36 @@ integration("rejects overflow and leaves no PDF", async () => {
   await assert.rejects(() => fs.access(output));
 });
 
+integration("auto-style settings expand dense resumes toward a full safe page", async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "md-resume-pdf-auto-fit-"));
+  const outputPath = path.join(directory, "auto.pdf");
+  const bullets = Array.from(
+    { length: 16 },
+    (_, index) => `- 第 ${index + 1} 项：负责跨系统链路建设、数据一致性治理、性能优化和可观测能力沉淀，支撑复杂业务稳定落地。`,
+  ).join("\n");
+  const markdown = `# 张三\n\n北京 | zhang@example.com\n\n## 个人定位\n\n后端工程师，关注复杂系统稳定性、数据正确性和工程效率。\n\n## 工作经历\n\n### 示例公司\n\n${bullets}\n\n## 教育经历\n\n示例大学 | 软件工程 | 本科`;
+  const options = {
+    ...DEFAULT_OPTIONS,
+    lineHeight: 1.38,
+    listFactor: 0.08,
+    listLineHeight: 1.15,
+    marginMm: 6,
+    maxFontPt: 10.8,
+    minFontPt: 8,
+    outputPath,
+    paragraphFactor: 0.9,
+    sectionFactor: 1,
+    subheadingFactor: 0.95,
+  };
+
+  const layout = await exportPdf(buildResumeHtml(markdown, options), options);
+  const pdf = await PDFDocument.load(await fs.readFile(outputPath));
+
+  assert.equal(layout.status, "fit");
+  assert.equal(pdf.getPageCount(), 1);
+  assert.ok(layout.contentHeight / layout.availableHeight >= 0.95);
+});
+
 integration("web studio previews and exports a Chinese filename", async () => {
   const server = createServer();
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));

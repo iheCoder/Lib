@@ -45,23 +45,62 @@ GitHub: https://github.com/example
 
 示例大学 | 软件工程 | 本科`;
 
+const PRESETS = {
+  auto: {
+    lineHeight: 1.38,
+    listFactor: 0.08,
+    listLineHeight: 1.15,
+    marginMm: 6,
+    minFontPt: 8,
+    maxFontPt: 10.8,
+    paragraphFactor: 0.9,
+    sectionFactor: 1,
+    subheadingFactor: 0.95,
+  },
+  relaxed: {
+    lineHeight: 1.52,
+    listFactor: 0.24,
+    listLineHeight: 1.22,
+    marginMm: 12,
+    minFontPt: 9.5,
+    maxFontPt: 11,
+    paragraphFactor: 1.3,
+    sectionFactor: 1.45,
+    subheadingFactor: 1.3,
+  },
+  balanced: {
+    lineHeight: 1.44,
+    listFactor: 0.16,
+    listLineHeight: 1.18,
+    marginMm: 9,
+    minFontPt: 9,
+    maxFontPt: 10.5,
+    paragraphFactor: 1.12,
+    sectionFactor: 1.2,
+    subheadingFactor: 1.12,
+  },
+  compact: {
+    lineHeight: 1.34,
+    listFactor: 0.08,
+    listLineHeight: 1.15,
+    marginMm: 6,
+    minFontPt: 8,
+    maxFontPt: 9.5,
+    paragraphFactor: 0.88,
+    sectionFactor: 1,
+    subheadingFactor: 0.92,
+  },
+};
+
 const state = {
   filename: "未命名简历.md",
   markdown: "",
   options: {
     accent: "#215fbd",
-    listFactor: 0.18,
-    listLineHeight: 1.2,
-    lineHeight: 1.44,
-    marginMm: 9,
-    maxFontPt: 10.5,
-    minFontPt: 9,
-    paragraphFactor: 1,
-    sectionFactor: 1.08,
-    subheadingFactor: 1.05,
+    ...PRESETS.auto,
   },
   layout: null,
-  preset: "balanced",
+  preset: "auto",
   step: 1,
 };
 
@@ -172,10 +211,12 @@ function renderStructurePanel() {
 function renderDesignPanel() {
   return `<div class="panel-heading"><h2>调整版式</h2><p>从阅读体验出发，再让内容适配一页。</p></div>
   <div class="field-group"><strong>版式预设</strong><div class="preset-grid">
-    ${presetButton("relaxed", "舒展", "章节更舒展", state.preset)}
+    ${presetButton("auto", "智能", "优先贴近一页", state.preset)}
+    ${presetButton("relaxed", "舒展", "阅读更从容", state.preset)}
     ${presetButton("balanced", "平衡", "层级清晰", state.preset)}
-    ${presetButton("compact", "紧凑", "列表更紧凑", state.preset)}
+    ${presetButton("compact", "紧凑", "内容更多", state.preset)}
   </div></div>
+  <div class="field-group"><div class="diagnostic"><strong>${layoutHeadline()}</strong><p>${layoutAdvice()}</p></div>${designPrimaryAction()}</div>
   <div class="field-group"><strong>主题色</strong><div class="swatches">${["#215fbd","#17365d","#168178","#426b46","#8a5f32","#684783"].map((color) => `<button class="swatch ${state.options.accent === color ? "is-active" : ""}" style="--color:${color}" data-accent="${color}" title="${color}"></button>`).join("")}</div></div>
   <div class="field-group">
     ${rangeControl("页面边距", "marginMm", state.options.marginMm, 4, 18, "mm")}
@@ -205,19 +246,16 @@ function bindPanelActions() {
   elements.panel.querySelectorAll("[data-action=upload]").forEach((button) => button.addEventListener("click", openFilePicker));
   elements.panel.querySelectorAll("[data-action=edit]").forEach((button) => button.addEventListener("click", openEditor));
   elements.panel.querySelectorAll("[data-action=export]").forEach((button) => button.addEventListener("click", exportPdf));
+  elements.panel.querySelectorAll("[data-action=go-export]").forEach((button) => button.addEventListener("click", () => setStep(4)));
+  elements.panel.querySelectorAll("[data-action=auto-fit]").forEach((button) => button.addEventListener("click", () => applyPreset("auto")));
   elements.panel.querySelectorAll("[data-preset]").forEach((button) => button.addEventListener("click", () => applyPreset(button.dataset.preset)));
   elements.panel.querySelectorAll("[data-accent]").forEach((button) => button.addEventListener("click", () => updateOption("accent", button.dataset.accent)));
   elements.panel.querySelectorAll("input[type=range]").forEach((input) => input.addEventListener("input", () => updateOption(input.name, Number(input.value))));
 }
 
 function applyPreset(preset) {
-  const presets = {
-    relaxed: { lineHeight: 1.52, listFactor: 0.24, listLineHeight: 1.22, marginMm: 12, minFontPt: 9.5, maxFontPt: 11, paragraphFactor: 1.3, sectionFactor: 1.45, subheadingFactor: 1.3 },
-    balanced: { lineHeight: 1.44, listFactor: 0.16, listLineHeight: 1.18, marginMm: 9, minFontPt: 9, maxFontPt: 10.5, paragraphFactor: 1.12, sectionFactor: 1.2, subheadingFactor: 1.12 },
-    compact: { lineHeight: 1.34, listFactor: 0.08, listLineHeight: 1.15, marginMm: 6, minFontPt: 8, maxFontPt: 9.5, paragraphFactor: 0.88, sectionFactor: 1, subheadingFactor: 0.92 },
-  };
   state.preset = preset;
-  Object.assign(state.options, presets[preset]);
+  Object.assign(state.options, PRESETS[preset]);
   renderPanel();
   schedulePreview();
 }
@@ -280,12 +318,43 @@ function updateFitStatus() {
   const fit = state.layout?.status === "fit";
   document.body.classList.toggle("is-fit", fit);
   document.body.classList.toggle("is-overflow", !fit);
-  $("#fit-title").textContent = fit ? "一页适配良好" : "内容超出一页";
-  $("#fit-description").textContent = fit ? "内容可完整显示在一页 A4 纸张。" : `超出 ${state.layout.overflowPercent}%，建议精简内容。`;
+  $("#fit-title").textContent = fit ? "一页适配良好" : overflowTitle();
+  $("#fit-description").textContent = fit ? "内容可完整显示在一页 A4 纸张。" : overflowDescription();
   $("#usage-value").textContent = `${usagePercent()}%`;
   const largest = state.layout.sections?.[0];
   $("#largest-title").textContent = largest ? `${largest.title}占用最多` : "尚未分析";
   $("#largest-description").textContent = largest ? `当前占用约 ${Math.round(largest.height)}px` : "系统会指出占用最多的章节";
+}
+
+function layoutHeadline() {
+  if (!state.layout) return "等待自动适配";
+  if (state.layout.status === "fit") return state.layout.isNearTarget ? "已接近满页" : "已安全适配一页";
+  return overflowTitle();
+}
+
+function layoutAdvice() {
+  if (!state.layout) return "导入 Markdown 后，系统会自动搜索接近一页的安全排版。";
+  if (state.layout.status === "fit") {
+    return `当前页面利用率 ${usagePercent()}%，已保留约 ${Math.round(state.layout.printSafetyPx)}px 打印安全区。`;
+  }
+  return `${overflowDescription()} 可尝试智能适配，若仍不行再精简占用最多的章节。`;
+}
+
+function designPrimaryAction() {
+  if (state.layout?.status === "fit") {
+    return '<button class="primary-button export-primary" data-action="go-export"><i class="ph ph-arrow-right"></i> 前往导出</button>';
+  }
+  return '<button class="secondary-button export-primary" data-action="auto-fit"><i class="ph ph-sparkle"></i> 使用智能适配</button>';
+}
+
+function overflowTitle() {
+  return state.layout?.overflowPercent > 0 ? "内容超出一页" : "打印安全区不足";
+}
+
+function overflowDescription() {
+  if (!state.layout) return "上传 Markdown 后开始一页适配";
+  if (state.layout.overflowPercent > 0) return `超出 ${state.layout.overflowPercent}%，建议精简内容。`;
+  return `利用率 ${usagePercent()}%，但距离纸张底部太近，导出可能分页。`;
 }
 
 async function exportPdf() {
