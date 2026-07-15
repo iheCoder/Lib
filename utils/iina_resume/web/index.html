@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>IINA Resume</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="card" aria-labelledby="page-title">
+      <div class="brand" aria-hidden="true">
+        <span class="brand-play"></span>
+      </div>
+      <p class="eyebrow">CONTINUE WATCHING</p>
+      <h1 id="page-title">接着看上次的视频</h1>
+
+      <div id="loading" class="state">正在读取 IINA 播放记录…</div>
+      <div id="empty" class="state hidden">
+        <p>还没有播放记录</p>
+        <small>先用 IINA 打开并关闭一个视频，再刷新这里。</small>
+      </div>
+
+      <div id="playback" class="playback hidden">
+        <div class="file-icon" aria-hidden="true">▶</div>
+        <div class="file-copy">
+          <strong id="file-name"></strong>
+          <span id="file-path"></span>
+          <span id="position" class="position"></span>
+        </div>
+      </div>
+
+      <p id="message" class="message" role="status" aria-live="polite"></p>
+      <div class="actions">
+        <button id="resume" class="primary" type="button" disabled>
+          <span>在 IINA 中继续播放</span><span aria-hidden="true">→</span>
+        </button>
+        <button id="refresh" class="secondary" type="button">刷新记录</button>
+      </div>
+    </section>
+    <p class="privacy">播放记录只从本机 IINA 读取，不会上传。</p>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>
