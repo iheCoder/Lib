@@ -39,7 +39,7 @@ body::before {
 }
 
 .card {
-  width: min(560px, calc(100vw - 40px));
+  width: min(720px, calc(100vw - 40px));
   padding: 48px;
   border: 1px solid var(--panel-border);
   border-radius: 28px;
@@ -95,24 +95,53 @@ h1 {
 .state p { margin: 4px 0 8px; color: var(--text); font-weight: 650; }
 .state small { line-height: 1.6; }
 
-.playback {
-  display: flex;
-  gap: 18px;
-  align-items: center;
-  min-height: 104px;
-  padding: 20px;
+.sessions {
+  display: grid;
+  gap: 14px;
+  max-height: min(58vh, 620px);
+  padding-right: 4px;
+  overflow-y: auto;
+}
+
+.session-card {
+  padding: 18px;
   border: 1px solid rgba(255,255,255,.1);
   border-radius: 18px;
   background: rgba(255,255,255,.035);
 }
 
+.session-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.session-header strong, .session-header span { display: block; }
+.session-header span { margin-top: 5px; color: var(--muted); font-size: 12px; }
+.session-header .count { margin: 0; padding: 5px 9px; border-radius: 999px; color: var(--accent-light); background: rgba(140, 108, 255, .14); white-space: nowrap; }
+.playback-list { display: grid; gap: 8px; margin-bottom: 14px; }
+
+.playback-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-height: 68px;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(0,0,0,.14);
+}
+
+.playback-row.unavailable { opacity: .48; }
+
 .file-icon {
   display: grid;
-  flex: 0 0 48px;
+  flex: 0 0 36px;
   place-items: center;
-  width: 48px;
-  height: 58px;
-  border-radius: 10px;
+  width: 36px;
+  height: 42px;
+  border-radius: 9px;
   color: var(--accent-light);
   background: rgba(140, 108, 255, .15);
 }
@@ -120,7 +149,7 @@ h1 {
 .file-copy { min-width: 0; }
 .file-copy strong, .file-copy span { display: block; }
 .file-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-copy > span { margin-top: 7px; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.file-copy > span { margin-top: 4px; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .file-copy .position { color: var(--accent-light); }
 
 .message { min-height: 20px; margin: 16px 2px 0; color: #ff9eaa; font-size: 13px; }

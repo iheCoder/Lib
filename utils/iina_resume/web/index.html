@@ -14,28 +14,17 @@
         <span class="brand-play"></span>
       </div>
       <p class="eyebrow">CONTINUE WATCHING</p>
-      <h1 id="page-title">接着看上次的视频</h1>
+      <h1 id="page-title">恢复上次播放会话</h1>
 
       <div id="loading" class="state">正在读取 IINA 播放记录…</div>
       <div id="empty" class="state hidden">
-        <p>还没有播放记录</p>
-        <small>先用 IINA 打开并关闭一个视频，再刷新这里。</small>
+        <p>还没有可恢复的会话</p>
+        <small>先用 IINA 打开视频并正常退出，再刷新这里。</small>
       </div>
-
-      <div id="playback" class="playback hidden">
-        <div class="file-icon" aria-hidden="true">▶</div>
-        <div class="file-copy">
-          <strong id="file-name"></strong>
-          <span id="file-path"></span>
-          <span id="position" class="position"></span>
-        </div>
-      </div>
+      <div id="sessions" class="sessions hidden"></div>
 
       <p id="message" class="message" role="status" aria-live="polite"></p>
       <div class="actions">
-        <button id="resume" class="primary" type="button" disabled>
-          <span>在 IINA 中继续播放</span><span aria-hidden="true">→</span>
-        </button>
         <button id="refresh" class="secondary" type="button">刷新记录</button>
       </div>
     </section>

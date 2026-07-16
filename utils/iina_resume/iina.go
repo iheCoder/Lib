@@ -7,27 +7,30 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
 
 const (
-	iinaBundleID       = "com.colliderli.iina"
-	lastFileKey        = "iinaLastPlayedFilePath"
-	lastPositionKey    = "iinaLastPlayedFilePosition"
-	iinaApplication    = "IINA"
-	localFileKind      = "file"
-	remoteResourceKind = "url"
+	iinaBundleID        = "com.colliderli.iina"
+	lastFileKey         = "iinaLastPlayedFilePath"
+	lastPositionKey     = "iinaLastPlayedFilePosition"
+	iinaCLIPath         = "/Applications/IINA.app/Contents/MacOS/iina-cli"
+	localFileKind       = "file"
+	remoteResourceKind  = "url"
+	defaultSessionLimit = 10
 )
 
 var (
 	errNoPlaybackHistory = errors.New("IINA has no previous playback record")
-	errSourceUnavailable = errors.New("the previous video is no longer available")
+	errSessionNotFound   = errors.New("the requested IINA session no longer exists")
+	errSourceUnavailable = errors.New("the previous videos are no longer available")
 )
 
-// commandRunner is the only operating-system boundary. Keeping command
-// execution behind this interface makes tests deterministic and prevents an
-// HTTP handler test from accidentally opening IINA.
+// commandRunner is the only command-execution boundary. Tests can inspect
+// launch arguments without accidentally opening IINA or reading real defaults.
 type commandRunner interface {
 	Output(ctx context.Context, name string, args ...string) ([]byte, error)
 	Start(name string, args ...string) error
@@ -39,14 +42,14 @@ type osCommandRunner struct{}
 // wiring does not construct operating-system dependencies ad hoc.
 func newCommandRunner() commandRunner { return osCommandRunner{} }
 
-// Output runs short-lived read commands synchronously because the response is
-// not meaningful until the current IINA preference value is known.
+// Output blocks only for short local reads whose result is required by the
+// current API response.
 func (osCommandRunner) Output(ctx context.Context, name string, args ...string) ([]byte, error) {
 	return exec.CommandContext(ctx, name, args...).Output()
 }
 
-// Start intentionally detaches from the IINA process: the API reports success
-// once macOS accepts the open request and must not wait for the player to exit.
+// Start detaches from iina-cli: the helper confirms that macOS accepted the
+// launch request but never waits for all restored player windows to close.
 func (osCommandRunner) Start(name string, args ...string) error {
 	return exec.Command(name, args...).Start()
 }
@@ -59,49 +62,85 @@ type playbackRecord struct {
 	Available       bool    `json:"available"`
 }
 
+type playbackSession struct {
+	ID             string           `json:"id"`
+	ClosedAt       string           `json:"closedAt,omitempty"`
+	Playbacks      []playbackRecord `json:"playbacks"`
+	AvailableCount int              `json:"availableCount"`
+}
+
 type iinaService struct {
-	runner commandRunner
+	runner   commandRunner
+	sessions *sessionStore
 }
 
-// newIINAService requires its side-effect boundary explicitly; there is no
-// hidden package-level executor that tests or future callers must replace.
-func newIINAService(runner commandRunner) *iinaService {
-	return &iinaService{runner: runner}
+// newIINAService makes both side-effect boundaries explicit. The data directory
+// is injectable because test fixtures must not depend on the user's IINA state.
+func newIINAService(runner commandRunner, dataDirectory string) *iinaService {
+	return &iinaService{
+		runner: runner, sessions: newSessionStore(runner, dataDirectory),
+	}
 }
 
-// LastPlayback reads IINA at request time rather than mirroring its history.
-// IINA therefore remains the single source of truth even if files are played
-// while this helper is stopped.
-func (service *iinaService) LastPlayback(ctx context.Context) (playbackRecord, error) {
+// RecentSessions first reconstructs shutdown batches from watch-later files.
+// The legacy preference remains a fallback for disabled or missing IINA history.
+func (service *iinaService) RecentSessions(ctx context.Context) ([]playbackSession, error) {
+	sessions, err := service.sessions.Recent(ctx, defaultSessionLimit)
+	if err == nil && len(sessions) > 0 {
+		return sessions, nil
+	}
+
+	record, fallbackErr := service.lastPlayback(ctx)
+	if fallbackErr != nil {
+		return nil, fallbackErr
+	}
+	return []playbackSession{buildSession("latest", "", []playbackRecord{record})}, nil
+}
+
+// ResumeSession re-reads the catalog and accepts only an opaque session ID.
+// Paths never cross the HTTP trust boundary, preventing arbitrary file launches.
+func (service *iinaService) ResumeSession(ctx context.Context, sessionID string) (playbackSession, error) {
+	sessions, err := service.RecentSessions(ctx)
+	if err != nil {
+		return playbackSession{}, err
+	}
+	session, found := findSession(sessions, sessionID)
+	if !found {
+		return playbackSession{}, errSessionNotFound
+	}
+	return session, service.openAvailable(session)
+}
+
+// openAvailable restores every reachable item in separate IINA windows. Missing
+// external-disk files do not block the rest of a recoverable session.
+func (service *iinaService) openAvailable(session playbackSession) error {
+	arguments := []string{"--no-stdin", "--separate-windows"}
+	for _, playback := range session.Playbacks {
+		if playback.Available {
+			arguments = append(arguments, playback.Path)
+		}
+	}
+	if len(arguments) == 2 {
+		return errSourceUnavailable
+	}
+	if err := service.runner.Start(iinaCLIPath, arguments...); err != nil {
+		return fmt.Errorf("ask IINA CLI to restore session: %w", err)
+	}
+	return nil
+}
+
+// lastPlayback preserves compatibility when playback history recording is off.
+// It cannot represent multiple windows and is therefore intentionally fallback-only.
+func (service *iinaService) lastPlayback(ctx context.Context) (playbackRecord, error) {
 	path, err := service.readPreference(ctx, lastFileKey)
 	if err != nil || path == "" {
 		return playbackRecord{}, errNoPlaybackHistory
 	}
-
-	position := service.readPosition(ctx)
-	return buildPlaybackRecord(path, position), nil
+	return buildPlaybackRecord(path, service.readPosition(ctx)), nil
 }
 
-// Resume validates the record immediately before opening it. This closes the
-// race where an external disk is removed after the page initially loads.
-func (service *iinaService) Resume(ctx context.Context) (playbackRecord, error) {
-	record, err := service.LastPlayback(ctx)
-	if err != nil {
-		return playbackRecord{}, err
-	}
-	if !record.Available {
-		return record, errSourceUnavailable
-	}
-
-	if err := service.runner.Start("open", "-a", iinaApplication, record.Path); err != nil {
-		return record, fmt.Errorf("ask macOS to open IINA: %w", err)
-	}
-	return record, nil
-}
-
-// readPreference uses `defaults` instead of parsing IINA's plist directly.
-// This respects macOS preference caching and works across IINA storage-format
-// changes as long as its public preference keys remain stable.
+// readPreference delegates plist caching semantics to macOS `defaults` rather
+// than reading the preferences file behind cfprefsd's back.
 func (service *iinaService) readPreference(ctx context.Context, key string) (string, error) {
 	output, err := service.runner.Output(ctx, "defaults", "read", iinaBundleID, key)
 	if err != nil {
@@ -110,8 +149,8 @@ func (service *iinaService) readPreference(ctx context.Context, key string) (str
 	return strings.TrimSpace(string(output)), nil
 }
 
-// readPosition is optional metadata: an unreadable value must not hide a valid
-// video. IINA's own watch-later data still controls the exact resume position.
+// readPosition is optional metadata: a malformed value must not hide a valid
+// fallback video because IINA's watch-later file controls the actual resume.
 func (service *iinaService) readPosition(ctx context.Context) float64 {
 	rawPosition, err := service.readPreference(ctx, lastPositionKey)
 	if err != nil {
@@ -124,41 +163,62 @@ func (service *iinaService) readPosition(ctx context.Context) float64 {
 	return position
 }
 
-// buildPlaybackRecord explicitly separates URLs from local files. Only local
-// files can be checked synchronously without causing network side effects.
+// buildPlaybackRecord separates URLs from local files because only local paths
+// can be availability-checked without adding network traffic to a page read.
 func buildPlaybackRecord(path string, position float64) playbackRecord {
-	kind := localFileKind
-	available := true
-	name := localDisplayName(path)
-
+	kind, available, name := localFileKind, true, filepath.Base(path)
 	if parsed, err := url.Parse(path); err == nil && parsed.Scheme != "" {
-		kind = remoteResourceKind
-		name = remoteDisplayName(parsed)
+		kind, name = remoteResourceKind, remoteDisplayName(parsed)
 	} else if _, err := os.Stat(path); err != nil {
 		available = false
 	}
-
 	return playbackRecord{
 		Path: path, Name: name, PositionSeconds: position,
 		Kind: kind, Available: available,
 	}
 }
 
-// localDisplayName avoids importing path/filepath semantics for remote URLs
-// and keeps a useful fallback for malformed or root-only paths.
-func localDisplayName(path string) string {
-	trimmed := strings.TrimRight(path, "/")
-	if index := strings.LastIndex(trimmed, "/"); index >= 0 && index+1 < len(trimmed) {
-		return trimmed[index+1:]
+// buildSession derives availability once so both the UI and launch decision use
+// the same count. Alphabetical ordering keeps reconstructed sessions stable.
+func buildSession(id, closedAt string, playbacks []playbackRecord) playbackSession {
+	sort.Slice(playbacks, func(i, j int) bool { return playbacks[i].Name < playbacks[j].Name })
+	availableCount := 0
+	for _, playback := range playbacks {
+		if playback.Available {
+			availableCount++
+		}
 	}
-	return trimmed
+	return playbackSession{
+		ID: id, ClosedAt: closedAt, Playbacks: playbacks, AvailableCount: availableCount,
+	}
 }
 
+// findSession performs an exact opaque-ID lookup; an empty or stale ID never
+// falls back to a different session that the user did not choose.
+func findSession(sessions []playbackSession, id string) (playbackSession, bool) {
+	for _, session := range sessions {
+		if session.ID == id {
+			return session, true
+		}
+	}
+	return playbackSession{}, false
+}
+
+// remoteDisplayName prefers a file-like path segment while retaining the host
+// as a useful label for host-level streams.
 func remoteDisplayName(resource *url.URL) string {
-	// A URL can represent either a file-like resource or a host-level stream.
-	// Prefer the final path segment but retain the host as a useful fallback.
-	if name := localDisplayName(resource.Path); name != "" {
+	if name := filepath.Base(resource.Path); name != "." && name != "/" {
 		return name
 	}
 	return resource.Host
+}
+
+// defaultIINADataDirectory resolves the current user's sandbox-free application
+// support location used by the standard IINA distribution.
+func defaultIINADataDirectory() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, "Library", "Application Support", iinaBundleID)
 }
