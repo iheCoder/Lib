@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	mobileUserAgent  = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
-	maxSharePageSize = 4 << 20
-	routerDataMarker = "window._ROUTER_DATA"
-	sharePageTimeout = 30 * time.Second
+	mobileUserAgent        = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148"
+	maxSharePageSize       = 4 << 20
+	routerDataMarker       = "window._ROUTER_DATA"
+	sharePageTimeout       = 30 * time.Second
+	preferredOriginalRatio = "2160p"
 )
 
 // VideoInfo is the stable boundary between Douyin page parsing and file
@@ -190,9 +191,9 @@ func videoFromLoaderEntry(raw json.RawMessage) (VideoInfo, bool, error) {
 	if item.ID == "" || len(item.Video.PlayAddress.URLs) == 0 {
 		return VideoInfo{}, false, errors.New("作品数据缺少 ID 或播放地址")
 	}
-	mediaURL, err := url.Parse(item.Video.PlayAddress.URLs[0])
-	if err != nil || !isTrustedHTTPSURL(mediaURL, mediaHostSuffixes) {
-		return VideoInfo{}, false, errors.New("作品播放地址不在受信任的媒体域名下")
+	mediaURL, err := buildOriginalPlaybackURL(item.Video.PlayAddress.URLs[0])
+	if err != nil {
+		return VideoInfo{}, false, err
 	}
 	return VideoInfo{
 		ID:       item.ID,
@@ -200,4 +201,27 @@ func videoFromLoaderEntry(raw json.RawMessage) (VideoInfo, bool, error) {
 		Title:    strings.TrimSpace(item.Title),
 		MediaURL: mediaURL.String(),
 	}, true, nil
+}
+
+// buildOriginalPlaybackURL converts the mobile share page's `/playwm/` gateway
+// into Douyin's original-content `/play/` gateway. Parsing and rebuilding the
+// URL explicitly preserves the video ID while removing watermark-only options;
+// a blind string replacement could silently alter an unrelated path.
+func buildOriginalPlaybackURL(rawURL string) (*url.URL, error) {
+	mediaURL, err := url.Parse(rawURL)
+	if err != nil || !isTrustedHTTPSURL(mediaURL, mediaHostSuffixes) {
+		return nil, errors.New("作品播放地址不在受信任的媒体域名下")
+	}
+	if mediaURL.Path != "/aweme/v1/playwm/" && mediaURL.Path != "/aweme/v1/play/" {
+		return nil, fmt.Errorf("不支持的抖音播放入口 %q", mediaURL.Path)
+	}
+	query := mediaURL.Query()
+	if query.Get("video_id") == "" {
+		return nil, errors.New("作品播放地址缺少 video_id")
+	}
+	mediaURL.Path = "/aweme/v1/play/"
+	query.Del("logo_name")
+	query.Set("ratio", preferredOriginalRatio)
+	mediaURL.RawQuery = query.Encode()
+	return mediaURL, nil
 }

@@ -23,8 +23,29 @@ func TestParseVideoInfo(t *testing.T) {
 	if video.ID != "7664176772422146725" || video.Author != "周期" || video.Title != "丘比特的力气太小" {
 		t.Fatalf("parseVideoInfo() = %#v", video)
 	}
-	if !strings.Contains(video.MediaURL, "video_id=test") {
+	mediaURL, err := url.Parse(video.MediaURL)
+	if err != nil {
+		t.Fatalf("url.Parse(MediaURL) error = %v", err)
+	}
+	if mediaURL.Path != "/aweme/v1/play/" || mediaURL.Query().Get("ratio") != preferredOriginalRatio {
 		t.Fatalf("MediaURL = %q", video.MediaURL)
+	}
+}
+
+func TestBuildOriginalPlaybackURLRemovesWatermarkOptions(t *testing.T) {
+	rawURL := "https://aweme.snssdk.com/aweme/v1/playwm/?line=0&logo_name=aweme_diversion_search&ratio=720p&video_id=source-id"
+	mediaURL, err := buildOriginalPlaybackURL(rawURL)
+	if err != nil {
+		t.Fatalf("buildOriginalPlaybackURL() error = %v", err)
+	}
+	if mediaURL.Path != "/aweme/v1/play/" {
+		t.Fatalf("Path = %q", mediaURL.Path)
+	}
+	if mediaURL.Query().Get("video_id") != "source-id" || mediaURL.Query().Get("ratio") != preferredOriginalRatio {
+		t.Fatalf("Query = %q", mediaURL.RawQuery)
+	}
+	if mediaURL.Query().Has("logo_name") {
+		t.Fatalf("watermark option remains in %q", mediaURL.RawQuery)
 	}
 }
 
