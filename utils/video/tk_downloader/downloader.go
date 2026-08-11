@@ -42,25 +42,15 @@ func newDownloader() *downloader {
 // only after a complete copy. The final path is never overwritten; repeated
 // downloads receive a numeric suffix instead of destroying an existing file.
 func (d *downloader) Download(ctx context.Context, video VideoInfo, outputDirectory string) (string, error) {
-	mediaURL, err := url.Parse(video.MediaURL)
-	if err != nil || !d.allowMediaURL(mediaURL) {
-		return "", errors.New("播放地址无效或不受信任")
-	}
 	if err := os.MkdirAll(outputDirectory, 0o755); err != nil {
 		return "", fmt.Errorf("创建保存目录: %w", err)
 	}
 
-	response, err := d.requestMedia(ctx, mediaURL)
+	response, err := d.OpenMedia(ctx, video)
 	if err != nil {
 		return "", err
 	}
 	defer response.Body.Close()
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return "", fmt.Errorf("媒体服务器返回 HTTP %d", response.StatusCode)
-	}
-	if !isPlausibleMediaType(response.Header.Get("Content-Type")) {
-		return "", fmt.Errorf("媒体服务器返回了非视频内容 %q", response.Header.Get("Content-Type"))
-	}
 
 	temporaryPath, err := writeTemporaryVideo(response.Body, outputDirectory, buildFilename(video))
 	if err != nil {
@@ -72,6 +62,29 @@ func (d *downloader) Download(ctx context.Context, video VideoInfo, outputDirect
 		return "", err
 	}
 	return finalPath, nil
+}
+
+// OpenMedia validates and opens the final media response without buffering its
+// body. Both the CLI file writer and the web proxy use this boundary, ensuring
+// they apply identical trust, redirect, status, and content-type checks.
+func (d *downloader) OpenMedia(ctx context.Context, video VideoInfo) (*http.Response, error) {
+	mediaURL, err := url.Parse(video.MediaURL)
+	if err != nil || !d.allowMediaURL(mediaURL) {
+		return nil, errors.New("播放地址无效或不受信任")
+	}
+	response, err := d.requestMedia(ctx, mediaURL)
+	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		response.Body.Close()
+		return nil, fmt.Errorf("媒体服务器返回 HTTP %d", response.StatusCode)
+	}
+	if !isPlausibleMediaType(response.Header.Get("Content-Type")) {
+		response.Body.Close()
+		return nil, fmt.Errorf("媒体服务器返回了非视频内容 %q", response.Header.Get("Content-Type"))
+	}
+	return response, nil
 }
 
 // requestMedia adds the same browser identity used for page resolution. Some

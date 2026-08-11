@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="粘贴分享文本，下载无平台水印、无引流尾帧的最高可用原内容。">
+  <title>取片 | 原片下载</title>
+  <link rel="icon" href="/favicon.png" type="image/png">
+  <link rel="preload" href="/hero-media.jpg" as="image" type="image/jpeg">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="取片首页">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span>取片</span>
+    </a>
+    <nav aria-label="主导航">
+      <a href="#workflow">工作方式</a>
+      <a href="#boundary">下载说明</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <h1 id="hero-title">分享链接进去，<span class="headline-tail">干净原片出来。</span></h1>
+        <p class="hero-intro">粘贴分享文本，下载无平台水印、无引流尾帧的最高可用原内容。</p>
+
+        <form class="download-form" id="resolve-form" novalidate>
+          <div class="field">
+            <label for="share-text">分享文本或链接</label>
+            <textarea
+              id="share-text"
+              name="shareText"
+              maxlength="8000"
+              rows="4"
+              required
+              autocomplete="off"
+              placeholder="粘贴完整分享文本，或 https://v.douyin.com/..."
+              aria-describedby="share-helper form-error"
+            ></textarea>
+            <p class="field-helper" id="share-helper">只处理无需登录即可打开的公开视频。</p>
+            <p class="field-error" id="form-error" hidden></p>
+          </div>
+          <button class="primary-action" id="resolve-button" type="submit">
+            <span class="button-label">解析视频</span>
+          </button>
+        </form>
+
+        <div class="result-region" id="result-region" aria-live="polite" aria-atomic="true">
+          <div class="result-loading" id="result-loading" hidden aria-label="正在解析视频">
+            <span class="skeleton skeleton-title"></span>
+            <span class="skeleton skeleton-body"></span>
+            <span class="skeleton skeleton-button"></span>
+          </div>
+
+          <article class="result-card" id="result-card" hidden>
+            <div class="result-copy">
+              <p class="result-author" id="result-author"></p>
+              <h2 id="result-title"></h2>
+              <p class="result-filename" id="result-filename"></p>
+            </div>
+            <a class="download-action" id="download-link" href="#">下载原片</a>
+          </article>
+        </div>
+      </div>
+
+      <figure class="hero-media">
+        <img
+          src="/hero-media.jpg"
+          width="1536"
+          height="1024"
+          alt="珊瑚红胶片穿过透明玻璃画框，表达从分享链接中提取干净视频"
+          fetchpriority="high"
+        >
+        <figcaption>去掉平台叠加内容，保留作品本身。</figcaption>
+      </figure>
+    </section>
+
+    <section class="workflow" id="workflow" aria-labelledby="workflow-title">
+      <div class="workflow-lead">
+        <h2 id="workflow-title">下载过程应该足够直接。</h2>
+        <p>不需要登录，不经过第三方解析站，也不会把视频先存进服务器目录。</p>
+      </div>
+      <div class="workflow-steps">
+        <article>
+          <h3>识别分享页</h3>
+          <p>短链仅在受信任的域名内跳转。</p>
+        </article>
+        <article>
+          <h3>提取原内容</h3>
+          <p>避开带水印和引流尾帧的分享流。</p>
+        </article>
+        <article>
+          <h3>直接保存</h3>
+          <p>视频从媒体源流式传输到浏览器。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="boundary" id="boundary" aria-labelledby="boundary-title">
+      <div>
+        <h2 id="boundary-title">原内容，不冒充上传母版。</h2>
+        <p>页面会请求公开链路的最高规格。若平台只开放转码版本，真正的上传母版仍需从创作者端取得。</p>
+      </div>
+      <p class="privacy-note">解析结果只在本机内存中保留十分钟。页面不加载统计脚本，也不连接第三方前端服务。</p>
+    </section>
+  </main>
+
+  <footer>
+    <span>取片</span>
+    <span>仅用于下载有权保存的公开内容</span>
+  </footer>
+</body>
+</html>

@@ -29,8 +29,17 @@ func runCLI(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("tk_downloader", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	outputDirectory := flags.String("o", defaultOutputDirectory, "视频保存目录")
+	webMode := flags.Bool("web", false, "启动网页端")
+	webAddress := flags.String("addr", defaultWebAddress, "网页端监听地址")
 	if err := flags.Parse(args); err != nil {
 		return 2
+	}
+	if *webMode {
+		if err := runWebServer(ctx, *webAddress, stdout); err != nil {
+			fmt.Fprintf(stderr, "网页服务运行失败: %v\n", err)
+			return 1
+		}
+		return 0
 	}
 
 	shareText := strings.TrimSpace(strings.Join(flags.Args(), " "))
