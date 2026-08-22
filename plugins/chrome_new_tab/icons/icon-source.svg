@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bubble" x1="88" y1="72" x2="398" y2="418" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#343B3A"/>
+      <stop offset="1" stop-color="#171A19"/>
+    </linearGradient>
+    <linearGradient id="spark" x1="296" y1="92" x2="404" y2="210" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#55D6B0"/>
+      <stop offset="1" stop-color="#119977"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#bubble)" d="M78 126c0-38.66 31.34-70 70-70h216c38.66 0 70 31.34 70 70v208c0 38.66-31.34 70-70 70H226l-82 58c-17.16 12.14-40.88-.13-40.88-21.14V394.5C87.61 381.66 78 362.26 78 341V126Z"/>
+  <path fill="#F7F4EC" d="M153 208c0-13.25 10.75-24 24-24h158c13.25 0 24 10.75 24 24s-10.75 24-24 24H177c-13.25 0-24-10.75-24-24Zm0 88c0-13.25 10.75-24 24-24h108c13.25 0 24 10.75 24 24s-10.75 24-24 24H177c-13.25 0-24-10.75-24-24Z"/>
+  <path fill="url(#spark)" stroke="#171A19" stroke-width="12" stroke-linejoin="round" d="M375 50c7.11 38.65 26.35 62.55 64 71-37.65 8.45-56.89 32.35-64 71-7.11-38.65-26.35-62.55-64-71 37.65-8.45 56.89-32.35 64-71Z"/>
+</svg>

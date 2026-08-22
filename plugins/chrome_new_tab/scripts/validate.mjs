@@ -10,6 +10,19 @@ function readExtensionFile(relativePath) {
   return readFile(resolve(extensionRoot, relativePath), "utf8");
 }
 
+/** Read one binary extension asset without coercing its PNG bytes to text. */
+function readExtensionAsset(relativePath) {
+  return readFile(resolve(extensionRoot, relativePath));
+}
+
+/** Validate PNG signature and IHDR dimensions without adding image dependencies. */
+function assertPngDimensions(buffer, expectedSize, relativePath) {
+  const pngSignature = "89504e470d0a1a0a";
+  assert.equal(buffer.subarray(0, 8).toString("hex"), pngSignature, `${relativePath} is not PNG`);
+  assert.equal(buffer.readUInt32BE(16), expectedSize, `${relativePath} width is incorrect`);
+  assert.equal(buffer.readUInt32BE(20), expectedSize, `${relativePath} height is incorrect`);
+}
+
 /**
  * Validate the deployment contract that Chrome relies on. These checks remain
  * deliberately dependency-free so the extension can be audited and installed
@@ -55,8 +68,19 @@ async function validateExtension() {
   assert.match(newTabScript, /location\.replace/);
   assert.match(contentScript, /chrome\.storage\.onChanged/);
   assert.match(contentScript, /attachShadow\(\{ mode: "closed" \}\)/);
+  assert.match(contentScript, /querySelectorAll\("main"\)/);
+  assert.match(contentScript, /new ResizeObserver/);
   assert.doesNotMatch(contentScript, /--cgnt-wallpaper-image/);
   assert.match(themeCss, /data-cgnt-wallpaper/);
+  assert.doesNotMatch(themeCss, /bg-token-sidebar-surface/);
+}
+
+/** Ensure every manifest icon is a real square PNG at its declared size. */
+async function validateIcons() {
+  for (const size of [16, 32, 48, 128]) {
+    const relativePath = `icons/icon-${size}.png`;
+    assertPngDimensions(await readExtensionAsset(relativePath), size, relativePath);
+  }
 }
 
 /** Validate the shared migration boundary with malformed and future data. */
@@ -76,10 +100,11 @@ async function validateSettingsNormalization() {
     dimming: 80,
     blur: 0,
     surfaceOpacity: 78,
-    fit: "cover",
+    fit: "contain",
   });
 }
 
 await validateExtension();
+await validateIcons();
 await validateSettingsNormalization();
 console.log("Chrome extension validation passed.");

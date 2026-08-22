@@ -15,7 +15,10 @@ html[data-cgnt-wallpaper="active"] body {
 #cgnt-wallpaper-host {
   position: fixed;
   z-index: -1;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
   display: block;
   overflow: hidden;
   pointer-events: none;
@@ -39,9 +42,7 @@ html[data-cgnt-wallpaper="active"] #__next {
 }
 
 html[data-cgnt-wallpaper="active"] .bg-token-main-surface-primary,
-html[data-cgnt-wallpaper="active"] .bg-token-main-surface-secondary,
-html[data-cgnt-wallpaper="active"] .bg-token-sidebar-surface-primary,
-html[data-cgnt-wallpaper="active"] .bg-token-sidebar-surface-secondary {
+html[data-cgnt-wallpaper="active"] .bg-token-main-surface-secondary {
   background-color: rgb(var(--cgnt-surface-rgb) / var(--cgnt-surface-opacity)) !important;
   backdrop-filter: blur(12px);
 }

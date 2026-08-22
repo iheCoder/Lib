@@ -4,6 +4,10 @@
   const WALLPAPER_HOST_ID = "cgnt-wallpaper-host";
   let wallpaperHost;
   let wallpaperSurface;
+  let observedConversationArea;
+  let resizeObserver;
+  let replacementObserver;
+  let layoutFrame;
 
   /** Read one coherent snapshot so a page never renders mixed old/new values. */
   async function readWallpaperState() {
@@ -24,6 +28,7 @@
     wallpaperHost?.remove();
     wallpaperHost = undefined;
     wallpaperSurface = undefined;
+    stopLayoutTracking();
   }
 
   /** Translate a user-facing fit mode into explicit, predictable CSS values. */
@@ -35,6 +40,79 @@
       return { size: "auto", repeat: "repeat" };
     }
     return { size: "cover", repeat: "no-repeat" };
+  }
+
+  /** Select the largest visible main landmark, excluding ChatGPT's sidebar. */
+  function findConversationArea() {
+    const candidates = [...document.querySelectorAll("main")];
+    return candidates
+      .map((element) => ({ element, rectangle: element.getBoundingClientRect() }))
+      .filter(({ rectangle }) => rectangle.width > 0 && rectangle.height > 0)
+      .sort((left, right) => {
+        const rightArea = right.rectangle.width * right.rectangle.height;
+        const leftArea = left.rectangle.width * left.rectangle.height;
+        return rightArea - leftArea;
+      })[0];
+  }
+
+  /** Rebind geometry observation when ChatGPT replaces its main SPA landmark. */
+  function observeConversationArea(element) {
+    if (element === observedConversationArea) return;
+    resizeObserver?.disconnect();
+    observedConversationArea = element;
+    if (element) {
+      resizeObserver ??= new ResizeObserver(scheduleLayoutSync);
+      resizeObserver.observe(element);
+    }
+  }
+
+  /** Scope the wallpaper to the live conversation rectangle, not the viewport. */
+  function syncWallpaperBounds() {
+    layoutFrame = undefined;
+    if (!wallpaperHost?.isConnected) return;
+
+    const area = findConversationArea();
+    observeConversationArea(area?.element);
+    const rectangle = area?.rectangle ?? {
+      left: 0,
+      top: 0,
+      width: window.innerWidth,
+      height: window.innerHeight,
+    };
+    Object.assign(wallpaperHost.style, {
+      left: `${Math.round(rectangle.left)}px`,
+      top: `${Math.round(rectangle.top)}px`,
+      width: `${Math.round(rectangle.width)}px`,
+      height: `${Math.round(rectangle.height)}px`,
+    });
+  }
+
+  /** Collapse resize bursts into one layout read and write per animation frame. */
+  function scheduleLayoutSync() {
+    if (layoutFrame !== undefined) return;
+    layoutFrame = window.requestAnimationFrame(syncWallpaperBounds);
+  }
+
+  /** Track sidebar transitions and main-node replacement without reading chats. */
+  function startLayoutTracking() {
+    replacementObserver ??= new MutationObserver(() => {
+      if (!observedConversationArea?.isConnected) scheduleLayoutSync();
+    });
+    replacementObserver.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("resize", scheduleLayoutSync, { passive: true });
+    scheduleLayoutSync();
+  }
+
+  /** Stop all layout work when the wallpaper is disabled or removed. */
+  function stopLayoutTracking() {
+    resizeObserver?.disconnect();
+    replacementObserver?.disconnect();
+    observedConversationArea = undefined;
+    window.removeEventListener("resize", scheduleLayoutSync);
+    if (layoutFrame !== undefined) {
+      window.cancelAnimationFrame(layoutFrame);
+      layoutFrame = undefined;
+    }
   }
 
   /** Wait for a safe sibling of ChatGPT's app root instead of entering its tree. */
@@ -60,11 +138,12 @@
     wallpaperSurface = document.createElement("div");
     Object.assign(wallpaperSurface.style, {
       position: "absolute",
-      inset: "-24px",
+      inset: "0",
       backgroundPosition: "center",
     });
     shadowRoot.append(wallpaperSurface);
     (await waitForBody()).prepend(wallpaperHost);
+    startLayoutTracking();
     return wallpaperSurface;
   }
 
@@ -88,7 +167,6 @@
     surface.style.backgroundRepeat = fit.repeat;
     surface.style.backgroundSize = fit.size;
     surface.style.filter = `blur(${preferences.blur}px)`;
-    surface.style.transform = `scale(${1 + preferences.blur / 500})`;
   }
 
   /** Refresh failures must never interfere with the actual ChatGPT application. */

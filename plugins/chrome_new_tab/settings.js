@@ -10,7 +10,7 @@
     dimming: 28,
     blur: 0,
     surfaceOpacity: 78,
-    fit: "cover",
+    fit: "contain",
   });
 
   const SUPPORTED_FITS = new Set(["cover", "contain", "repeat"]);
