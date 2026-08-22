@@ -16,20 +16,70 @@ function readExtensionFile(relativePath) {
  * without running npm install.
  */
 async function validateExtension() {
-  const [manifestSource, html, script] = await Promise.all([
+  const sources = await Promise.all([
     readExtensionFile("manifest.json"),
+    readExtensionFile("package.json"),
     readExtensionFile("newtab.html"),
     readExtensionFile("newtab.js"),
+    readExtensionFile("popup.html"),
+    readExtensionFile("content.js"),
+    readExtensionFile("chatgpt-theme.css"),
   ]);
+  const [
+    manifestSource,
+    packageSource,
+    newTabHtml,
+    newTabScript,
+    popupHtml,
+    contentScript,
+    themeCss,
+  ] = sources;
   const manifest = JSON.parse(manifestSource);
+  const packageMetadata = JSON.parse(packageSource);
 
   assert.equal(manifest.manifest_version, 3, "Manifest V3 is required");
+  assert.equal(packageMetadata.version, manifest.version, "Package and manifest versions must match");
   assert.equal(manifest.chrome_url_overrides?.newtab, "newtab.html");
-  assert.match(html, /<script src="newtab\.js" defer><\/script>/);
-  assert.doesNotMatch(html, /<script(?:\s[^>]*)?>\s*[^<\s]/i, "Inline scripts violate extension CSP");
-  assert.match(script, /https:\/\/chatgpt\.com\//);
-  assert.match(script, /location\.replace/);
+  assert.deepEqual(manifest.permissions, ["storage"], "Only local storage permission is expected");
+  assert.equal(manifest.action?.default_popup, "popup.html");
+  assert.deepEqual(manifest.content_scripts?.[0]?.matches, ["https://chatgpt.com/*"]);
+  assert.deepEqual(manifest.content_scripts?.[0]?.js, ["settings.js", "content.js"]);
+  assert.deepEqual(manifest.content_scripts?.[0]?.css, ["chatgpt-theme.css"]);
+  assert.match(newTabHtml, /<script src="newtab\.js" defer><\/script>/);
+  assert.match(popupHtml, /<script src="settings\.js" defer><\/script>/);
+  assert.match(popupHtml, /<script src="popup\.js" defer><\/script>/);
+  for (const html of [newTabHtml, popupHtml]) {
+    assert.doesNotMatch(html, /<script(?:\s[^>]*)?>\s*[^<\s]/i, "Inline scripts violate CSP");
+  }
+  assert.match(newTabScript, /https:\/\/chatgpt\.com\//);
+  assert.match(newTabScript, /location\.replace/);
+  assert.match(contentScript, /chrome\.storage\.onChanged/);
+  assert.match(contentScript, /attachShadow\(\{ mode: "closed" \}\)/);
+  assert.doesNotMatch(contentScript, /--cgnt-wallpaper-image/);
+  assert.match(themeCss, /data-cgnt-wallpaper/);
+}
+
+/** Validate the shared migration boundary with malformed and future data. */
+async function validateSettingsNormalization() {
+  await import(new URL("../settings.js", import.meta.url));
+  const { normalizePreferences } = globalThis.ChatGptNewTabSettings;
+  const normalized = normalizePreferences({
+    enabled: false,
+    dimming: 999,
+    blur: -5,
+    surfaceOpacity: "not-a-number",
+    fit: "unsupported",
+  });
+
+  assert.deepEqual(normalized, {
+    enabled: false,
+    dimming: 80,
+    blur: 0,
+    surfaceOpacity: 78,
+    fit: "cover",
+  });
 }
 
 await validateExtension();
+await validateSettingsNormalization();
 console.log("Chrome extension validation passed.");

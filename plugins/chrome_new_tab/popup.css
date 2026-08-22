@@ -1,0 +1,280 @@
+:root {
+  color-scheme: light dark;
+  font-family:
+    Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f4f2ed;
+  color: #20201e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 360px;
+  margin: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.settings-shell {
+  padding: 22px;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: #77746e;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+}
+
+h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+}
+
+.switch {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.switch span {
+  width: 42px;
+  height: 24px;
+  padding: 3px;
+  border-radius: 999px;
+  background: #c8c5be;
+  transition: background 150ms ease;
+}
+
+.switch span::after {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 20%);
+  content: "";
+  transition: transform 150ms ease;
+}
+
+.switch input:checked + span {
+  background: #147d64;
+}
+
+.switch input:checked + span::after {
+  transform: translateX(18px);
+}
+
+.switch input:focus-visible + span {
+  outline: 3px solid rgb(20 125 100 / 30%);
+  outline-offset: 2px;
+}
+
+.image-picker {
+  position: relative;
+  min-height: 142px;
+  display: grid;
+  overflow: hidden;
+  border: 1px dashed #aaa69e;
+  border-radius: 18px;
+  cursor: pointer;
+  background: #ebe8e1;
+  isolation: isolate;
+}
+
+.image-picker:hover {
+  border-color: #147d64;
+}
+
+.image-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.image-picker__preview {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  background-position: center;
+  background-size: cover;
+  transition: transform 180ms ease;
+}
+
+.image-picker:hover .image-picker__preview {
+  transform: scale(1.025);
+}
+
+.image-picker__content {
+  align-self: end;
+  padding: 18px;
+  display: grid;
+  gap: 3px;
+}
+
+.image-picker__content strong {
+  font-size: 14px;
+}
+
+.image-picker__content small {
+  color: #716e68;
+  font-size: 11px;
+}
+
+.image-picker.has-image {
+  border-style: solid;
+  border-color: rgb(255 255 255 / 28%);
+  color: #fff;
+}
+
+.image-picker.has-image::after {
+  position: absolute;
+  z-index: -1;
+  inset: 36% 0 0;
+  background: linear-gradient(transparent, rgb(0 0 0 / 76%));
+  content: "";
+}
+
+.image-picker.has-image small {
+  color: rgb(255 255 255 / 72%);
+}
+
+.controls {
+  margin-top: 10px;
+  display: grid;
+}
+
+.field {
+  padding: 13px 2px 11px;
+  display: grid;
+  gap: 9px;
+  border-bottom: 1px solid rgb(32 32 30 / 9%);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.field > span {
+  display: flex;
+  justify-content: space-between;
+}
+
+output {
+  color: #77746e;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: #147d64;
+  cursor: pointer;
+}
+
+.field--select {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+select {
+  padding: 6px 28px 6px 10px;
+  border: 1px solid rgb(32 32 30 / 12%);
+  border-radius: 9px;
+  background: #fff;
+  color: inherit;
+  font-size: 12px;
+}
+
+.footer-actions {
+  min-height: 34px;
+  padding-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#status {
+  margin: 0;
+  color: #77746e;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+#status.is-error {
+  color: #b42318;
+}
+
+.remove-button {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  background: transparent;
+  color: #a33d32;
+  font-size: 11px;
+}
+
+.remove-button:hover {
+  background: rgb(163 61 50 / 8%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    background: #222321;
+    color: #edede8;
+  }
+
+  .eyebrow,
+  output,
+  #status,
+  .image-picker__content small {
+    color: #aaa9a2;
+  }
+
+  .image-picker {
+    border-color: #5f605b;
+    background: #2d2e2b;
+  }
+
+  .field {
+    border-color: rgb(255 255 255 / 9%);
+  }
+
+  select {
+    border-color: rgb(255 255 255 / 12%);
+    background: #30312e;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+  }
+}

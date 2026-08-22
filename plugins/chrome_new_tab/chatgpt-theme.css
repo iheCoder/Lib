@@ -1,0 +1,59 @@
+/*
+ * The host is a sibling of ChatGPT's React root. Its closed shadow tree owns
+ * the actual image, so the website cannot read the local data URL from CSS.
+ */
+html[data-cgnt-wallpaper="active"],
+html[data-cgnt-wallpaper="active"] body {
+  min-height: 100%;
+  background-color: transparent !important;
+}
+
+html[data-cgnt-wallpaper="active"] body {
+  isolation: isolate;
+}
+
+#cgnt-wallpaper-host {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  display: block;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: #111;
+}
+
+/* Only stable, semantic surface tokens are adapted; unknown UI stays opaque. */
+html[data-cgnt-wallpaper="active"] {
+  --cgnt-surface-rgb: 255 255 255;
+}
+
+html.dark[data-cgnt-wallpaper="active"],
+html[data-theme="dark"][data-cgnt-wallpaper="active"] {
+  --cgnt-surface-rgb: 33 33 33;
+}
+
+html[data-cgnt-wallpaper="active"] body > div:first-of-type,
+html[data-cgnt-wallpaper="active"] #root,
+html[data-cgnt-wallpaper="active"] #__next {
+  background-color: transparent !important;
+}
+
+html[data-cgnt-wallpaper="active"] .bg-token-main-surface-primary,
+html[data-cgnt-wallpaper="active"] .bg-token-main-surface-secondary,
+html[data-cgnt-wallpaper="active"] .bg-token-sidebar-surface-primary,
+html[data-cgnt-wallpaper="active"] .bg-token-sidebar-surface-secondary {
+  background-color: rgb(var(--cgnt-surface-rgb) / var(--cgnt-surface-opacity)) !important;
+  backdrop-filter: blur(12px);
+}
+
+/* Keep high-attention controls legible even with a visually busy photograph. */
+html[data-cgnt-wallpaper="active"] .bg-token-composer-surface,
+html[data-cgnt-wallpaper="active"] [role="dialog"] {
+  backdrop-filter: blur(18px);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html[data-cgnt-wallpaper="active"] {
+    --cgnt-surface-opacity: 0.94 !important;
+  }
+}

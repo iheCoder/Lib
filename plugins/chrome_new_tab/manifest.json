@@ -1,9 +1,22 @@
 {
   "manifest_version": 3,
   "name": "ChatGPT New Tab",
-  "version": "1.0.0",
-  "description": "Open the official ChatGPT home page whenever a new tab is created.",
+  "version": "1.1.0",
+  "description": "Open ChatGPT in every new tab and personalize it with a local background.",
+  "permissions": ["storage"],
+  "action": {
+    "default_title": "设置 ChatGPT 背景",
+    "default_popup": "popup.html"
+  },
   "chrome_url_overrides": {
     "newtab": "newtab.html"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*"],
+      "css": ["chatgpt-theme.css"],
+      "js": ["settings.js", "content.js"],
+      "run_at": "document_start"
+    }
+  ]
 }
