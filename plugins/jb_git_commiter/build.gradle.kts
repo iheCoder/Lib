@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.ihewe"
-version = "0.4.0"
+version = "0.5.0"
 
 repositories {
     mavenCentral()
@@ -24,6 +24,7 @@ dependencies {
             local(localIdePath)
         }
         bundledPlugin("Git4Idea")
+        bundledPlugin("org.jetbrains.plugins.go")
     }
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
@@ -39,6 +40,7 @@ java {
 tasks {
     withType<JavaCompile>().configureEach {
         options.encoding = "UTF-8"
+        options.compilerArgs.add("-Xlint:deprecation")
     }
 
     test {

@@ -1,6 +1,8 @@
 package com.ihewe.jbgitcommitter.prompt;
 
 import com.ihewe.jbgitcommitter.model.FileChangeSnapshot;
+import com.ihewe.jbgitcommitter.model.LimitedDependencyContext;
+import com.ihewe.jbgitcommitter.model.LimitedDependencyContext.SymbolRelation;
 import com.ihewe.jbgitcommitter.settings.AiCommitSettings;
 import org.junit.jupiter.api.Test;
 
@@ -16,6 +18,7 @@ class CommitPromptBuilderTest {
     void formatsSelectedChange() {
         String prompt = CommitPromptBuilder.userPrompt(
                 List.of(new FileChangeSnapshot("src/App.java", "MODIFICATION", "old", "new")),
+                emptyDependencyContext(),
                 10_000
         );
 
@@ -30,11 +33,34 @@ class CommitPromptBuilderTest {
         int budget = 180;
         String prompt = CommitPromptBuilder.userPrompt(
                 List.of(new FileChangeSnapshot("large.txt", "MODIFICATION", "a".repeat(500), "b".repeat(500))),
+                emptyDependencyContext(),
                 budget
         );
 
         assertEquals(budget, prompt.length());
         assertTrue(prompt.endsWith("...[context truncated by AI Git Committer]"));
+    }
+
+    /** Limited relations are rendered before raw revisions with package, edges, tests, and paths. */
+    @Test
+    void formatsLimitedDependencyRelations() {
+        LimitedDependencyContext context = new LimitedDependencyContext(
+                List.of(new SymbolRelation(
+                        "order", "internal/order/service.go", "order.(*Service).Create", "MODIFIED",
+                        List.of("inventory.Check @ internal/inventory/service.go"),
+                        List.of("handler.CreateOrder @ internal/order/handler.go"),
+                        List.of("TestCreateOrder @ internal/order/service_test.go")
+                )),
+                List.of("internal/order/service.go", "internal/order/service_test.go"),
+                "Relations are project-local and bounded."
+        );
+
+        String prompt = CommitPromptBuilder.userPrompt(List.of(), context, 10_000);
+
+        assertTrue(prompt.contains("## Limited Dependency Relations"));
+        assertTrue(prompt.contains("package: order"));
+        assertTrue(prompt.contains("inventory.Check"));
+        assertTrue(prompt.contains("TestCreateOrder"));
     }
 
     /** Empty custom text selects the immutable default and the visible default language. */
@@ -71,5 +97,10 @@ class CommitPromptBuilderTest {
 
         assertTrue(prompt.contains("Write the commit message in 中文"));
         assertTrue(prompt.contains("within 80 Unicode characters"));
+    }
+
+    /** Provides the mandatory empty relation section for non-Go or symbol-free selections. */
+    private static LimitedDependencyContext emptyDependencyContext() {
+        return new LimitedDependencyContext(List.of(), List.of("src/App.java"), "No Go symbols detected.");
     }
 }

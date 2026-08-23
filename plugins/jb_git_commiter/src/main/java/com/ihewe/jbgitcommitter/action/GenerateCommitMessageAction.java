@@ -2,7 +2,9 @@ package com.ihewe.jbgitcommitter.action;
 
 import com.ihewe.jbgitcommitter.api.OpenAiCompatibleClient;
 import com.ihewe.jbgitcommitter.context.FileContextPolicy;
+import com.ihewe.jbgitcommitter.context.GoLimitedDependencyAnalyzer;
 import com.ihewe.jbgitcommitter.model.FileChangeSnapshot;
+import com.ihewe.jbgitcommitter.model.LimitedDependencyContext;
 import com.ihewe.jbgitcommitter.prompt.CommitPromptBuilder;
 import com.ihewe.jbgitcommitter.settings.AiCommitSettings;
 import com.ihewe.jbgitcommitter.settings.AiCommitSettingsConfigurable;
@@ -85,9 +87,16 @@ public final class GenerateCommitMessageAction extends AnAction implements DumbA
             }
 
             indicator.checkCanceled();
+            indicator.setText("Building limited dependency relations");
+            LimitedDependencyContext dependencyContext = GoLimitedDependencyAnalyzer.analyze(project, changes);
+            indicator.checkCanceled();
             indicator.setText("Calling " + settings.model);
             String systemPrompt = CommitPromptBuilder.systemPrompt(settings);
-            String userPrompt = CommitPromptBuilder.userPrompt(changes, settings.maxContextChars);
+            String userPrompt = CommitPromptBuilder.userPrompt(
+                    changes,
+                    dependencyContext,
+                    settings.maxContextChars
+            );
             String commitMessage = new OpenAiCompatibleClient().generate(
                     settings,
                     apiKey,

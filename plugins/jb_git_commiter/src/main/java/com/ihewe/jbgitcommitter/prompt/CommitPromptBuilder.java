@@ -1,6 +1,8 @@
 package com.ihewe.jbgitcommitter.prompt;
 
 import com.ihewe.jbgitcommitter.model.FileChangeSnapshot;
+import com.ihewe.jbgitcommitter.model.LimitedDependencyContext;
+import com.ihewe.jbgitcommitter.model.LimitedDependencyContext.SymbolRelation;
 import com.ihewe.jbgitcommitter.settings.AiCommitSettings;
 
 import java.util.List;
@@ -29,8 +31,13 @@ public final class CommitPromptBuilder {
     }
 
     /** Adds files in selection order and enforces one global character budget before transmission. */
-    public static String userPrompt(List<FileChangeSnapshot> changes, int maxCharacters) {
-        StringBuilder prompt = new StringBuilder("Generate one commit message for these selected changes:\n");
+    public static String userPrompt(
+            List<FileChangeSnapshot> changes,
+            LimitedDependencyContext dependencyContext,
+            int maxCharacters
+    ) {
+        StringBuilder prompt = new StringBuilder("Generate one commit message for these selected changes:\n")
+                .append(dependencyBlock(dependencyContext));
         for (FileChangeSnapshot change : changes) {
             appendWithinBudget(prompt, fileBlock(change), maxCharacters);
             if (prompt.length() >= maxCharacters) {
@@ -43,6 +50,45 @@ public final class CommitPromptBuilder {
             prompt.append(TRUNCATION_MARKER);
         }
         return prompt.toString();
+    }
+
+    /** Renders bounded PSI evidence ahead of raw revisions so intent extraction sees structure first. */
+    private static String dependencyBlock(LimitedDependencyContext context) {
+        StringBuilder block = new StringBuilder("\n## Limited Dependency Relations\n")
+                .append("Analysis: ").append(context.analysisNote()).append('\n')
+                .append("Relevant project paths:\n");
+        appendList(block, context.relevantPaths());
+        block.append("Changed symbols:\n");
+        if (context.symbols().isEmpty()) {
+            block.append("- [none detected]\n");
+        } else {
+            context.symbols().forEach(symbol -> appendSymbol(block, symbol));
+        }
+        return block.toString();
+    }
+
+    /** Keeps each changed symbol and its three relation kinds visually scannable for the model. */
+    private static void appendSymbol(StringBuilder block, SymbolRelation symbol) {
+        block.append("- ").append(symbol.changeKind()).append(' ').append(symbol.symbol())
+                .append(" (package: ").append(symbol.packageName())
+                .append(", file: ").append(symbol.filePath()).append(")\n")
+                .append("  dependencies: ").append(inlineList(symbol.dependencies())).append('\n')
+                .append("  dependents: ").append(inlineList(symbol.dependents())).append('\n')
+                .append("  related tests: ").append(inlineList(symbol.relatedTests())).append('\n');
+    }
+
+    /** Uses a stable marker for empty relation kinds instead of making the model infer absence. */
+    private static String inlineList(List<String> values) {
+        return values.isEmpty() ? "[none found]" : String.join("; ", values);
+    }
+
+    /** Renders relevant paths as a sparse project slice rather than transmitting the whole tree. */
+    private static void appendList(StringBuilder destination, List<String> values) {
+        if (values.isEmpty()) {
+            destination.append("- [none]\n");
+            return;
+        }
+        values.forEach(value -> destination.append("- ").append(value).append('\n'));
     }
 
     /** Formats null revision content explicitly so deletions and binary files remain distinguishable. */
