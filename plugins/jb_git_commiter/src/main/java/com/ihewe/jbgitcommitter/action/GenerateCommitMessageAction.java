@@ -30,11 +30,12 @@ import java.util.List;
 public final class GenerateCommitMessageAction extends AnAction implements DumbAware {
     private static final String NOTIFICATION_GROUP = "AI Git Committer";
 
-    /** Enables the action only when a project and at least one file/change are present. */
+    /** Keeps the toolbar button visible and enables it only when checked/selected changes exist. */
     @Override
     public void update(@NotNull AnActionEvent event) {
         boolean enabled = event.getProject() != null && SelectedChangeCollector.hasSelection(event);
-        event.getPresentation().setEnabledAndVisible(enabled);
+        event.getPresentation().setVisible(event.getProject() != null);
+        event.getPresentation().setEnabled(enabled);
     }
 
     /** Captures the current commit editor, then performs VCS, keychain, and network work in background. */
@@ -133,9 +134,9 @@ public final class GenerateCommitMessageAction extends AnAction implements DumbA
                 .notify(project);
     }
 
-    /** update() only reads data-context values and is therefore safe on the background update thread. */
+    /** CommitWorkflowUi is a Swing-backed data source and must be sampled on the UI thread. */
     @Override
     public @NotNull ActionUpdateThread getActionUpdateThread() {
-        return ActionUpdateThread.BGT;
+        return ActionUpdateThread.EDT;
     }
 }

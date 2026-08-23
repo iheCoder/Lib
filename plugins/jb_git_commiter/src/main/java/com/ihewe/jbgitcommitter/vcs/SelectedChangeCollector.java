@@ -13,6 +13,7 @@ import com.intellij.openapi.vcs.changes.ChangeListManager;
 import com.intellij.openapi.vcs.changes.ContentRevision;
 import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.vcs.commit.CommitWorkflowUi;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.IOException;
@@ -36,9 +37,8 @@ public final class SelectedChangeCollector {
             throws VcsException, IOException {
         Set<Change> changes = new LinkedHashSet<>();
         List<VirtualFile> unversionedFiles = new ArrayList<>();
-        if (selection.changes().length > 0) {
-            changes.addAll(List.of(selection.changes()));
-        } else {
+        changes.addAll(List.of(selection.changes()));
+        if (selection.files().length > 0) {
             collectFromVirtualFiles(selection.files(), project, changes, unversionedFiles);
         }
 
@@ -59,15 +59,33 @@ public final class SelectedChangeCollector {
 
     /** Copies action data immediately so a short-lived DataContext is never accessed by a worker thread. */
     public static Selection capture(@NotNull AnActionEvent event) {
+        // In Commit UI, checked/included files are the user's actual commit selection. Prefer that
+        // semantic set over incidental table-row data exposed by broader VCS data keys.
+        CommitWorkflowUi workflowUi = event.getData(VcsDataKeys.COMMIT_WORKFLOW_UI);
+        if (workflowUi != null) {
+            return captureIncludedChanges(workflowUi);
+        }
+
         Change[] selected = firstNonEmpty(
                 event.getData(VcsDataKeys.SELECTED_CHANGES),
                 event.getData(VcsDataKeys.CHANGES)
         );
+        if (selected != null) {
+            return new Selection(selected.clone(), new VirtualFile[0]);
+        }
+
         VirtualFile[] files = event.getData(CommonDataKeys.VIRTUAL_FILE_ARRAY);
-        return new Selection(
-                selected == null ? new Change[0] : selected.clone(),
-                files == null ? new VirtualFile[0] : files.clone()
-        );
+        return new Selection(new Change[0], files == null ? new VirtualFile[0] : files.clone());
+    }
+
+    /** Converts the Commit workflow's checked changes and unversioned paths into a stable snapshot. */
+    private static Selection captureIncludedChanges(CommitWorkflowUi workflowUi) {
+        Change[] changes = workflowUi.getIncludedChanges().toArray(Change[]::new);
+        VirtualFile[] unversionedFiles = workflowUi.getIncludedUnversionedFiles().stream()
+                .map(FilePath::getVirtualFile)
+                .filter(file -> file != null)
+                .toArray(VirtualFile[]::new);
+        return new Selection(changes, unversionedFiles);
     }
 
     /** Expands selected directories and keeps unversioned files as complete after-images. */

@@ -49,6 +49,17 @@ public final class OpenAiCompatibleClient {
         return parseCommitMessage(response.body());
     }
 
+    /** Performs a minimal authenticated request without transmitting repository content. */
+    public void testConnection(@NotNull AiCommitSettings.SettingsState settings, @NotNull String apiKey)
+            throws IOException, InterruptedException {
+        generate(
+                settings,
+                apiKey,
+                "You are an API connectivity tester. Return only OK.",
+                "Reply with OK."
+        );
+    }
+
     /** Builds the broadly supported Chat Completions request shape. */
     static String buildRequestBody(String model, String systemPrompt, String userPrompt) {
         JsonObject root = new JsonObject();

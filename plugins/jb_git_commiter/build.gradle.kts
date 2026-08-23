@@ -1,12 +1,10 @@
-import org.jetbrains.intellij.platform.gradle.TestFrameworkType
-
 plugins {
     java
     id("org.jetbrains.intellij.platform") version "2.18.1"
 }
 
 group = "com.ihewe"
-version = "0.1.0"
+version = "0.2.0"
 
 repositories {
     mavenCentral()
@@ -26,10 +24,10 @@ dependencies {
             local(localIdePath)
         }
         bundledPlugin("Git4Idea")
-        testFramework(TestFrameworkType.Platform)
     }
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
 }
 
 java {
