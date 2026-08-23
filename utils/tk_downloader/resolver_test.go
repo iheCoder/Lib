@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,23 @@ import (
 )
 
 const sampleRouterData = `{"loaderData":{"video_layout":null,"video_(id)/page":{"videoInfoRes":{"item_list":[{"aweme_id":"7664176772422146725","desc":"丘比特的力气太小","author":{"nickname":"周期"},"video":{"play_addr":{"url_list":["https://aweme.snssdk.com/aweme/v1/playwm/?video_id=test"]}}}]}}}}`
+
+type fakeDetailResolver struct {
+	wantID string
+	video  VideoInfo
+	err    error
+	calls  int
+}
+
+// ResolveByID records the fallback boundary so resolver tests can prove that a
+// new SSR payload delegates by itemId without launching a real browser.
+func (fake *fakeDetailResolver) ResolveByID(_ context.Context, itemID string) (VideoInfo, error) {
+	fake.calls++
+	if itemID != fake.wantID {
+		return VideoInfo{}, fmt.Errorf("itemID = %q, want %q", itemID, fake.wantID)
+	}
+	return fake.video, fake.err
+}
 
 // TestParseVideoInfo locks down the narrow mapping from Douyin's large router
 // payload to VideoInfo, including the dynamic loader key and escaped JSON text.
@@ -73,6 +91,40 @@ func TestResolverFollowsRedirect(t *testing.T) {
 	}
 	if video.ID != "7664176772422146725" {
 		t.Fatalf("Resolve() = %#v", video)
+	}
+}
+
+// TestResolverFallsBackFromItemID covers the exact upstream drift that caused
+// the regression: videoInfoRes disappeared, but itemId remained in loaderData.
+func TestResolverFallsBackFromItemID(t *testing.T) {
+	const itemID = "7654487788875770865"
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+		fmt.Fprintf(writer, `<script>window._ROUTER_DATA = {"loaderData":{"video_(id)/page":{"itemId":%q}}}</script>`, itemID)
+	}))
+	defer server.Close()
+
+	fallback := &fakeDetailResolver{
+		wantID: itemID,
+		video:  VideoInfo{ID: itemID, Author: "陳博榕", Title: "头发乱乱的", MediaURL: "https://v3.douyinvod.com/video.mp4"},
+	}
+	allowTestServer := func(candidate *url.URL) bool { return candidate.Host == strings.TrimPrefix(server.URL, "http://") }
+	testResolver := &resolver{client: server.Client(), allowPageURL: allowTestServer, detail: fallback}
+	shareURL, _ := url.Parse(server.URL)
+
+	video, err := testResolver.Resolve(context.Background(), shareURL)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if video.ID != itemID || fallback.calls != 1 {
+		t.Fatalf("Resolve() = %#v, fallback calls = %d", video, fallback.calls)
+	}
+}
+
+func TestParseSharePageRejectsNonNumericFallbackID(t *testing.T) {
+	page := []byte(`<script>window._ROUTER_DATA = {"loaderData":{"video_(id)/page":{"itemId":"https://attacker.invalid"}}}</script>`)
+	_, itemID, err := parseSharePage(page)
+	if !errors.Is(err, errRouterVideoMissing) || itemID != "" {
+		t.Fatalf("parseSharePage() itemID = %q, error = %v", itemID, err)
 	}
 }
 
