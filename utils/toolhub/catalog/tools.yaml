@@ -1,0 +1,83 @@
+version: 1
+
+# This is ToolHub's single source of registration truth. Managed projects do
+# not contain ToolHub-specific files; see ../AGENT_REGISTRATION.md before edits.
+tools:
+  - id: iina-resume
+    name: IINA Resume
+    description: 查看并恢复 IINA 最近关闭的多窗口播放会话。
+    category: 媒体
+    kind: service
+    working_directory: ${REPO_ROOT}/utils/iina_resume
+    command: go
+    args: [run, .]
+    url: http://127.0.0.1:17845
+    health_url: http://127.0.0.1:17845/
+    startup_timeout: 20s
+    stop_timeout: 5s
+
+  - id: tk-downloader
+    name: 分享视频下载器
+    description: 解析公开分享链接并通过本地网页下载原始视频流。
+    category: 媒体
+    kind: service
+    working_directory: ${REPO_ROOT}/utils/tk_downloader
+    command: go
+    args: [run, ., -web]
+    url: http://127.0.0.1:17846
+    health_url: http://127.0.0.1:17846/
+    startup_timeout: 25s
+    stop_timeout: 5s
+
+  - id: resume-converter
+    name: 简历转换工作台
+    description: 编辑 Markdown 简历、实时适配 A4 页面并导出单页 PDF。
+    category: 文档
+    kind: service
+    working_directory: ${REPO_ROOT}/utils/resume_converter
+    command: npm
+    args: [start]
+    environment:
+      PORT: "4173"
+    url: http://127.0.0.1:4173
+    health_url: http://127.0.0.1:4173/
+    startup_timeout: 25s
+    stop_timeout: 8s
+
+  - id: subtitle-generator
+    name: 本地字幕生成器
+    description: 使用本地模型转写外文视频、翻译简体中文并封装字幕。
+    category: 媒体
+    kind: task
+    working_directory: ~/PycharmProjects/AIEra
+    command: uv
+    args: [run, --project, subtitles_generator, python, -m, subtitles_generator, generate]
+    stop_timeout: 12s
+    inputs:
+      - id: video
+        label: 视频文件路径
+        type: text
+        position: true
+        required: true
+        placeholder: /Users/you/Videos/example.mp4
+      - id: source_language
+        label: 源语言
+        type: select
+        flag: --source-language
+        default: ja
+        options: [ja, auto]
+      - id: output_directory
+        label: 输出目录
+        type: text
+        flag: --output-dir
+        placeholder: 留空则写入视频所在目录
+      - id: offline
+        label: 严格离线运行
+        type: boolean
+        flag: --offline
+        default: "true"
+      - id: burn
+        label: 同时生成硬字幕视频
+        type: boolean
+        flag: --burn
+        default: "false"

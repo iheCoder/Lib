@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>ToolHub · 本地工具控制台</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#tool-list">跳到工具列表</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="ToolHub 概览">
+      <div class="brand-block">
+        <span class="brand-mark" aria-hidden="true">TH</span>
+        <div>
+          <strong>ToolHub</strong>
+          <span>LOCAL CONTROL</span>
+        </div>
+      </div>
+
+      <div class="system-state">
+        <span class="live-indicator" aria-hidden="true"></span>
+        <div>
+          <strong>控制台在线</strong>
+          <span>127.0.0.1 · 仅限本机</span>
+        </div>
+      </div>
+
+      <dl class="metrics" aria-label="工具状态统计">
+        <div><dt>可用工具</dt><dd id="metric-total">—</dd></div>
+        <div><dt>正在运行</dt><dd id="metric-running">—</dd></div>
+        <div><dt>需要关注</dt><dd id="metric-attention">—</dd></div>
+      </dl>
+
+      <div class="sidebar-note">
+        <strong>进程边界</strong>
+        <p>只停止从本页启动的进程。外部实例可直接打开，但不会被 ToolHub 终止。</p>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="page-header">
+        <div>
+          <p class="overline">WORKSPACE / LOCAL UTILITIES</p>
+          <h1>你的工具，<br><span>一个入口。</span></h1>
+        </div>
+        <div class="header-copy">
+          <p>启动本地服务、运行长任务、查看异常日志，并在工具就绪后直接进入对应网页。</p>
+          <label class="search-field" for="tool-search">
+            <span>筛选工具</span>
+            <input id="tool-search" type="search" placeholder="名称、分类或说明" autocomplete="off">
+          </label>
+        </div>
+      </header>
+
+      <section class="tool-section" aria-labelledby="tools-heading">
+        <div class="section-heading">
+          <h2 id="tools-heading">工具目录</h2>
+          <span id="refresh-state" aria-live="polite">正在连接…</span>
+        </div>
+        <div id="tool-list" class="tool-grid" aria-live="polite" aria-busy="true">
+          <div class="skeleton-card"></div>
+          <div class="skeleton-card"></div>
+          <div class="skeleton-card"></div>
+        </div>
+        <div id="empty-state" class="empty-state" hidden>
+          <strong>没有匹配的工具</strong>
+          <p>换一个关键词，或者清空筛选条件。</p>
+          <button id="clear-search" class="button secondary" type="button">清空筛选</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="task-dialog" aria-labelledby="task-dialog-title">
+    <form id="task-form" class="dialog-shell">
+      <header>
+        <div>
+          <span class="dialog-kicker">运行任务</span>
+          <h2 id="task-dialog-title">配置任务</h2>
+        </div>
+        <button class="text-button" type="button" data-close-dialog="task-dialog">取消</button>
+      </header>
+      <div id="task-fields" class="dialog-content"></div>
+      <footer>
+        <p>参数会作为独立命令参数传递，不经过 shell。</p>
+        <button id="task-submit" class="button primary" type="submit">开始运行</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="logs-dialog" class="logs-dialog" aria-labelledby="logs-dialog-title">
+    <div class="dialog-shell">
+      <header>
+        <div>
+          <span class="dialog-kicker">最近输出</span>
+          <h2 id="logs-dialog-title">运行日志</h2>
+        </div>
+        <button class="text-button" type="button" data-close-dialog="logs-dialog">关闭</button>
+      </header>
+      <div class="log-toolbar">
+        <span id="logs-updated">尚无输出</span>
+        <button id="refresh-logs" class="text-button" type="button">刷新</button>
+      </div>
+      <pre id="logs-content" tabindex="0">正在读取日志…</pre>
+    </div>
+  </dialog>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
