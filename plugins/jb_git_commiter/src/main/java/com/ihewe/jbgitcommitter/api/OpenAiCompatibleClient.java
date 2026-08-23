@@ -74,7 +74,7 @@ public final class OpenAiCompatibleClient {
         messages.add(message("user", userPrompt));
         root.add("messages", messages);
         if (settings.structuredOutput) {
-            root.add("response_format", responseFormat(settings.usesDefaultPrompt()));
+            root.add("response_format", responseFormat(settings.messageMaxCharacters));
         }
         return root.toString();
     }
@@ -107,12 +107,12 @@ public final class OpenAiCompatibleClient {
     }
 
     /** Creates the strict, single-property schema understood by OpenAI-compatible providers. */
-    private static JsonObject responseFormat(boolean enforceDefaultLimit) {
+    private static JsonObject responseFormat(int maxCharacters) {
         JsonObject messageProperty = new JsonObject();
         messageProperty.addProperty("type", "string");
         messageProperty.addProperty("minLength", 1);
-        if (enforceDefaultLimit) {
-            messageProperty.addProperty("maxLength", AiCommitSettings.DEFAULT_MESSAGE_MAX_CHARACTERS);
+        if (maxCharacters > 0) {
+            messageProperty.addProperty("maxLength", maxCharacters);
         }
         JsonObject properties = new JsonObject();
         properties.add("message", messageProperty);

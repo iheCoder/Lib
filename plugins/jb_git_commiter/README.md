@@ -10,9 +10,10 @@ OpenAI-compatible Chat Completions API 生成一条 commit message。
 - Project 视图：多选文件后右键执行同一动作，结果会复制到剪贴板。
 - 同时支持已跟踪变更、删除文件和未跟踪文本文件；目录选择会展开其下的变更。
 - generated 文件默认从混合选择中移除；如果选中的全是 generated 文件，则保留全部作为回退上下文。
-- generated glob 与 `Source → Generated` 折叠规则均可配置，默认覆盖 Go、Python、Dart、GraphQL、OpenAPI 和常见 lock/vendor 文件。
-- 未配置 Custom Prompt 时使用内置 Default Prompt，并通过 JSON Schema 将结果限制为最多 50 个字符。
+- generated glob 与 `Source → Generated` 折叠规则均可配置；映射规则通过 Source/Generated 两列表格维护。
 - Custom Prompt 会完整覆盖 Default Prompt；插件不会追加隐藏规则，也不会对返回结果执行单行化或截断。
+- 语言默认 English，可从常见语言中选择或直接输入其他语言；长度默认 `0`（不限制），也可设置正整数。
+- 语言和可选长度会作为设置页中明确可见的 Output constraints 拼接到 Default/Custom Prompt 后。
 - Settings 页面提供 **Test API**，使用当前未保存的 URL、模型和 API Key 发起最小请求并展示成功/失败原因。
 - API Key 使用 JetBrains PasswordSafe（macOS 上通常落入 Keychain），不会写进插件 XML 配置。
 
@@ -60,7 +61,7 @@ export JAVA_HOME="/Applications/GoLand.app/Contents/jbr/Contents/Home"
       "strict": true,
       "schema": {
         "type": "object",
-        "properties": {"message": {"type": "string", "maxLength": 50}},
+        "properties": {"message": {"type": "string", "minLength": 1}},
         "required": ["message"],
         "additionalProperties": false
       }
@@ -72,6 +73,7 @@ export JAVA_HOME="/Applications/GoLand.app/Contents/jbr/Contents/Home"
 完整配置、glob 和 `Source → Generated` 语法见
 [Configuration schema](docs/configuration-schema.md)。不支持 JSON Schema 的兼容接口可以关闭该选项；
 插件只检查结果非空，不会在本地改写格式或截断。响应支持 `choices[0].message.content` 和顶层 `output_text`。
+当 Maximum message characters 大于 `0` 时，同一数值会加入 prompt 和 schema 的 `maxLength`。
 
 ## 隐私边界
 

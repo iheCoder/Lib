@@ -26,7 +26,7 @@ class OpenAiCompatibleClientTest {
         assertTrue(json.contains("\\n"));
         assertTrue(json.contains("\"model\":\"model-a\""));
         assertTrue(json.contains("\"type\":\"json_schema\""));
-        assertTrue(json.contains("\"maxLength\":50"));
+        assertFalse(json.contains("maxLength"));
     }
 
     /** Plain responses are preserved rather than forced into one line or stripped of formatting. */
@@ -76,6 +76,17 @@ class OpenAiCompatibleClientTest {
 
         assertTrue(json.contains("\"type\":\"json_schema\""));
         assertFalse(json.contains("maxLength"));
+    }
+
+    /** A positive visible length setting is mirrored into the provider schema. */
+    @Test
+    void configuredLengthIsAddedToSchema() {
+        AiCommitSettings.SettingsState settings = new AiCommitSettings.SettingsState();
+        settings.messageMaxCharacters = 80;
+
+        String json = OpenAiCompatibleClient.buildRequestBody(settings, "prompt", "changes");
+
+        assertTrue(json.contains("\"maxLength\":80"));
     }
 
     /** Verifies Test API performs an authenticated minimal request against the unsaved endpoint/model. */

@@ -12,11 +12,20 @@ public final class CommitPromptBuilder {
     private CommitPromptBuilder() {
     }
 
-    /** Uses the immutable default unless the user supplies a complete replacement prompt. */
+    /** Selects default/custom intent, then appends only the explicit UI output constraints. */
     public static String systemPrompt(AiCommitSettings.SettingsState settings) {
-        return settings.usesDefaultPrompt()
+        String generationPrompt = settings.usesDefaultPrompt()
                 ? AiCommitSettings.DEFAULT_PROMPT
                 : settings.customPrompt.trim();
+        StringBuilder effectivePrompt = new StringBuilder(generationPrompt)
+                .append("\n\nOutput constraints:")
+                .append("\n- Write the commit message in ").append(settings.outputLanguage).append('.');
+        if (settings.messageMaxCharacters > 0) {
+            effectivePrompt.append("\n- Keep the complete commit message within ")
+                    .append(settings.messageMaxCharacters)
+                    .append(" Unicode characters.");
+        }
+        return effectivePrompt.toString();
     }
 
     /** Adds files in selection order and enforces one global character budget before transmission. */

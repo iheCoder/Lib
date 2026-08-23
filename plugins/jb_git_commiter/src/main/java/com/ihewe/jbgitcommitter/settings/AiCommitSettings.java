@@ -17,11 +17,10 @@ import org.jetbrains.annotations.NotNull;
 @Service(Service.Level.APP)
 @State(name = "com.ihewe.jbgitcommitter.settings.AiCommitSettings", storages = @Storage("AiGitCommitter.xml"))
 public final class AiCommitSettings implements PersistentStateComponent<AiCommitSettings.SettingsState> {
-    public static final int CURRENT_SCHEMA_VERSION = 2;
+    public static final int CURRENT_SCHEMA_VERSION = 3;
     public static final String DEFAULT_ENDPOINT = "https://api.openai.com/v1/chat/completions";
     public static final String DEFAULT_MODEL = "gpt-4.1-mini";
     public static final int DEFAULT_MAX_CONTEXT_CHARS = 60_000;
-    public static final int DEFAULT_MESSAGE_MAX_CHARACTERS = 50;
     public static final String DEFAULT_PROMPT = """
             Generate a concise git commit message for the provided changes.
             Capture the primary intent or behavior change, not a list of individual edits.
@@ -84,6 +83,10 @@ public final class AiCommitSettings implements PersistentStateComponent<AiCommit
         // Older plugin XML may lack current fields. Restore only absent values while preserving
         // deliberate empty pattern/rule lists, which are the supported way to disable filtering.
         loadedState.customPrompt = loadedState.customPrompt == null ? "" : loadedState.customPrompt;
+        if (loadedState.outputLanguage == null || loadedState.outputLanguage.isBlank()) {
+            loadedState.outputLanguage = "English";
+        }
+        loadedState.messageMaxCharacters = Math.max(0, loadedState.messageMaxCharacters);
         if (loadedState.generatedPatterns == null) {
             loadedState.generatedPatterns = DEFAULT_GENERATED_PATTERNS;
         }
@@ -131,13 +134,15 @@ public final class AiCommitSettings implements PersistentStateComponent<AiCommit
         public String endpoint = DEFAULT_ENDPOINT;
         public String model = DEFAULT_MODEL;
         public String customPrompt = "";
+        public String outputLanguage = "English";
+        public int messageMaxCharacters = 0;
         public String generatedPatterns = DEFAULT_GENERATED_PATTERNS;
         public String sourceGeneratedRules = DEFAULT_SOURCE_GENERATED_RULES;
         public int maxContextChars = DEFAULT_MAX_CONTEXT_CHARS;
         public int requestTimeoutSeconds = 60;
         public boolean structuredOutput = true;
 
-        /** Empty custom text means the immutable built-in prompt and its 50-character schema apply. */
+        /** Empty custom text means the immutable built-in prompt is the generation instruction. */
         public boolean usesDefaultPrompt() {
             return customPrompt == null || customPrompt.isBlank();
         }
