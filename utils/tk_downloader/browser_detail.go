@@ -46,7 +46,14 @@ type rawDetailItem struct {
 	Author struct {
 		Nickname string `json:"nickname"`
 	} `json:"author"`
-	Video rawDetailVideo `json:"video"`
+	Video  rawDetailVideo   `json:"video"`
+	Images []rawDetailImage `json:"images"`
+}
+
+type rawDetailImage struct {
+	Width  int      `json:"width"`
+	Height int      `json:"height"`
+	URLs   []string `json:"url_list"`
 }
 
 type rawDetailVideo struct {
@@ -79,7 +86,7 @@ type mediaCandidate struct {
 // newBrowserDetailResolver finds a locally installed Chromium-family browser.
 // Missing browsers are represented by an empty path so startup still succeeds;
 // users with legacy SSR links should not be blocked by an unused fallback.
-func newBrowserDetailResolver() videoDetailResolver {
+func newBrowserDetailResolver() workDetailResolver {
 	return &browserDetailResolver{
 		executable: findBrowserExecutable(),
 		timeout:    browserDetailTimeout,
@@ -90,15 +97,15 @@ func newBrowserDetailResolver() videoDetailResolver {
 // ResolveByID runs one isolated browser only when Douyin withheld work data
 // from SSR. A single slot prevents concurrent web requests from spawning an
 // unbounded number of Chrome processes on the user's machine.
-func (r *browserDetailResolver) ResolveByID(ctx context.Context, itemID string) (VideoInfo, error) {
+func (r *browserDetailResolver) ResolveByID(ctx context.Context, itemID string) (WorkInfo, error) {
 	if !isDecimalWorkID(itemID) {
-		return VideoInfo{}, errors.New("浏览器解析收到无效作品 ID")
+		return WorkInfo{}, errors.New("浏览器解析收到无效作品 ID")
 	}
 	if r.executable == "" {
-		return VideoInfo{}, errors.New("当前分享页需要浏览器解析，但未找到 Chrome、Chromium 或 Edge")
+		return WorkInfo{}, errors.New("当前分享页需要浏览器解析，但未找到 Chrome、Chromium 或 Edge")
 	}
 	if err := acquireBrowserSlot(ctx, r.slot); err != nil {
-		return VideoInfo{}, err
+		return WorkInfo{}, err
 	}
 	defer func() { <-r.slot }()
 
@@ -106,7 +113,7 @@ func (r *browserDetailResolver) ResolveByID(ctx context.Context, itemID string) 
 	defer cancel()
 	body, err := captureDetailResponse(timedCtx, r.executable, itemID)
 	if err != nil {
-		return VideoInfo{}, err
+		return WorkInfo{}, err
 	}
 	return parseBrowserDetail(body, itemID)
 }
@@ -207,26 +214,90 @@ func isExpectedDetailResponse(rawURL, itemID string) bool {
 		parsed.Path == detailAPIPath && parsed.Query().Get("aweme_id") == itemID
 }
 
-// parseBrowserDetail maps the large browser response onto the same stable
-// VideoInfo used by SSR. Only non-watermarked playback fields are considered;
-// download_addr is intentionally excluded because it is the branded variant.
-func parseBrowserDetail(body []byte, expectedID string) (VideoInfo, error) {
+// parseBrowserDetail maps the large response into one stable work model. Image
+// posts are detected before video selection because their video field can hold
+// music metadata that must never be mistaken for the primary media.
+func parseBrowserDetail(body []byte, expectedID string) (WorkInfo, error) {
 	var response rawDetailResponse
 	if err := json.Unmarshal(body, &response); err != nil {
-		return VideoInfo{}, fmt.Errorf("解码浏览器作品详情: %w", err)
+		return WorkInfo{}, fmt.Errorf("解码浏览器作品详情: %w", err)
 	}
 	item := response.AwemeDetail
 	if response.StatusCode != 0 || item.ID == "" || item.ID != expectedID {
-		return VideoInfo{}, fmt.Errorf("浏览器作品详情无效: status=%d message=%q", response.StatusCode, response.StatusMsg)
+		return WorkInfo{}, fmt.Errorf("浏览器作品详情无效: status=%d message=%q", response.StatusCode, response.StatusMsg)
+	}
+	if len(item.Images) > 0 {
+		return imageWorkFromDetail(item)
 	}
 	mediaURL, err := selectBestH264Media(item.Video)
 	if err != nil {
-		return VideoInfo{}, err
+		return WorkInfo{}, err
 	}
-	return VideoInfo{
+	work := detailWork(item, WorkKindVideo, []MediaAsset{{
+		URL: mediaURL, Kind: MediaKindVideo, Extension: ".mp4",
+	}})
+	return work, work.Validate()
+}
+
+// imageWorkFromDetail preserves Douyin's image order and uses url_list rather
+// than download_url_list. The latter currently points at a watermarked image
+// transform, while url_list exposes the public unwatermarked display image.
+func imageWorkFromDetail(item rawDetailItem) (WorkInfo, error) {
+	assets := make([]MediaAsset, 0, len(item.Images))
+	for index, image := range item.Images {
+		imageURL, extension := selectPreferredImageURL(image.URLs)
+		if imageURL == "" {
+			return WorkInfo{}, fmt.Errorf("图集第 %d 张图片没有受信任的下载地址", index+1)
+		}
+		assets = append(assets, MediaAsset{
+			URL: imageURL, Kind: MediaKindImage, Extension: extension,
+			Width: image.Width, Height: image.Height,
+		})
+	}
+	work := detailWork(item, WorkKindImages, assets)
+	return work, work.Validate()
+}
+
+// selectPreferredImageURL prefers JPEG for broad local viewer compatibility.
+// Douyin often lists WEBP first and JPEG later at the same public dimensions;
+// all candidates still cross the shared trusted-CDN boundary.
+func selectPreferredImageURL(candidates []string) (string, string) {
+	var fallbackURL, fallbackExtension string
+	for _, candidate := range candidates {
+		parsed, err := url.Parse(candidate)
+		if err != nil || !isTrustedHTTPSURL(parsed, mediaHostSuffixes) {
+			continue
+		}
+		extension := normalizedImageExtension(filepath.Ext(parsed.Path))
+		if extension == ".jpg" {
+			return parsed.String(), extension
+		}
+		if fallbackURL == "" && extension != "" {
+			fallbackURL, fallbackExtension = parsed.String(), extension
+		}
+	}
+	return fallbackURL, fallbackExtension
+}
+
+// normalizedImageExtension restricts output names to formats accepted by the
+// parser and folds JPEG's two common suffixes into one stable extension.
+func normalizedImageExtension(extension string) string {
+	switch strings.ToLower(extension) {
+	case ".jpg", ".jpeg":
+		return ".jpg"
+	case ".webp", ".png":
+		return strings.ToLower(extension)
+	default:
+		return ""
+	}
+}
+
+// detailWork centralizes metadata trimming for both detail-response branches.
+func detailWork(item rawDetailItem, kind WorkKind, assets []MediaAsset) WorkInfo {
+	return WorkInfo{
 		ID: item.ID, Author: strings.TrimSpace(item.Author.Nickname),
-		Title: strings.TrimSpace(item.Title), MediaURL: mediaURL,
-	}, nil
+		Title: strings.TrimSpace(item.Title), Kind: kind, Assets: assets,
+	}
 }
 
 // selectBestH264Media ranks direct H.264 transcodes by pixel count, bitrate,

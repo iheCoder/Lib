@@ -21,6 +21,18 @@ func TestExtractShareURL(t *testing.T) {
 			input: "打开 https://www.douyin.com/video/7664176772422146725。",
 			want:  "https://www.douyin.com/video/7664176772422146725",
 		},
+		{
+			name: "markdown escaped image share",
+			input: "8.41 复制打开抖音，看看【Syoyng的图文作品】以你为名的天使主义。 " +
+				`[https://v.douyin.com/nbByc\_Nj9o4/](https://v.douyin.com/nbByc\_Nj9o4/) d\@N.Ji`,
+			want: "https://v.douyin.com/nbByc_Nj9o4/",
+		},
+		{
+			name: "multiply escaped markdown image share",
+			input: "8.41 复制打开抖音，看看【Syoyng的图文作品】以你为名的天使主义。 " +
+				`[https://v.douyin.com/nbByc\\\_Nj9o4/](https://v.douyin.com/nbByc\\_Nj9o4/) d\@N.Ji`,
+			want: "https://v.douyin.com/nbByc_Nj9o4/",
+		},
 		{name: "reject lookalike host", input: "https://douyin.com.evil.example/video/1", wantErr: true},
 		{name: "reject unrelated URL", input: "https://example.com/video.mp4", wantErr: true},
 	}

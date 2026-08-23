@@ -7,7 +7,12 @@ import (
 	"strings"
 )
 
-var shareURLPattern = regexp.MustCompile(`https?://[^\s"'<>]+`)
+// Markdown delimiters terminate a candidate because copied chat content often
+// contains `[visible URL](target URL)`. Treating the whole construct as one URL
+// sends a malformed path to Douyin and can be misreported as a risk page.
+var shareURLPattern = regexp.MustCompile(`https?://[^\s"'<>\[\]()]+`)
+
+var escapedUnderscorePattern = regexp.MustCompile(`\\+_`)
 
 var shareHostSuffixes = []string{
 	"douyin.com",
@@ -27,6 +32,7 @@ var mediaHostSuffixes = []string{
 	"pstatp.com",
 	"ixigua.com",
 	"amemv.com",
+	"douyinpic.com",
 }
 
 const trailingSharePunctuation = `.,;:!?)]}，。；：！？）】》`
@@ -36,13 +42,21 @@ const trailingSharePunctuation = `.,;:!?)]}，。；：！？）】》`
 // Douyin-owned share domain is returned; unrelated URLs in the prose are ignored.
 func extractShareURL(input string) (*url.URL, error) {
 	for _, candidate := range shareURLPattern.FindAllString(input, -1) {
-		candidate = strings.TrimRight(candidate, trailingSharePunctuation)
+		candidate = normalizePastedShareURL(candidate)
 		parsed, err := url.Parse(candidate)
 		if err == nil && isTrustedHTTPSURL(parsed, shareHostSuffixes) {
 			return parsed, nil
 		}
 	}
 	return nil, errors.New("没有找到受支持的抖音 HTTPS 分享链接")
+}
+
+// normalizePastedShareURL reverses one or more Markdown escape layers before an
+// underscore. Chat renderers can re-escape an already escaped URL, so handling
+// exactly one backslash is not sufficient for copied conversation content.
+func normalizePastedShareURL(candidate string) string {
+	candidate = escapedUnderscorePattern.ReplaceAllString(candidate, "_")
+	return strings.TrimRight(candidate, trailingSharePunctuation)
 }
 
 // isTrustedHTTPSURL is the single outbound-network boundary. Exact hosts and

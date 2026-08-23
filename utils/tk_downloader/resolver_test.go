@@ -15,38 +15,38 @@ const sampleRouterData = `{"loaderData":{"video_layout":null,"video_(id)/page":{
 
 type fakeDetailResolver struct {
 	wantID string
-	video  VideoInfo
+	work   WorkInfo
 	err    error
 	calls  int
 }
 
 // ResolveByID records the fallback boundary so resolver tests can prove that a
 // new SSR payload delegates by itemId without launching a real browser.
-func (fake *fakeDetailResolver) ResolveByID(_ context.Context, itemID string) (VideoInfo, error) {
+func (fake *fakeDetailResolver) ResolveByID(_ context.Context, itemID string) (WorkInfo, error) {
 	fake.calls++
 	if itemID != fake.wantID {
-		return VideoInfo{}, fmt.Errorf("itemID = %q, want %q", itemID, fake.wantID)
+		return WorkInfo{}, fmt.Errorf("itemID = %q, want %q", itemID, fake.wantID)
 	}
-	return fake.video, fake.err
+	return fake.work, fake.err
 }
 
 // TestParseVideoInfo locks down the narrow mapping from Douyin's large router
 // payload to VideoInfo, including the dynamic loader key and escaped JSON text.
 func TestParseVideoInfo(t *testing.T) {
 	page := []byte(`<html><script>window._ROUTER_DATA = ` + sampleRouterData + `</script></html>`)
-	video, err := parseVideoInfo(page)
+	work, err := parseVideoInfo(page)
 	if err != nil {
 		t.Fatalf("parseVideoInfo() error = %v", err)
 	}
-	if video.ID != "7664176772422146725" || video.Author != "周期" || video.Title != "丘比特的力气太小" {
-		t.Fatalf("parseVideoInfo() = %#v", video)
+	if work.ID != "7664176772422146725" || work.Author != "周期" || work.Title != "丘比特的力气太小" {
+		t.Fatalf("parseVideoInfo() = %#v", work)
 	}
-	mediaURL, err := url.Parse(video.MediaURL)
+	mediaURL, err := url.Parse(work.Assets[0].URL)
 	if err != nil {
 		t.Fatalf("url.Parse(MediaURL) error = %v", err)
 	}
 	if mediaURL.Path != "/aweme/v1/play/" || mediaURL.Query().Get("ratio") != preferredOriginalRatio {
-		t.Fatalf("MediaURL = %q", video.MediaURL)
+		t.Fatalf("MediaURL = %q", work.Assets[0].URL)
 	}
 }
 
@@ -85,12 +85,12 @@ func TestResolverFollowsRedirect(t *testing.T) {
 	allowTestServer := func(candidate *url.URL) bool { return candidate.Host == strings.TrimPrefix(server.URL, "http://") }
 	testResolver := &resolver{client: server.Client(), allowPageURL: allowTestServer}
 	shareURL, _ := url.Parse(server.URL + "/short")
-	video, err := testResolver.Resolve(context.Background(), shareURL)
+	work, err := testResolver.Resolve(context.Background(), shareURL)
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
-	if video.ID != "7664176772422146725" {
-		t.Fatalf("Resolve() = %#v", video)
+	if work.ID != "7664176772422146725" {
+		t.Fatalf("Resolve() = %#v", work)
 	}
 }
 
@@ -105,25 +105,53 @@ func TestResolverFallsBackFromItemID(t *testing.T) {
 
 	fallback := &fakeDetailResolver{
 		wantID: itemID,
-		video:  VideoInfo{ID: itemID, Author: "陳博榕", Title: "头发乱乱的", MediaURL: "https://v3.douyinvod.com/video.mp4"},
+		work: WorkInfo{ID: itemID, Author: "陳博榕", Title: "头发乱乱的", Kind: WorkKindVideo,
+			Assets: []MediaAsset{{URL: "https://v3.douyinvod.com/video.mp4", Kind: MediaKindVideo, Extension: ".mp4"}}},
 	}
 	allowTestServer := func(candidate *url.URL) bool { return candidate.Host == strings.TrimPrefix(server.URL, "http://") }
 	testResolver := &resolver{client: server.Client(), allowPageURL: allowTestServer, detail: fallback}
 	shareURL, _ := url.Parse(server.URL)
 
-	video, err := testResolver.Resolve(context.Background(), shareURL)
+	work, err := testResolver.Resolve(context.Background(), shareURL)
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
-	if video.ID != itemID || fallback.calls != 1 {
-		t.Fatalf("Resolve() = %#v, fallback calls = %d", video, fallback.calls)
+	if work.ID != itemID || fallback.calls != 1 {
+		t.Fatalf("Resolve() = %#v, fallback calls = %d", work, fallback.calls)
+	}
+}
+
+// TestResolverFallsBackFromRiskPageFinalURL freezes the second recovery path:
+// a trusted redirect can reveal the work ID even when SSR is replaced by a
+// verification page.
+func TestResolverFallsBackFromRiskPageFinalURL(t *testing.T) {
+	const itemID = "7673098271799701430"
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/short" {
+			http.Redirect(writer, request, "/note/"+itemID, http.StatusFound)
+			return
+		}
+		_, _ = writer.Write([]byte(`<script>window.byted_acrawler.init()</script>`))
+	}))
+	defer server.Close()
+
+	fallbackWork := WorkInfo{ID: itemID, Kind: WorkKindImages,
+		Assets: []MediaAsset{{URL: "https://p3-pc-sign.douyinpic.com/image.jpeg", Kind: MediaKindImage, Extension: ".jpg"}}}
+	fallback := &fakeDetailResolver{wantID: itemID, work: fallbackWork}
+	allowTestServer := func(candidate *url.URL) bool { return candidate.Host == strings.TrimPrefix(server.URL, "http://") }
+	resolver := &resolver{client: server.Client(), allowPageURL: allowTestServer, detail: fallback}
+	shareURL, _ := url.Parse(server.URL + "/short")
+
+	work, err := resolver.Resolve(context.Background(), shareURL)
+	if err != nil || work.ID != itemID || fallback.calls != 1 {
+		t.Fatalf("Resolve() = %#v, %v; fallback calls = %d", work, err, fallback.calls)
 	}
 }
 
 func TestParseSharePageRejectsNonNumericFallbackID(t *testing.T) {
 	page := []byte(`<script>window._ROUTER_DATA = {"loaderData":{"video_(id)/page":{"itemId":"https://attacker.invalid"}}}</script>`)
 	_, itemID, err := parseSharePage(page)
-	if !errors.Is(err, errRouterVideoMissing) || itemID != "" {
+	if !errors.Is(err, errRouterWorkMissing) || itemID != "" {
 		t.Fatalf("parseSharePage() itemID = %q, error = %v", itemID, err)
 	}
 }

@@ -12,13 +12,13 @@ import (
 	"testing"
 )
 
-type fakeVideoResolver struct {
-	video VideoInfo
-	err   error
+type fakeWorkResolver struct {
+	work WorkInfo
+	err  error
 }
 
-func (fake *fakeVideoResolver) Resolve(context.Context, *url.URL) (VideoInfo, error) {
-	return fake.video, fake.err
+func (fake *fakeWorkResolver) Resolve(context.Context, *url.URL) (WorkInfo, error) {
+	return fake.work, fake.err
 }
 
 type fakeMediaOpener struct {
@@ -26,21 +26,29 @@ type fakeMediaOpener struct {
 	err  error
 }
 
-func (fake *fakeMediaOpener) OpenMedia(context.Context, VideoInfo) (*http.Response, error) {
+func (fake *fakeMediaOpener) OpenAsset(_ context.Context, asset MediaAsset) (*http.Response, error) {
 	if fake.err != nil {
 		return nil, fake.err
 	}
+	contentType := "video/mp4"
+	if asset.Kind == MediaKindImage {
+		contentType = "image/jpeg"
+	}
+	body := fake.body
+	if asset.Kind == MediaKindImage && asset.URL != "" {
+		body = []byte(asset.URL)
+	}
 	return &http.Response{
 		StatusCode:    http.StatusOK,
-		Header:        http.Header{"Content-Type": []string{"video/mp4"}},
-		Body:          io.NopCloser(bytes.NewReader(fake.body)),
-		ContentLength: int64(len(fake.body)),
+		Header:        http.Header{"Content-Type": []string{contentType}},
+		Body:          io.NopCloser(bytes.NewReader(body)),
+		ContentLength: int64(len(body)),
 	}, nil
 }
 
-func testWebApplication(video VideoInfo, body []byte) *webApplication {
+func testWebApplication(work WorkInfo, body []byte) *webApplication {
 	return &webApplication{
-		resolver:   &fakeVideoResolver{video: video},
+		resolver:   &fakeWorkResolver{work: work},
 		downloader: &fakeMediaOpener{body: body},
 		tickets:    newDownloadTicketStore(),
 	}
@@ -50,7 +58,9 @@ func testWebApplication(video VideoInfo, body []byte) *webApplication {
 // same-origin JSON resolution, opaque ticket creation, attachment headers, and
 // direct media streaming without exposing the upstream URL.
 func TestWebResolveAndDownload(t *testing.T) {
-	video := VideoInfo{ID: "123", Author: "周期", Title: "测试作品", MediaURL: "https://aweme.snssdk.com/aweme/v1/play/?video_id=test"}
+	mediaURL := "https://aweme.snssdk.com/aweme/v1/play/?video_id=test"
+	video := WorkInfo{ID: "123", Author: "周期", Title: "测试作品", Kind: WorkKindVideo,
+		Assets: []MediaAsset{{URL: mediaURL, Kind: MediaKindVideo, Extension: ".mp4"}}}
 	app := testWebApplication(video, []byte("video-body"))
 	resolve := httptest.NewRequest(http.MethodPost, "/api/resolve", strings.NewReader(`{"shareText":"https://v.douyin.com/example/"}`))
 	resolve.Host = "127.0.0.1:17846"
@@ -66,7 +76,7 @@ func TestWebResolveAndDownload(t *testing.T) {
 	if err := json.NewDecoder(resolveRecorder.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode resolve response: %v", err)
 	}
-	if payload.Author != "周期" || payload.DownloadURL == "" || strings.Contains(resolveRecorder.Body.String(), video.MediaURL) {
+	if payload.Author != "周期" || payload.DownloadURL == "" || payload.Kind != WorkKindVideo || strings.Contains(resolveRecorder.Body.String(), mediaURL) {
 		t.Fatalf("unexpected resolve response: %#v", payload)
 	}
 
@@ -82,7 +92,7 @@ func TestWebResolveAndDownload(t *testing.T) {
 }
 
 func TestWebResolveRejectsCrossOriginRequest(t *testing.T) {
-	app := testWebApplication(VideoInfo{}, nil)
+	app := testWebApplication(WorkInfo{}, nil)
 	request := httptest.NewRequest(http.MethodPost, "/api/resolve", strings.NewReader(`{"shareText":"https://v.douyin.com/example/"}`))
 	request.Host = "127.0.0.1:17846"
 	request.Header.Set("Origin", "https://untrusted.example")
@@ -113,8 +123,45 @@ func TestEmbeddedPagePreflight(t *testing.T) {
 
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
 	response := httptest.NewRecorder()
-	testWebApplication(VideoInfo{}, nil).routes().ServeHTTP(response, request)
+	testWebApplication(WorkInfo{}, nil).routes().ServeHTTP(response, request)
 	if response.Code != http.StatusOK || response.Header().Get("Content-Security-Policy") == "" {
 		t.Fatalf("static response status = %d, CSP = %q", response.Code, response.Header().Get("Content-Security-Policy"))
+	}
+}
+
+func TestWebExposesImagePostAsIndividualPreviewsAndDownloads(t *testing.T) {
+	work := WorkInfo{ID: "7673098271799701430", Author: "Syoyng", Title: "以你为名的天使主义", Kind: WorkKindImages,
+		Assets: []MediaAsset{
+			{URL: "first-image", Kind: MediaKindImage, Extension: ".jpeg"},
+			{URL: "second-image", Kind: MediaKindImage, Extension: ".jpeg"},
+		}}
+	app := testWebApplication(work, nil)
+	resolve := httptest.NewRequest(http.MethodPost, "/api/resolve", strings.NewReader(`{"shareText":"https://v.douyin.com/example/"}`))
+	resolve.Header.Set("Content-Type", "application/json")
+	resolveRecorder := httptest.NewRecorder()
+	app.routes().ServeHTTP(resolveRecorder, resolve)
+
+	var payload resolveResponse
+	if err := json.NewDecoder(resolveRecorder.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode resolve response: %v", err)
+	}
+	if payload.Kind != WorkKindImages || payload.AssetCount != 2 || payload.DownloadURL != "" || len(payload.Assets) != 2 {
+		t.Fatalf("resolve response = %#v", payload)
+	}
+	if payload.Assets[0].PreviewURL == "" || payload.Assets[0].DownloadURL == "" ||
+		payload.Assets[0].Filename == payload.Assets[1].Filename {
+		t.Fatalf("image actions = %#v", payload.Assets)
+	}
+	previewRecorder := httptest.NewRecorder()
+	app.routes().ServeHTTP(previewRecorder, httptest.NewRequest(http.MethodGet, payload.Assets[0].PreviewURL, nil))
+	if previewRecorder.Code != http.StatusOK || previewRecorder.Body.String() != "first-image" ||
+		previewRecorder.Header().Get("Content-Disposition") != "" {
+		t.Fatalf("preview status = %d headers = %v body = %q", previewRecorder.Code, previewRecorder.Header(), previewRecorder.Body.String())
+	}
+	downloadRecorder := httptest.NewRecorder()
+	app.routes().ServeHTTP(downloadRecorder, httptest.NewRequest(http.MethodGet, payload.Assets[1].DownloadURL, nil))
+	if downloadRecorder.Body.String() != "second-image" ||
+		!strings.Contains(downloadRecorder.Header().Get("Content-Disposition"), "attachment") {
+		t.Fatalf("download headers = %v body = %q", downloadRecorder.Header(), downloadRecorder.Body.String())
 	}
 }

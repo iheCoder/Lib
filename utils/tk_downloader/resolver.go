@@ -21,29 +21,22 @@ const (
 	preferredOriginalRatio = "2160p"
 )
 
-var errRouterVideoMissing = errors.New("_ROUTER_DATA 中没有找到视频作品")
-
-// VideoInfo is the stable boundary between Douyin page parsing and file
-// downloading. Keeping only required fields isolates the downloader from the
-// much larger and frequently changing SSR payload.
-type VideoInfo struct {
-	ID       string
-	Author   string
-	Title    string
-	MediaURL string
-}
+var (
+	errRouterWorkMissing = errors.New("_ROUTER_DATA 中没有找到作品媒体")
+	errRiskVerification  = errors.New("返回了风控校验页，请稍后重试")
+)
 
 type resolver struct {
 	client       *http.Client
 	allowPageURL urlPolicy
-	detail       videoDetailResolver
+	detail       workDetailResolver
 }
 
 // videoDetailResolver is the deliberate seam between cheap SSR parsing and
 // the browser fallback. Tests can exercise orchestration without launching a
 // browser, while production pays the browser cost only after SSR has drifted.
-type videoDetailResolver interface {
-	ResolveByID(context.Context, string) (VideoInfo, error)
+type workDetailResolver interface {
+	ResolveByID(context.Context, string) (WorkInfo, error)
 }
 
 type routerEnvelope struct {
@@ -85,45 +78,49 @@ func newResolver() *resolver {
 }
 
 // Resolve downloads one bounded HTML page and converts its embedded router
-// state into VideoInfo. Network, HTTP, size, and parse failures are reported as
+// state into WorkInfo. Network, HTTP, size, and parse failures are reported as
 // distinct stages so page-shape changes are diagnosable from CLI output.
-func (r *resolver) Resolve(ctx context.Context, shareURL *url.URL) (VideoInfo, error) {
+func (r *resolver) Resolve(ctx context.Context, shareURL *url.URL) (WorkInfo, error) {
 	if !r.allowPageURL(shareURL) {
-		return VideoInfo{}, errors.New("分享地址不在受信任的抖音域名下")
+		return WorkInfo{}, errors.New("分享地址不在受信任的抖音域名下")
 	}
 	request, err := newSharePageRequest(ctx, shareURL)
 	if err != nil {
-		return VideoInfo{}, err
+		return WorkInfo{}, err
 	}
 	response, err := r.client.Do(request)
 	if err != nil {
-		return VideoInfo{}, fmt.Errorf("请求分享页: %w", err)
+		return WorkInfo{}, fmt.Errorf("请求分享页: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return VideoInfo{}, fmt.Errorf("分享页返回 HTTP %d", response.StatusCode)
+		return WorkInfo{}, fmt.Errorf("分享页返回 HTTP %d", response.StatusCode)
 	}
 
 	page, err := readBoundedPage(response.Body)
 	if err != nil {
-		return VideoInfo{}, err
+		return WorkInfo{}, err
 	}
-	video, itemID, err := parseSharePage(page)
+	work, itemID, err := parseSharePage(page)
 	if err == nil {
-		return video, nil
+		return work, nil
 	}
-	if !errors.Is(err, errRouterVideoMissing) || itemID == "" || r.detail == nil {
-		return VideoInfo{}, fmt.Errorf("解析分享页: %w", err)
+	if itemID == "" {
+		itemID = itemIDFromWorkPageURL(response.Request.URL)
+	}
+	canUseBrowser := errors.Is(err, errRouterWorkMissing) || errors.Is(err, errRiskVerification)
+	if !canUseBrowser || itemID == "" || r.detail == nil {
+		return WorkInfo{}, fmt.Errorf("解析分享页: %w", err)
 	}
 
 	// Newer share pages keep only itemId in SSR and fetch the actual work after
 	// browser verification. Falling back here preserves the fast legacy path
 	// and makes the upstream contract change explicit instead of guessing fields.
-	video, err = r.detail.ResolveByID(ctx, itemID)
+	work, err = r.detail.ResolveByID(ctx, itemID)
 	if err != nil {
-		return VideoInfo{}, fmt.Errorf("解析浏览器作品详情: %w", err)
+		return WorkInfo{}, fmt.Errorf("解析浏览器作品详情: %w", err)
 	}
-	return video, nil
+	return work, nil
 }
 
 // newSharePageRequest centralizes the headers that select Douyin's SSR mobile
@@ -157,40 +154,57 @@ func readBoundedPage(reader io.Reader) ([]byte, error) {
 // parseVideoInfo scans loader entries instead of depending on the current
 // dynamic key `video_(id)/page`. This keeps the parser tolerant of route-key
 // renames while retaining a deliberately small typed JSON model.
-func parseVideoInfo(page []byte) (VideoInfo, error) {
-	video, _, err := parseSharePage(page)
-	return video, err
+func parseVideoInfo(page []byte) (WorkInfo, error) {
+	work, _, err := parseSharePage(page)
+	return work, err
 }
 
 // parseSharePage returns both the old embedded video record and the stable
 // itemId retained by the new SSR shape. Keeping both outcomes in one parse
 // prevents two independent decoders from drifting apart on the same payload.
-func parseSharePage(page []byte) (VideoInfo, string, error) {
+func parseSharePage(page []byte) (WorkInfo, string, error) {
 	routerJSON, err := extractRouterData(page)
 	if err != nil {
 		if bytes.Contains(page, []byte("byted_acrawler")) {
-			return VideoInfo{}, "", errors.New("抖音返回了风控校验页，请稍后重试")
+			return WorkInfo{}, "", errRiskVerification
 		}
-		return VideoInfo{}, "", err
+		return WorkInfo{}, "", err
 	}
 	var envelope routerEnvelope
 	if err := json.Unmarshal(routerJSON, &envelope); err != nil {
-		return VideoInfo{}, "", fmt.Errorf("解码 _ROUTER_DATA: %w", err)
+		return WorkInfo{}, "", fmt.Errorf("解码 _ROUTER_DATA: %w", err)
 	}
 	itemID := ""
 	for _, raw := range envelope.LoaderData {
 		if itemID == "" {
 			itemID = itemIDFromLoaderEntry(raw)
 		}
-		video, found, err := videoFromLoaderEntry(raw)
+		work, found, err := workFromLoaderEntry(raw)
 		if err != nil {
-			return VideoInfo{}, itemID, err
+			return WorkInfo{}, itemID, err
 		}
 		if found {
-			return video, itemID, nil
+			return work, itemID, nil
 		}
 	}
-	return VideoInfo{}, itemID, errRouterVideoMissing
+	return WorkInfo{}, itemID, errRouterWorkMissing
+}
+
+// itemIDFromWorkPageURL recovers evidence already established by a trusted
+// redirect. Both video and image posts expose their decimal ID in the final
+// canonical path even when the response body itself is a verification page.
+func itemIDFromWorkPageURL(pageURL *url.URL) string {
+	if pageURL == nil {
+		return ""
+	}
+	parts := strings.Split(strings.Trim(pageURL.Path, "/"), "/")
+	if len(parts) != 2 || (parts[0] != "video" && parts[0] != "note") {
+		return ""
+	}
+	if !isDecimalWorkID(parts[1]) {
+		return ""
+	}
+	return parts[1]
 }
 
 // itemIDFromLoaderEntry intentionally accepts only decimal work IDs. The ID is
@@ -242,25 +256,25 @@ func extractRouterData(page []byte) ([]byte, error) {
 // videoFromLoaderEntry treats unrelated loader entries as normal, but once a
 // video item is found it validates every field required by the download stage.
 // This prevents malformed upstream data from becoming a vague file I/O error.
-func videoFromLoaderEntry(raw json.RawMessage) (VideoInfo, bool, error) {
+func workFromLoaderEntry(raw json.RawMessage) (WorkInfo, bool, error) {
 	var payload videoPagePayload
 	if err := json.Unmarshal(raw, &payload); err != nil || len(payload.VideoInfoResponse.Items) == 0 {
-		return VideoInfo{}, false, nil
+		return WorkInfo{}, false, nil
 	}
 	item := payload.VideoInfoResponse.Items[0]
 	if item.ID == "" || len(item.Video.PlayAddress.URLs) == 0 {
-		return VideoInfo{}, false, errors.New("作品数据缺少 ID 或播放地址")
+		return WorkInfo{}, false, errors.New("作品数据缺少 ID 或播放地址")
 	}
 	mediaURL, err := buildOriginalPlaybackURL(item.Video.PlayAddress.URLs[0])
 	if err != nil {
-		return VideoInfo{}, false, err
+		return WorkInfo{}, false, err
 	}
-	return VideoInfo{
-		ID:       item.ID,
-		Author:   strings.TrimSpace(item.Author.Nickname),
-		Title:    strings.TrimSpace(item.Title),
-		MediaURL: mediaURL.String(),
-	}, true, nil
+	work := WorkInfo{
+		ID: item.ID, Author: strings.TrimSpace(item.Author.Nickname),
+		Title: strings.TrimSpace(item.Title), Kind: WorkKindVideo,
+		Assets: []MediaAsset{{URL: mediaURL.String(), Kind: MediaKindVideo, Extension: ".mp4"}},
+	}
+	return work, true, work.Validate()
 }
 
 // buildOriginalPlaybackURL converts the mobile share page's `/playwm/` gateway

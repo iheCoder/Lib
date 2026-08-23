@@ -25,16 +25,16 @@ const (
 //go:embed web/*
 var embeddedWebAssets embed.FS
 
-type videoResolver interface {
-	Resolve(context.Context, *url.URL) (VideoInfo, error)
+type workResolver interface {
+	Resolve(context.Context, *url.URL) (WorkInfo, error)
 }
 
 type mediaOpener interface {
-	OpenMedia(context.Context, VideoInfo) (*http.Response, error)
+	OpenAsset(context.Context, MediaAsset) (*http.Response, error)
 }
 
 type webApplication struct {
-	resolver   videoResolver
+	resolver   workResolver
 	downloader mediaOpener
 	tickets    *downloadTicketStore
 }
@@ -44,11 +44,23 @@ type resolveRequest struct {
 }
 
 type resolveResponse struct {
-	ID          string `json:"id"`
-	Author      string `json:"author"`
-	Title       string `json:"title"`
+	ID          string          `json:"id"`
+	Author      string          `json:"author"`
+	Title       string          `json:"title"`
+	Filename    string          `json:"filename"`
+	DownloadURL string          `json:"downloadUrl"`
+	Kind        WorkKind        `json:"kind"`
+	AssetCount  int             `json:"assetCount"`
+	Assets      []resolvedAsset `json:"assets,omitempty"`
+}
+
+type resolvedAsset struct {
+	Index       int    `json:"index"`
 	Filename    string `json:"filename"`
+	PreviewURL  string `json:"previewUrl"`
 	DownloadURL string `json:"downloadUrl"`
+	Width       int    `json:"width,omitempty"`
+	Height      int    `json:"height,omitempty"`
 }
 
 // newWebApplication composes the production dependencies behind narrow
@@ -72,6 +84,7 @@ func (app *webApplication) routes() http.Handler {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/resolve", app.handleResolve)
+	mux.HandleFunc("GET /api/preview/{ticket}", app.handlePreview)
 	mux.HandleFunc("GET /api/download/{ticket}", app.handleDownload)
 	mux.Handle("GET /", http.FileServer(http.FS(webRoot)))
 	return app.securityHeaders(mux)
@@ -96,54 +109,111 @@ func (app *webApplication) handleResolve(writer http.ResponseWriter, request *ht
 		writeAPIError(writer, http.StatusBadRequest, err.Error())
 		return
 	}
-	video, err := app.resolver.Resolve(request.Context(), shareURL)
+	work, err := app.resolver.Resolve(request.Context(), shareURL)
 	if err != nil {
 		writeAPIError(writer, http.StatusBadGateway, err.Error())
 		return
 	}
-	app.writeResolvedVideo(writer, video)
+	app.writeResolvedWork(writer, work)
 }
 
-// writeResolvedVideo issues the ticket only after the complete resolve stage
+// writeResolvedWork issues the ticket only after the complete resolve stage
 // succeeds, preventing unusable entries from accumulating after upstream errors.
-func (app *webApplication) writeResolvedVideo(writer http.ResponseWriter, video VideoInfo) {
-	ticket, err := app.tickets.Issue(video)
-	if err != nil {
+func (app *webApplication) writeResolvedWork(writer http.ResponseWriter, work WorkInfo) {
+	if err := work.Validate(); err != nil {
+		writeAPIError(writer, http.StatusBadGateway, err.Error())
+		return
+	}
+	response := resolveResponse{
+		ID:         work.ID,
+		Author:     work.Author,
+		Title:      work.Title,
+		Kind:       work.Kind,
+		AssetCount: len(work.Assets),
+	}
+	if err := app.attachMediaTickets(work, &response); err != nil {
 		writeAPIError(writer, http.StatusInternalServerError, "无法创建下载任务")
 		return
 	}
-	writeJSONResponse(writer, http.StatusOK, resolveResponse{
-		ID:          video.ID,
-		Author:      video.Author,
-		Title:       video.Title,
-		Filename:    buildFilename(video),
-		DownloadURL: "/api/download/" + ticket,
-	})
+	writeJSONResponse(writer, http.StatusOK, response)
 }
 
-// handleDownload validates a short-lived ticket, opens the trusted upstream
-// stream, and proxies bytes directly to the browser. Neither the server nor the
-// browser needs to buffer the complete video before the save dialog starts.
+// attachMediaTickets creates a single video action or one preview/download pair
+// per image. Upstream URLs remain server-side in both response shapes.
+func (app *webApplication) attachMediaTickets(work WorkInfo, response *resolveResponse) error {
+	if !work.IsImagePost() {
+		ticket, err := app.tickets.Issue(work, 0)
+		if err != nil {
+			return err
+		}
+		response.Filename = buildDownloadFilename(work)
+		response.DownloadURL = "/api/download/" + ticket
+		return nil
+	}
+	for index, asset := range work.Assets {
+		ticket, err := app.tickets.Issue(work, index)
+		if err != nil {
+			return err
+		}
+		response.Assets = append(response.Assets, resolvedAsset{
+			Index: index + 1, Filename: buildIndividualImageFilename(work, index, asset),
+			PreviewURL: "/api/preview/" + ticket, DownloadURL: "/api/download/" + ticket,
+			Width: asset.Width, Height: asset.Height,
+		})
+	}
+	return nil
+}
+
+// handlePreview serves a same-origin inline image. The route is never returned
+// for videos, but the same ticket validation still protects accidental calls.
+func (app *webApplication) handlePreview(writer http.ResponseWriter, request *http.Request) {
+	app.serveTicketMedia(writer, request, false)
+}
+
+// handleDownload serves one attachment. Image posts therefore remain useful
+// when one CDN object expires without forcing the user to download a full set.
 func (app *webApplication) handleDownload(writer http.ResponseWriter, request *http.Request) {
-	video, exists := app.tickets.Get(request.PathValue("ticket"))
+	app.serveTicketMedia(writer, request, true)
+}
+
+// serveTicketMedia is the shared capability boundary for previews and saves.
+// It reopens and revalidates the upstream asset on every browser request.
+func (app *webApplication) serveTicketMedia(writer http.ResponseWriter, request *http.Request, attachment bool) {
+	grant, exists := app.tickets.Get(request.PathValue("ticket"))
 	if !exists {
-		http.Error(writer, "下载链接已失效，请重新解析", http.StatusNotFound)
+		http.Error(writer, "媒体链接已失效，请重新解析", http.StatusNotFound)
 		return
 	}
-	response, err := app.downloader.OpenMedia(request.Context(), video)
+	asset, exists := grant.Asset()
+	if !exists {
+		http.Error(writer, "媒体任务无效，请重新解析", http.StatusNotFound)
+		return
+	}
+	response, err := app.downloader.OpenAsset(request.Context(), asset)
 	if err != nil {
-		http.Error(writer, "无法连接视频源，请重新解析", http.StatusBadGateway)
+		http.Error(writer, "无法连接媒体源，请重新解析", http.StatusBadGateway)
 		return
 	}
 	defer response.Body.Close()
+	copyMediaHeaders(writer, response, grant, asset, attachment)
+	writer.WriteHeader(http.StatusOK)
+	_, _ = io.CopyBuffer(writer, response.Body, make([]byte, downloadBufferSize))
+}
 
+// copyMediaHeaders preserves type and length while adding attachment metadata
+// only for explicit downloads, allowing preview responses to render in <img>.
+func copyMediaHeaders(writer http.ResponseWriter, response *http.Response, grant mediaGrant, asset MediaAsset, attachment bool) {
 	writer.Header().Set("Content-Type", response.Header.Get("Content-Type"))
-	writer.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": buildFilename(video)}))
+	if attachment {
+		filename := buildDownloadFilename(grant.Work)
+		if grant.Work.IsImagePost() {
+			filename = buildIndividualImageFilename(grant.Work, grant.AssetIndex, asset)
+		}
+		writer.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
+	}
 	if response.ContentLength >= 0 {
 		writer.Header().Set("Content-Length", strconv.FormatInt(response.ContentLength, 10))
 	}
-	writer.WriteHeader(http.StatusOK)
-	_, _ = io.CopyBuffer(writer, response.Body, make([]byte, downloadBufferSize))
 }
 
 // isJSONRequest parses parameters such as charset instead of comparing the raw

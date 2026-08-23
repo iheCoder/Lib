@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"sync"
 	"time"
 )
@@ -13,8 +14,24 @@ const (
 )
 
 type downloadTicket struct {
-	video     VideoInfo
+	grant     mediaGrant
 	expiresAt time.Time
+}
+
+// mediaGrant narrows one ticket to one resolved asset. This lets the browser
+// preview and download images independently without accepting arbitrary URLs.
+type mediaGrant struct {
+	Work       WorkInfo
+	AssetIndex int
+}
+
+// Asset validates the stored index again at use time, keeping corrupt or stale
+// in-memory state from becoming an out-of-bounds media request.
+func (grant mediaGrant) Asset() (MediaAsset, bool) {
+	if grant.AssetIndex < 0 || grant.AssetIndex >= len(grant.Work.Assets) {
+		return MediaAsset{}, false
+	}
+	return grant.Work.Assets[grant.AssetIndex], true
 }
 
 type downloadTicketStore struct {
@@ -36,7 +53,10 @@ func newDownloadTicketStore() *downloadTicketStore {
 // Issue creates a cryptographically unguessable ticket and opportunistically
 // removes expired entries. No background goroutine is needed for this small
 // local tool, so server shutdown remains simple and deterministic.
-func (store *downloadTicketStore) Issue(video VideoInfo) (string, error) {
+func (store *downloadTicketStore) Issue(work WorkInfo, assetIndex int) (string, error) {
+	if _, exists := (mediaGrant{Work: work, AssetIndex: assetIndex}).Asset(); !exists {
+		return "", errors.New("下载任务引用了无效媒体")
+	}
 	random := make([]byte, downloadTicketBytes)
 	if _, err := rand.Read(random); err != nil {
 		return "", err
@@ -47,7 +67,7 @@ func (store *downloadTicketStore) Issue(video VideoInfo) (string, error) {
 	defer store.mu.Unlock()
 	store.purgeExpiredLocked()
 	store.entries[ticketID] = downloadTicket{
-		video:     video,
+		grant:     mediaGrant{Work: work, AssetIndex: assetIndex},
 		expiresAt: store.now().Add(downloadTicketLifetime),
 	}
 	return ticketID, nil
@@ -56,15 +76,15 @@ func (store *downloadTicketStore) Issue(video VideoInfo) (string, error) {
 // Get returns only live entries. Tickets remain reusable until expiry so a
 // browser retry after a transient connection failure does not force users to
 // resolve the share page again.
-func (store *downloadTicketStore) Get(ticketID string) (VideoInfo, bool) {
+func (store *downloadTicketStore) Get(ticketID string) (mediaGrant, bool) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	store.purgeExpiredLocked()
 	ticket, exists := store.entries[ticketID]
 	if !exists {
-		return VideoInfo{}, false
+		return mediaGrant{}, false
 	}
-	return ticket.video, true
+	return ticket.grant, true
 }
 
 // purgeExpiredLocked assumes the caller holds store.mu and keeps expiration
