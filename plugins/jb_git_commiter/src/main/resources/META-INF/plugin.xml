@@ -1,0 +1,37 @@
+<idea-plugin>
+    <id>com.ihewe.jb-git-committer</id>
+    <name>AI Git Committer</name>
+    <vendor>ihewe</vendor>
+
+    <description><![CDATA[
+        Select changed files in the Project view or Commit tool window and generate a commit
+        message with your own OpenAI-compatible model API.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.vcs</depends>
+    <depends>Git4Idea</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationConfigurable
+                id="com.ihewe.jb-git-committer.settings"
+                displayName="AI Git Committer"
+                parentId="tools"
+                instance="com.ihewe.jbgitcommitter.settings.AiCommitSettingsConfigurable"/>
+        <notificationGroup
+                id="AI Git Committer"
+                displayType="BALLOON"
+                isLogByDefault="true"/>
+    </extensions>
+
+    <actions>
+        <action
+                id="com.ihewe.jbgitcommitter.GenerateCommitMessage"
+                class="com.ihewe.jbgitcommitter.action.GenerateCommitMessageAction"
+                text="Generate Commit Message with AI"
+                description="Generate a commit message from the selected changes">
+            <add-to-group group-id="ChangesView.CommitToolbar" anchor="first"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>
