@@ -1,6 +1,7 @@
 package com.ihewe.jbgitcommitter.prompt;
 
 import com.ihewe.jbgitcommitter.model.FileChangeSnapshot;
+import com.ihewe.jbgitcommitter.settings.AiCommitSettings;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -35,13 +36,20 @@ class CommitPromptBuilderTest {
         assertTrue(prompt.endsWith("...[context truncated by AI Git Committer]"));
     }
 
-    /** Verifies user-specific output constraints are appended without weakening the base contract. */
+    /** Empty custom text selects the exact immutable default prompt. */
     @Test
-    void buildsSystemContract() {
-        String prompt = CommitPromptBuilder.systemPrompt("中文", true, "scope 使用模块名");
+    void usesDefaultPrompt() {
+        AiCommitSettings.SettingsState settings = new AiCommitSettings.SettingsState();
 
-        assertTrue(prompt.contains("at most 72 characters"));
-        assertTrue(prompt.contains("Conventional Commits"));
-        assertTrue(prompt.contains("scope 使用模块名"));
+        assertEquals(AiCommitSettings.DEFAULT_PROMPT, CommitPromptBuilder.systemPrompt(settings));
+    }
+
+    /** A custom prompt replaces the default completely instead of being appended to it. */
+    @Test
+    void customPromptOverridesDefault() {
+        AiCommitSettings.SettingsState settings = new AiCommitSettings.SettingsState();
+        settings.customPrompt = "Write a detailed multi-line message with rationale.";
+
+        assertEquals(settings.customPrompt, CommitPromptBuilder.systemPrompt(settings));
     }
 }

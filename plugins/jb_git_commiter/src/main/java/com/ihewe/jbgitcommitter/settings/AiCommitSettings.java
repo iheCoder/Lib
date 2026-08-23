@@ -17,9 +17,48 @@ import org.jetbrains.annotations.NotNull;
 @Service(Service.Level.APP)
 @State(name = "com.ihewe.jbgitcommitter.settings.AiCommitSettings", storages = @Storage("AiGitCommitter.xml"))
 public final class AiCommitSettings implements PersistentStateComponent<AiCommitSettings.SettingsState> {
+    public static final int CURRENT_SCHEMA_VERSION = 2;
     public static final String DEFAULT_ENDPOINT = "https://api.openai.com/v1/chat/completions";
     public static final String DEFAULT_MODEL = "gpt-4.1-mini";
     public static final int DEFAULT_MAX_CONTEXT_CHARS = 60_000;
+    public static final int DEFAULT_MESSAGE_MAX_CHARACTERS = 50;
+    public static final String DEFAULT_PROMPT = """
+            Generate a concise git commit message for the provided changes.
+            Capture the primary intent or behavior change, not a list of individual edits.
+            Prefer what the change accomplishes over how it was implemented.
+            Be specific when the evidence supports it, but do not invent intent that is not present in the changes.
+            If several changes support the same goal, describe that shared goal rather than enumerating them.
+            If the changes contain multiple unrelated goals, summarize the most important ones concisely without forcing them into a single invented theme.
+            Return only the commit message. No explanation, prefix, quotation marks, or markdown.
+            """.strip();
+    public static final String DEFAULT_GENERATED_PATTERNS = """
+            # One language-independent glob per line.
+            **/*.generated.*
+            **/*.g.dart
+            **/*.freezed.dart
+            **/*.pb.go
+            **/*_pb2.py
+            **/*_pb2.pyi
+            **/__generated__/**
+            **/generated/**
+            **/vendor/**
+            **/*.min.js
+            **/*.min.css
+            **/package-lock.json
+            **/yarn.lock
+            **/pnpm-lock.yaml
+            **/poetry.lock
+            **/uv.lock
+            **/go.sum
+            """.strip();
+    public static final String DEFAULT_SOURCE_GENERATED_RULES = """
+            # source glob => generated glob, generated glob
+            **/*.proto => **/*.pb.go, **/*_pb2.py, **/*_pb2.pyi
+            **/*.graphql => **/*.generated.*, **/__generated__/**
+            **/openapi*.yaml => **/generated/**
+            **/openapi*.yml => **/generated/**
+            **/openapi*.json => **/generated/**
+            """.strip();
     private static final CredentialAttributes API_KEY_ATTRIBUTES = new CredentialAttributes(
             CredentialAttributesKt.generateServiceName("AI Git Committer", "OpenAI-compatible API key")
     );
@@ -42,6 +81,16 @@ public final class AiCommitSettings implements PersistentStateComponent<AiCommit
     /** Replaces deserialized state atomically to avoid partially applied settings. */
     @Override
     public void loadState(@NotNull SettingsState loadedState) {
+        // Older plugin XML may lack current fields. Restore only absent values while preserving
+        // deliberate empty pattern/rule lists, which are the supported way to disable filtering.
+        loadedState.customPrompt = loadedState.customPrompt == null ? "" : loadedState.customPrompt;
+        if (loadedState.generatedPatterns == null) {
+            loadedState.generatedPatterns = DEFAULT_GENERATED_PATTERNS;
+        }
+        if (loadedState.sourceGeneratedRules == null) {
+            loadedState.sourceGeneratedRules = DEFAULT_SOURCE_GENERATED_RULES;
+        }
+        loadedState.schemaVersion = CURRENT_SCHEMA_VERSION;
         state = loadedState;
     }
 
@@ -78,12 +127,19 @@ public final class AiCommitSettings implements PersistentStateComponent<AiCommit
 
     /** Serializable non-secret settings with conservative payload and timeout defaults. */
     public static final class SettingsState {
+        public int schemaVersion = CURRENT_SCHEMA_VERSION;
         public String endpoint = DEFAULT_ENDPOINT;
         public String model = DEFAULT_MODEL;
-        public String outputLanguage = "中文";
-        public String additionalInstructions = "";
+        public String customPrompt = "";
+        public String generatedPatterns = DEFAULT_GENERATED_PATTERNS;
+        public String sourceGeneratedRules = DEFAULT_SOURCE_GENERATED_RULES;
         public int maxContextChars = DEFAULT_MAX_CONTEXT_CHARS;
         public int requestTimeoutSeconds = 60;
-        public boolean conventionalCommits = true;
+        public boolean structuredOutput = true;
+
+        /** Empty custom text means the immutable built-in prompt and its 50-character schema apply. */
+        public boolean usesDefaultPrompt() {
+            return customPrompt == null || customPrompt.isBlank();
+        }
     }
 }

@@ -1,6 +1,7 @@
 package com.ihewe.jbgitcommitter.settings;
 
 import com.ihewe.jbgitcommitter.api.OpenAiCompatibleClient;
+import com.ihewe.jbgitcommitter.context.FileContextPolicy;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.options.ConfigurationException;
@@ -8,6 +9,7 @@ import com.intellij.ui.JBColor;
 import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBPasswordField;
+import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.util.ui.FormBuilder;
@@ -20,6 +22,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import java.awt.FlowLayout;
 import java.util.Arrays;
+import java.util.List;
 
 /** Builds the Settings page without reading secrets back onto the UI thread. */
 public final class AiCommitSettingsConfigurable implements Configurable {
@@ -31,12 +34,14 @@ public final class AiCommitSettingsConfigurable implements Configurable {
     private JPanel panel;
     private JBTextField endpointField;
     private JBTextField modelField;
-    private JBTextField languageField;
     private JBTextField maxContextField;
     private JBTextField timeoutField;
-    private JBTextArea instructionsArea;
+    private JBTextArea defaultPromptArea;
+    private JBTextArea customPromptArea;
+    private JBTextArea generatedPatternsArea;
+    private JBTextArea sourceGeneratedRulesArea;
     private JBPasswordField apiKeyField;
-    private JBCheckBox conventionalCheckBox;
+    private JBCheckBox structuredOutputCheckBox;
     private JBCheckBox clearApiKeyCheckBox;
     private JButton testApiButton;
     private JBLabel testStatusLabel;
@@ -50,36 +55,60 @@ public final class AiCommitSettingsConfigurable implements Configurable {
     /** Creates a compact form; API-key input is write-only to avoid exposing stored credentials. */
     @Override
     public @Nullable JComponent createComponent() {
+        initializeFields();
+        panel = buildForm();
+        reset();
+        return new JBScrollPane(panel);
+    }
+
+    /** Creates all controls in one place so form composition remains a linear overview. */
+    private void initializeFields() {
         endpointField = new JBTextField();
         modelField = new JBTextField();
-        languageField = new JBTextField();
         maxContextField = new JBTextField();
         timeoutField = new JBTextField();
-        instructionsArea = new JBTextArea(4, 40);
-        instructionsArea.setLineWrap(true);
-        instructionsArea.setWrapStyleWord(true);
+        defaultPromptArea = wrappingTextArea(9);
+        defaultPromptArea.setText(AiCommitSettings.DEFAULT_PROMPT);
+        defaultPromptArea.setEditable(false);
+        customPromptArea = wrappingTextArea(9);
+        generatedPatternsArea = new JBTextArea(8, 40);
+        sourceGeneratedRulesArea = new JBTextArea(6, 40);
         apiKeyField = new JBPasswordField();
-        conventionalCheckBox = new JBCheckBox("Use Conventional Commits format");
+        structuredOutputCheckBox = new JBCheckBox("Use strict JSON Schema output (disable for incompatible APIs)");
         clearApiKeyCheckBox = new JBCheckBox("Clear the saved API key");
         testApiButton = new JButton("Test API");
         testApiButton.addActionListener(event -> testApiConnection());
         testStatusLabel = new JBLabel("The test sends only 'Reply with OK', never repository content.");
+    }
 
-        panel = FormBuilder.createFormBuilder()
+    /** Groups provider, output, prompt, and context-policy settings in their execution order. */
+    private JPanel buildForm() {
+        return FormBuilder.createFormBuilder()
                 .addLabeledComponent(new JBLabel("Chat Completions URL:"), endpointField, 1, false)
                 .addLabeledComponent(new JBLabel("Model:"), modelField, 1, false)
                 .addLabeledComponent(new JBLabel("API key (leave blank to keep saved key):"), apiKeyField, 1, false)
                 .addLabeledComponent(new JBLabel("Connection:"), createTestPanel(), 1, false)
                 .addComponent(clearApiKeyCheckBox, 1)
-                .addLabeledComponent(new JBLabel("Output language:"), languageField, 1, false)
-                .addComponent(conventionalCheckBox, 1)
+                .addComponent(structuredOutputCheckBox, 1)
                 .addLabeledComponent(new JBLabel("Maximum context characters:"), maxContextField, 1, false)
                 .addLabeledComponent(new JBLabel("Request timeout (seconds):"), timeoutField, 1, false)
-                .addLabeledComponentFillVertically("Additional instructions:", new JScrollPane(instructionsArea))
+                .addLabeledComponentFillVertically("Default prompt (read-only):", new JScrollPane(defaultPromptArea))
+                .addLabeledComponentFillVertically(
+                        "Custom prompt override (blank uses Default Prompt):",
+                        new JScrollPane(customPromptArea)
+                )
+                .addLabeledComponentFillVertically("Generated file globs (one per line):", new JScrollPane(generatedPatternsArea))
+                .addLabeledComponentFillVertically("Source → Generated rules:", new JScrollPane(sourceGeneratedRulesArea))
                 .addComponentFillVertically(new JPanel(), 0)
                 .getPanel();
-        reset();
-        return panel;
+    }
+
+    /** Applies consistent wrapping to prose prompts while leaving glob schemas line-oriented. */
+    private static JBTextArea wrappingTextArea(int rows) {
+        JBTextArea area = new JBTextArea(rows, 40);
+        area.setLineWrap(true);
+        area.setWrapStyleWord(true);
+        return area;
     }
 
     /** Compares every editable non-secret value and treats entered/cleared credentials as changes. */
@@ -88,11 +117,12 @@ public final class AiCommitSettingsConfigurable implements Configurable {
         AiCommitSettings.SettingsState state = AiCommitSettings.getInstance().getState();
         return !endpointField.getText().trim().equals(state.endpoint)
                 || !modelField.getText().trim().equals(state.model)
-                || !languageField.getText().trim().equals(state.outputLanguage)
-                || !instructionsArea.getText().trim().equals(state.additionalInstructions)
+                || !customPromptArea.getText().trim().equals(state.customPrompt)
+                || !generatedPatternsArea.getText().trim().equals(state.generatedPatterns)
+                || !sourceGeneratedRulesArea.getText().trim().equals(state.sourceGeneratedRules)
                 || !maxContextField.getText().trim().equals(String.valueOf(state.maxContextChars))
                 || !timeoutField.getText().trim().equals(String.valueOf(state.requestTimeoutSeconds))
-                || conventionalCheckBox.isSelected() != state.conventionalCommits
+                || structuredOutputCheckBox.isSelected() != state.structuredOutput
                 || apiKeyField.getPassword().length > 0
                 || clearApiKeyCheckBox.isSelected();
     }
@@ -113,11 +143,12 @@ public final class AiCommitSettingsConfigurable implements Configurable {
         AiCommitSettings.SettingsState state = AiCommitSettings.getInstance().getState();
         endpointField.setText(state.endpoint);
         modelField.setText(state.model);
-        languageField.setText(state.outputLanguage);
-        instructionsArea.setText(state.additionalInstructions);
+        customPromptArea.setText(state.customPrompt);
+        generatedPatternsArea.setText(state.generatedPatterns);
+        sourceGeneratedRulesArea.setText(state.sourceGeneratedRules);
         maxContextField.setText(String.valueOf(state.maxContextChars));
         timeoutField.setText(String.valueOf(state.requestTimeoutSeconds));
-        conventionalCheckBox.setSelected(state.conventionalCommits);
+        structuredOutputCheckBox.setSelected(state.structuredOutput);
         apiKeyField.setText("");
         clearApiKeyCheckBox.setSelected(false);
         resetTestStatus();
@@ -129,12 +160,14 @@ public final class AiCommitSettingsConfigurable implements Configurable {
         panel = null;
         endpointField = null;
         modelField = null;
-        languageField = null;
         maxContextField = null;
         timeoutField = null;
-        instructionsArea = null;
+        defaultPromptArea = null;
+        customPromptArea = null;
+        generatedPatternsArea = null;
+        sourceGeneratedRulesArea = null;
         apiKeyField = null;
-        conventionalCheckBox = null;
+        structuredOutputCheckBox = null;
         clearApiKeyCheckBox = null;
         testApiButton = null;
         testStatusLabel = null;
@@ -224,7 +257,6 @@ public final class AiCommitSettingsConfigurable implements Configurable {
     private FormValues readFormValues() throws ConfigurationException {
         String endpoint = endpointField.getText().trim();
         String model = modelField.getText().trim();
-        String language = languageField.getText().trim();
         int maxContext = parseBoundedInt(
                 maxContextField.getText(), "Maximum context", MIN_CONTEXT_CHARS, MAX_CONTEXT_CHARS
         );
@@ -234,11 +266,26 @@ public final class AiCommitSettingsConfigurable implements Configurable {
         if (!endpoint.startsWith("http://") && !endpoint.startsWith("https://")) {
             throw new ConfigurationException("Chat Completions URL must start with http:// or https://");
         }
-        if (model.isBlank() || language.isBlank()) {
-            throw new ConfigurationException("Model and output language cannot be empty");
+        if (model.isBlank()) {
+            throw new ConfigurationException("Model cannot be empty");
         }
-        return new FormValues(endpoint, model, language, instructionsArea.getText().trim(), maxContext, timeout,
-                conventionalCheckBox.isSelected());
+        String generatedPatterns = generatedPatternsArea.getText().trim();
+        String sourceGeneratedRules = sourceGeneratedRulesArea.getText().trim();
+        validateFilePolicy(generatedPatterns, sourceGeneratedRules);
+        return new FormValues(
+                endpoint, model, customPromptArea.getText().trim(), generatedPatterns, sourceGeneratedRules,
+                maxContext, timeout, structuredOutputCheckBox.isSelected()
+        );
+    }
+
+    /** Reuses the production parser so malformed Source → Generated rules cannot be saved or tested. */
+    private static void validateFilePolicy(String generatedPatterns, String sourceGeneratedRules)
+            throws ConfigurationException {
+        try {
+            FileContextPolicy.select(List.of(), generatedPatterns, sourceGeneratedRules);
+        } catch (IllegalArgumentException exception) {
+            throw new ConfigurationException(exception.getMessage());
+        }
     }
 
     /** Parses a numeric setting with explicit operational bounds to prevent accidental huge requests. */
@@ -275,11 +322,12 @@ public final class AiCommitSettingsConfigurable implements Configurable {
     private record FormValues(
             String endpoint,
             String model,
-            String language,
-            String instructions,
+            String customPrompt,
+            String generatedPatterns,
+            String sourceGeneratedRules,
             int maxContext,
             int timeout,
-            boolean conventionalCommits
+            boolean structuredOutput
     ) {
         /** Produces an isolated request configuration for Test API without mutating saved settings. */
         private AiCommitSettings.SettingsState toSettingsState() {
@@ -292,11 +340,13 @@ public final class AiCommitSettingsConfigurable implements Configurable {
         private void copyTo(AiCommitSettings.SettingsState state) {
             state.endpoint = endpoint;
             state.model = model;
-            state.outputLanguage = language;
-            state.additionalInstructions = instructions;
+            state.customPrompt = customPrompt;
+            state.generatedPatterns = generatedPatterns;
+            state.sourceGeneratedRules = sourceGeneratedRules;
             state.maxContextChars = maxContext;
             state.requestTimeoutSeconds = timeout;
-            state.conventionalCommits = conventionalCommits;
+            state.structuredOutput = structuredOutput;
+            state.schemaVersion = AiCommitSettings.CURRENT_SCHEMA_VERSION;
         }
     }
 }
