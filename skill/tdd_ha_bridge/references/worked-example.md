@@ -8,6 +8,7 @@
 Status: BLOCKED_BY_ORACLE_AMBIGUITY
 Scope: CreateOrder 的库存扣减、订单落库与消息发布
 Baseline: 相关单元测试通过；未发现 publish failure 的契约测试
+Secondary gap: V3 缺少真实 publish failpoint，Oracle 裁决后仍需先补 testability
 ```
 
 ## One-minute Summary
@@ -35,28 +36,37 @@ Baseline: 相关单元测试通过；未发现 publish failure 的契约测试
 
 ## Minimal High-value Scenarios
 
-| ID | Pri | Intent | Given / Trigger | Expected + forbidden effects | Protects | Exposes | Oracle |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| T1 | P0 | 正常创建只产生一次效果 | stock > qty | 一个订单；库存扣减一次；一个 ID | B1 | 基线错误 | REQ / High |
-| T2 | P0 | 库存不足无残留 | stock < qty | 明确错误；无订单；库存不变；不 publish | B2 | 先写后校验 | DOMAIN / High |
-| T3 | P0 | 并发相同幂等键 | 两请求同闸门释放 | 只产生一次订单和一次扣减 | B3 | 应用层 check-then-act race | API / High |
-| T4 | P1 | 恰好耗尽库存 | stock == qty | 成功；库存为 0 | B1 | `<`/`<=` 错误 | REQ / High |
-| T5 | P0 | commit 后 publish 失败 | publish 注入失败 | 待裁决 | B4 | ambiguous retry | UNKNOWN / Low |
+| ID | Pri | Intent | Given / Trigger | Expected + forbidden effects | Protects | Exposes | Oracle | Verify |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| T1 | P0 | 正常创建只产生一次效果 | stock > qty | 一个订单；库存扣减一次；一个 ID | B1 | 基线错误 | REQ / High | V1 |
+| T2 | P0 | 库存不足无残留 | stock < qty | 明确错误；无订单；库存不变；不 publish | B2 | 先写后校验 | DOMAIN / High | V1 |
+| T3 | P0 | 并发相同幂等键 | 两请求在幂等检查后由 barrier 同时释放 | 只产生一次订单和一次扣减 | B3 | 应用层 check-then-act race | API / High | V2 |
+| T4 | P1 | 恰好耗尽库存 | stock == qty | 成功；库存为 0 | B1 | `<`/`<=` 错误 | REQ / High | V1 |
+| T5 | P0 | commit 后 publish 失败 | publish 注入失败 | 待裁决 | B4 | ambiguous retry | UNKNOWN / Low | V3 |
+
+## Verification Strategies
+
+| ID | Level | Target property | Control / injection | Realism | Observable | Repeatability / diagnostic |
+| --- | --- | --- | --- | --- | --- | --- |
+| V1 | component | 业务分区与副作用原子边界 | 受控 repository + state spy | 不依赖 DB 隔离语义 | return、订单、库存、publish count | 确定性；定位业务分支 |
+| V2 | integration | 并发幂等与 unique constraint | 真实 DB；两个事务在 pre-check 后 barrier 释放 | 保留事务/唯一约束 | durable order count、stock、两响应 | 确定性；定位 check/commit boundary |
+| V3 | integration/fault injection | DB commit、publish 与 retry 边界 | 真实 DB/MQ；commit/publish 前后 failpoint | 不能用单纯 error mock | durable row、outbox/event、retry effect | Oracle 未裁决；harness 还缺 publish failpoint |
 
 ## Fault Challenge
 
-| Fault | Wrong implementation | Violates | Killed by | Result |
-| --- | --- | --- | --- | --- |
-| M1 | 先建订单，再校验库存 | B2 | T2 | killed |
-| M2 | 幂等只做非原子 pre-check | B3 | T3 | killed |
-| M3 | `stock <= qty` 一律拒绝 | B1 | T4 | killed |
-| M4 | publish 失败返回 5xx，但订单已提交且无稳定幂等 | B3, B4 | NONE | survivor: Oracle unknown |
+| Fault | Wrong implementation | Violates | Witness | Verify | Result |
+| --- | --- | --- | --- | --- | --- |
+| M1 | 先建订单，再校验库存 | B2 | T2 | V1 | killed |
+| M2 | 幂等只做非原子 pre-check | B3 | T3 | V2 | killed |
+| M3 | `stock <= qty` 一律拒绝 | B1 | T4 | V1 | killed |
+| M4 | publish 失败返回 5xx，但订单已提交且无稳定幂等 | B3, B4 | T5 | V3 | survivor: Oracle unknown + missing failpoint |
 
 ## Coverage Audit
 
 ```text
 Behavior coverage: B1 ✓  B2 ✓  B3 ✓  B4 ?  B5 △
 Risk coverage:     R1 ?  R2 ✓  R3 ✓  R4 ?
+Verification:      V1 ✓  V2 ✓  V3 ≈
 Relevant lenses:   Contract ✓ / State ✓ / Partition ✓ / Interaction ? / Time-Concurrency △ / Regression △
 ```
 
@@ -67,5 +77,6 @@ Relevant lenses:   Contract ✓ / State ✓ / Partition ✓ / Interaction ? / Ti
    - 若整体失败：需要证明订单、库存和事件均无残留。
    - 若接口返回成功：需要明确事件最终送达保证和告警语义。
 2. context cancellation 发生在 commit 之后时，API 应返回已成功结果还是取消错误？
+3. 是否批准为 V3 增加真实 publish failpoint？在此之前，普通 mock 只能验证 error branch，不能证明真实 partial-failure 语义。
 
 本例没有为了“全面”加入 max-int、宇宙射线或所有依赖组合；它把人的注意力放在会实质改变实现的两个 Oracle 上。

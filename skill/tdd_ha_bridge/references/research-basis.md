@@ -18,11 +18,15 @@
 
 [TestCase-Eval (2025)](https://arxiv.org/abs/2506.12278) 将能力区分为覆盖不同故障类型，以及构造能真正暴露具体错误实现的输入。本 skill 的 Critic 同时检查“风险是否被想到”和“场景是否真的能杀死它”。
 
+[IntTestGen (2026)](https://arxiv.org/abs/2605.26851) 聚焦使用真实项目内依赖的 low-level integration tests，强调 mock-based unit tests 会跳过对象构造、API 序列和组件交互 fault。故本 skill 将 verification fidelity、真实依赖语义和“不要 mock 掉 target property”加入充分性条件。
+
 ### 4. 强模型需要反馈和清晰标准，不需要僵硬 taxonomy
 
 [TestForge (2025)](https://arxiv.org/abs/2503.14713) 通过执行与覆盖反馈迭代修复、扩展测试；[newer-model replication (2026)](https://arxiv.org/abs/2601.09695) 则显示现代模型上的简单方法可超过多种旧式复杂 pipeline。故本 skill 保留短而强的 Lens、Critic 与可观测反馈，不设置几十类机械规则。
 
 [Evaluator-optimizer pattern](https://www.anthropic.com/engineering/building-effective-agents) 支持在评价标准清晰时用生成—评价循环。因此 Designer 与 Critic 使用不同任务表示；Critic 先独立重建风险面，避免只改写 Designer 的答案。
+
+[TestAgent (2026)](https://arxiv.org/abs/2607.09101) 使用 requirement planner、test generator、test reviewer 与测试专用上下文协作，支持 planner/reviewer 角色和上下文分离。这里不强制多 agent，但要求 blind critique 在 candidate reveal 前固化 fault inventory。
 
 ### 5. Oracle、property 与组合交互
 
@@ -30,8 +34,16 @@
 
 [Metamorphic testing survey (2026)](https://arxiv.org/abs/2605.13898) 总结了用多次相关执行之间的必要关系缓解 Oracle 问题的研究，因此 property/metamorphic relation 是一级设计判断，但只有在关系本身有证据时才使用。
 
+[Software evolution study (2026)](https://arxiv.org/abs/2603.23443) 研究 LLM 测试对 semantic-changing 与 semantic-preserving changes 的反应，提示对表面程序形态和 regression awareness 的风险。因此 Bug 修复使用 exact reproducer + fault mechanism + generalized neighbor，防止只 hardcode 事故实例。
+
 [NIST combinatorial testing](https://csrc.nist.gov/pubs/journal/2024/02/combinatorial-testing-for-building-reliable-system/final) 说明少数参数交互可用 t-way 组合高效覆盖。这里把它作为已识别 interaction risk 的压缩工具，而不是默认展开所有参数组合。
 
 ### 6. Agentic TDD 的实际工作习惯
 
 [First run the tests](https://simonwillison.net/guides/agentic-engineering-patterns/first-run-the-tests/) 强调既有测试帮助 agent 建立仓库语境并持续验证修改；[How OpenAI uses Codex](https://cdn.openai.com/pdf/6a2631dc-783e-479b-b1a4-af0cfbd38630/how-openai-uses-codex.pdf) 展示了用 property-based tests 改善测试覆盖的实践。故本 skill 先记录 baseline，并在适合时优先稳定 property，而不是只生成 examples。
+
+### 7. AI Agent 需要独立 Eval Route
+
+[Anthropic agent eval practice (2026)](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents) 将 agent eval 区分为 task、trial、trajectory、outcome、grader 和 harness，强调非确定性行为需要 multiple trials、隔离环境，以及 code/model/human graders 的组合与校准。故本 skill 不用单次 testcase 评估 agent，并同时审查工具轨迹和真实环境结果。
+
+[OpenAI Graders API](https://platform.openai.com/docs/api-reference/graders) 提供确定性 string/code grader、model grader 和 multi-grader 等组合机制。这里抽象为 grader stack，不绑定某一供应商；P0 forbidden effect 优先使用确定性 binary gate，开放质量才交给校准后的模型 grader。

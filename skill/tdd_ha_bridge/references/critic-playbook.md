@@ -9,20 +9,23 @@ Critic 的目标不是“再多想几个测试”，而是找出当前计划中 
 - Behavior Map；
 - Risk Map；
 - 候选场景；
+- P0/P1 Verification Strategies；
 - 当前 baseline 测试结果（若有）。
 
-不要只看 Designer 的摘要，否则 Critic 会继承同一盲区。
+不要只看 Designer 的摘要，否则 Critic 会继承同一盲区。若任务走 AI Agent Eval Route，同时读取 policy、tool schema、eval environment 和 grader contract。
 
 ## Pass 1 — 独立重建风险面
 
-暂时忽略候选场景，从原始材料独立写出：
+Critic 的 blind 阶段不能接收候选场景、Designer 的 Behavior/Risk Map 或其结论。只给原始需求、diff/change scope、API/policy、关键依赖和调用边界，独立写出：
 
 - 必须成立的 3–7 个 behavior/invariant；
 - 本次变更最可能出现的 P0/P1 错误实现；
 - 最危险的状态、外部交互、时序和兼容边界；
 - Oracle 可能被当前代码误导的位置。
 
-将重建结果与 Designer 的 Behavior/Risk Map 比对。缺失的义务优先于缺失的 testcase。
+先固化这份 `Blind Fault Inventory`，再 reveal Designer 产物并比较。不得在 reveal 后静默改写 inventory 使其与计划一致；新增发现要单独标记。缺失的义务优先于缺失的 testcase。
+
+若只能在同一上下文执行，仍要先输出并冻结 blind artifact，再读取候选计划；在结论中声明 Critic 与 Designer 的认知错误可能相关。运行时允许且用户已授权委派时，高风险任务优先使用隔离 reviewer context。
 
 ## Pass 2 — Plausible Fault Challenge
 
@@ -51,17 +54,32 @@ Critic 的目标不是“再多想几个测试”，而是找出当前计划中 
 
 建立映射：
 
-| Fault | Violates | Killed by | Survivor reason | Action |
+| Fault | Violates | Witness | Verify | Result / action |
 | --- | --- | --- | --- | --- |
-| M1 | B3 | T4 | — | keep |
-| M2 | B4 | NONE | 缺并发重复 | add / accept / clarify |
+| M1 | B3 | T4 | V2 | killed |
+| M2 | B4 | NONE | NONE | survivor: add / accept / clarify |
 
 这里同时检查两件事：
 
 - **Fault Coverage**：风险家族是否被代表；
 - **Fault Exposure**：场景的输入、状态或时序是否真的触发该 fault，而非只在标题里提到。
 
-## Pass 3 — Oracle Challenge
+## Pass 3 — Verification Fidelity Challenge
+
+对每个 P0/P1 `Fault → Witness → Verification Strategy` 追问：
+
+1. Verification level 是否保留 target property？
+2. mock/fake 是否把真实事务、锁、offset、lease、权限或网络语义删除了？
+3. failure/interleaving 是否能确定性控制，还是靠 sleep、压力和运气？
+4. Observable 是否能区分正确与错误实现，并检查 durable state/forbidden residue？
+5. 环境与生产差异是否足以改变结论？
+6. 失败后是否有足够 Diagnostic Value 定位到 obligation/failure boundary？
+
+场景和 Oracle 正确，但验证装置无法实际产生或观察目标 fault 时，标为 `PSEUDO_KILLER`，等同未覆盖。需要新增 test seam 或更高 fidelity 环境时标 `TESTABILITY_GAP`。
+
+详细判据见 [verification-strategy.md](verification-strategy.md)。AI agent 还要检查 trial isolation、trajectory capture、environment outcome 和 grader calibration。
+
+## Pass 4 — Oracle Challenge
 
 逐个审查 P0/P1 Expected：
 
@@ -74,7 +92,7 @@ Critic 的目标不是“再多想几个测试”，而是找出当前计划中 
 
 对 `ASSUME/UNKNOWN` 不要伪造答案。把它升级为 Human Review Required，并说明不同裁决会怎样改变测试和实现。
 
-## Pass 4 — Coverage Audit
+## Pass 5 — Coverage Audit
 
 至少建立两个映射：
 
@@ -96,17 +114,28 @@ Critic 的目标不是“再多想几个测试”，而是找出当前计划中 
 - 对 partial failure 的残留状态检查；
 - 对并发风险的真实并发控制，而非顺序替代。
 
+### Verification Coverage
+
+每个 P0/P1 fault 是否有：
+
+- 合适的 verification level；
+- 保留 target property 的依赖真实性；
+- 确定性 control/injection point；
+- 可观察 durable outcome 与 forbidden effect；
+- 可重复 witness 与合理 diagnostic value。
+
 覆盖符号：
 
 - `✓`：有可执行 witness 且 Oracle 可信；
 - `△`：有场景但触发或断言不足；
+- `≈`：有纸面场景，但 verification fidelity/control 不足，是 pseudo-killer；
 - `?`：Oracle 不确定；
 - `✗`：未覆盖；
 - `N/A`：已说明为何与本变更无关。
 
 `N/A` 必须有基于代码/架构边界的理由，不能用于逃避分析。
 
-## Pass 5 — Minimality 与 Reviewability
+## Pass 6 — Minimality 与 Reviewability
 
 删除或降级：
 
@@ -115,15 +144,16 @@ Critic 的目标不是“再多想几个测试”，而是找出当前计划中 
 - P3 极端风险却占据主审查视图的场景；
 - 用 implementation detail 断言制造的脆弱场景。
 
-如果一个新增场景同时杀死多个高风险 fault，保留并明确映射。主审查包应该小而强，完整细节可放附录。
+只有当另一场景以相同或更高 fidelity 覆盖相同 obligations + faults，并保持相近 Diagnostic Value 时才能删除。如果一个场景同时杀死多个高风险 fault，保留并明确映射；如果它跨越过多 failure boundary 导致失败无法定位，则拆分或补诊断观察点。主审查包应该小而强，完整细节可放附录。
 
 ## Critic 结论
 
 只能使用以下状态：
 
-- `READY_FOR_HUMAN_REVIEW`：无未解释 P0/P1 survivor，且所有 P0/P1 Oracle 可信；低优先级假设已显式列出。
+- `READY_FOR_HUMAN_REVIEW`：无未解释 P0/P1 survivor 或 pseudo-killer，所有 P0/P1 Oracle 可信且 verification strategy 足够真实、可控、可观察；低优先级假设已显式列出。
 - `REVISION_REQUIRED`：存在可修复的行为、场景、触发或断言缺口。
 - `BLOCKED_BY_ORACLE_AMBIGUITY`：关键业务语义无法从证据确定，不同答案会实质改变实现。
+- `BLOCKED_BY_TESTABILITY_GAP`：P0/P1 语义无法被现有 harness 足够真实、确定地控制或观察。
 
 结论必须附：
 
@@ -131,6 +161,7 @@ Critic 的目标不是“再多想几个测试”，而是找出当前计划中 
 Strongest adequacy argument:
 Top remaining uncertainty:
 Unexplained P0/P1 survivors:
+Pseudo-killers / testability gaps:
 Smallest next action:
 ```
 
