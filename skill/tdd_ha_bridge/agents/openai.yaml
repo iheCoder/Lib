@@ -1,0 +1,6 @@
+interface:
+  display_name: "TDD Human-Approval Bridge"
+  short_description: "Design reviewable tests and challenge their adequacy"
+  default_prompt: "Use $tdd-ha-bridge to produce a human-reviewable test design and adequacy critique before implementation."
+policy:
+  allow_implicit_invocation: true
