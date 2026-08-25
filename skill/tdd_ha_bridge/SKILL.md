@@ -190,3 +190,9 @@ Critic 必须先在看不到 candidate scenarios 的阶段，从原始证据生�
 ## 研究依据
 
 这个流程为何强调 specification-first、fault exposure、变异挑战、反馈循环和适度结构，见 [references/research-basis.md](references/research-basis.md)。研究只用于校准设计原则，不替代当前仓库和业务证据。
+
+## Self-validation Mode
+
+当用户要求验证或迭代这个 skill 本身时，读取 [references/self-eval-protocol.md](references/self-eval-protocol.md)。使用隔离的 benchmark builder、designer、adversarial implementer 和 judge 阶段；Designer 不得看到 hidden faults。优先以正确实现通过、seeded plausible mutants 被 executable tests/evals 杀死作为证据，而不是让模型给自己的文字打分。
+
+同模型、同上下文的自测只能作为 smoke/development evidence，必须明确污染风险；不能据此宣称 skill 已被独立验证。最终结论还需要未参与调优的 holdout、真实历史 Bug 或独立 reviewer/model。
