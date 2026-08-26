@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.ihewe"
-version = "0.5.0"
+version = "0.6.0"
 
 repositories {
     mavenCentral()
@@ -57,7 +57,7 @@ intellijPlatform {
     pluginConfiguration {
         name = "AI Git Committer"
         version = project.version.toString()
-        description = "Generates commit messages from selected changes with a user-configured OpenAI-compatible API."
+        description = "Generates commit messages from selected changes using OpenAI, Anthropic, or DeepSeek."
         vendor {
             name = "ihewe"
         }

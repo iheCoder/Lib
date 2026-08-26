@@ -5,9 +5,10 @@ state. API keys remain outside this schema in PasswordSafe.
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
+  "provider": "openai",
   "endpoint": "https://api.openai.com/v1/chat/completions",
-  "model": "gpt-4.1-mini",
+  "model": "gpt-5.6-terra",
   "customPrompt": "",
   "outputLanguage": "English",
   "messageMaxCharacters": 0,
@@ -18,6 +19,11 @@ state. API keys remain outside this schema in PasswordSafe.
   "sourceGeneratedRules": "**/*.proto => **/*.pb.go, **/*_pb2.py\n..."
 }
 ```
+
+`provider` is one of `openai`, `anthropic`, or `deepseek`. Selecting a provider in Settings fills
+its official endpoint and curated model list. Both endpoint and model remain editable. PasswordSafe
+uses a separate credential entry for each provider; pre-v0.6 OpenAI credentials are read through a
+legacy fallback and are never copied to another provider.
 
 ## Generated file schema
 
@@ -63,7 +69,7 @@ If the changes contain multiple unrelated goals, summarize the most important on
 Return only the commit message. No explanation, prefix, quotation marks, or markdown.
 ```
 
-With `structuredOutput` enabled, the request contains this strict Chat Completions
+With `structuredOutput` enabled, OpenAI and DeepSeek requests contain this strict Chat Completions
 `response_format` contract:
 
 ```json
@@ -87,6 +93,24 @@ With `structuredOutput` enabled, the request contains this strict Chat Completio
 }
 ```
 
+Anthropic receives the same inner schema through its native Messages contract:
+
+```json
+{
+  "output_config": {
+    "format": {
+      "type": "json_schema",
+      "schema": {
+        "type": "object",
+        "properties": {"message": {"type": "string", "minLength": 1}},
+        "required": ["message"],
+        "additionalProperties": false
+      }
+    }
+  }
+}
+```
+
 The built-in Default Prompt is used only when `customPrompt` is blank. A non-blank `customPrompt`
 replaces it completely. The two visible output settings are then appended to either choice:
 
@@ -101,5 +125,5 @@ defaults to `0`, meaning unlimited; the length line is omitted in that case. A p
 also added to the JSON Schema as `message.maxLength`. This keeps prompt and provider constraints
 consistent without truncating the returned text locally.
 
-Providers without JSON Schema support can disable `structuredOutput`. After extracting `message`,
+Custom gateways without JSON Schema support can disable `structuredOutput`. After extracting `message`,
 the plugin only rejects blank output. It does not force one line, strip Markdown, or truncate text.

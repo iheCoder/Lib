@@ -1,6 +1,7 @@
 package com.ihewe.jbgitcommitter.settings;
 
-import com.ihewe.jbgitcommitter.api.OpenAiCompatibleClient;
+import com.ihewe.jbgitcommitter.api.ModelApiClient;
+import com.ihewe.jbgitcommitter.api.ModelProvider;
 import com.ihewe.jbgitcommitter.context.FileContextPolicy;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.options.Configurable;
@@ -32,6 +33,7 @@ import java.awt.event.MouseWheelEvent;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.Supplier;
 
 /** Builds the Settings page without reading secrets back onto the UI thread. */
 public final class AiCommitSettingsConfigurable implements Configurable {
@@ -41,10 +43,13 @@ public final class AiCommitSettingsConfigurable implements Configurable {
     private static final int MAX_TIMEOUT_SECONDS = 600;
     private static final int MAX_MESSAGE_CHARACTERS = 2_000;
 
+    private final Supplier<AiCommitSettings> settingsSupplier;
+
     private JPanel panel;
     private JBScrollPane settingsScrollPane;
+    private JComboBox<ModelProvider> providerComboBox;
     private JBTextField endpointField;
-    private JBTextField modelField;
+    private JComboBox<String> modelComboBox;
     private JComboBox<String> languageComboBox;
     private JBTextField messageMaxCharactersField;
     private JBTextField maxContextField;
@@ -59,6 +64,22 @@ public final class AiCommitSettingsConfigurable implements Configurable {
     private JBCheckBox clearApiKeyCheckBox;
     private JButton testApiButton;
     private JBLabel testStatusLabel;
+    private boolean synchronizingProviderControls;
+
+    /** IntelliJ instantiates this constructor and resolves the application service lazily. */
+    public AiCommitSettingsConfigurable() {
+        this(AiCommitSettings::getInstance);
+    }
+
+    /** Test seam preserves the real Settings UI while replacing only application-service lookup. */
+    AiCommitSettingsConfigurable(AiCommitSettings settings) {
+        this(() -> settings);
+    }
+
+    /** Central constructor keeps production and tests on one behavior path. */
+    private AiCommitSettingsConfigurable(Supplier<AiCommitSettings> settingsSupplier) {
+        this.settingsSupplier = settingsSupplier;
+    }
 
     /** Provides the searchable display name under Settings | Tools. */
     @Override
@@ -80,8 +101,11 @@ public final class AiCommitSettingsConfigurable implements Configurable {
 
     /** Creates all controls in one place so form composition remains a linear overview. */
     private void initializeFields() {
+        providerComboBox = new JComboBox<>(ModelProvider.values());
         endpointField = new JBTextField();
-        modelField = new JBTextField();
+        modelComboBox = new JComboBox<>();
+        modelComboBox.setEditable(true);
+        providerComboBox.addActionListener(event -> applySelectedProviderDefaults());
         languageComboBox = new JComboBox<>(new String[]{"English", "中文", "日本語", "한국어"});
         languageComboBox.setEditable(true);
         messageMaxCharactersField = new JBTextField();
@@ -96,7 +120,9 @@ public final class AiCommitSettingsConfigurable implements Configurable {
         generatedPatternsArea = new JBTextArea(18, 40);
         initializeSourceGeneratedTable();
         apiKeyField = new JBPasswordField();
-        structuredOutputCheckBox = new JBCheckBox("Use strict JSON Schema output (disable for incompatible APIs)");
+        structuredOutputCheckBox = new JBCheckBox(
+                "Use strict JSON Schema output (disable for incompatible custom gateways)"
+        );
         clearApiKeyCheckBox = new JBCheckBox("Clear the saved API key");
         testApiButton = new JButton("Test API");
         testApiButton.addActionListener(event -> testApiConnection());
@@ -106,9 +132,15 @@ public final class AiCommitSettingsConfigurable implements Configurable {
     /** Groups provider, output, prompt, and context-policy settings in their execution order. */
     private JPanel buildForm() {
         return FormBuilder.createFormBuilder()
-                .addLabeledComponent(new JBLabel("Chat Completions URL:"), endpointField, 1, false)
-                .addLabeledComponent(new JBLabel("Model:"), modelField, 1, false)
-                .addLabeledComponent(new JBLabel("API key (leave blank to keep saved key):"), apiKeyField, 1, false)
+                .addLabeledComponent(new JBLabel("Provider:"), providerComboBox, 1, false)
+                .addLabeledComponent(new JBLabel("API URL:"), endpointField, 1, false)
+                .addLabeledComponent(new JBLabel("Model:"), modelComboBox, 1, false)
+                .addLabeledComponent(
+                        new JBLabel("API key for selected provider (blank keeps saved key):"),
+                        apiKeyField,
+                        1,
+                        false
+                )
                 .addLabeledComponent(new JBLabel("Connection:"), createTestPanel(), 1, false)
                 .addComponent(clearApiKeyCheckBox, 1)
                 .addComponent(structuredOutputCheckBox, 1)
@@ -223,9 +255,10 @@ public final class AiCommitSettingsConfigurable implements Configurable {
     /** Compares every editable non-secret value and treats entered/cleared credentials as changes. */
     @Override
     public boolean isModified() {
-        AiCommitSettings.SettingsState state = AiCommitSettings.getInstance().getState();
-        return !endpointField.getText().trim().equals(state.endpoint)
-                || !modelField.getText().trim().equals(state.model)
+        AiCommitSettings.SettingsState state = settings().getState();
+        return selectedProvider() != state.provider()
+                || !endpointField.getText().trim().equals(state.endpoint)
+                || !selectedModel().equals(state.model)
                 || !selectedLanguage().equals(state.outputLanguage)
                 || !messageMaxCharactersField.getText().trim().equals(String.valueOf(state.messageMaxCharacters))
                 || !customPromptArea.getText().trim().equals(state.customPrompt)
@@ -242,7 +275,7 @@ public final class AiCommitSettingsConfigurable implements Configurable {
     @Override
     public void apply() throws ConfigurationException {
         FormValues values = readFormValues();
-        AiCommitSettings settings = AiCommitSettings.getInstance();
+        AiCommitSettings settings = settings();
         AiCommitSettings.SettingsState state = settings.getState();
         values.copyTo(state);
         applyCredentialChange(settings);
@@ -251,9 +284,15 @@ public final class AiCommitSettingsConfigurable implements Configurable {
     /** Restores non-secret values and intentionally leaves the password field empty. */
     @Override
     public void reset() {
-        AiCommitSettings.SettingsState state = AiCommitSettings.getInstance().getState();
-        endpointField.setText(state.endpoint);
-        modelField.setText(state.model);
+        AiCommitSettings.SettingsState state = settings().getState();
+        synchronizingProviderControls = true;
+        try {
+            providerComboBox.setSelectedItem(state.provider());
+            endpointField.setText(state.endpoint);
+            replaceModelOptions(state.provider(), state.model);
+        } finally {
+            synchronizingProviderControls = false;
+        }
         languageComboBox.setSelectedItem(state.outputLanguage);
         messageMaxCharactersField.setText(String.valueOf(state.messageMaxCharacters));
         customPromptArea.setText(state.customPrompt);
@@ -272,8 +311,9 @@ public final class AiCommitSettingsConfigurable implements Configurable {
     public void disposeUIResources() {
         panel = null;
         settingsScrollPane = null;
+        providerComboBox = null;
         endpointField = null;
-        modelField = null;
+        modelComboBox = null;
         languageComboBox = null;
         messageMaxCharactersField = null;
         maxContextField = null;
@@ -324,12 +364,14 @@ public final class AiCommitSettingsConfigurable implements Configurable {
     /** Loads a saved key only when the write-only field is blank, then makes a minimal API request. */
     private void runApiTest(FormValues values, String enteredApiKey) {
         try {
-            String apiKey = enteredApiKey.isBlank() ? AiCommitSettings.getInstance().loadApiKey() : enteredApiKey;
+            String apiKey = enteredApiKey.isBlank()
+                    ? settings().loadApiKey(values.provider())
+                    : enteredApiKey;
             if (apiKey == null || apiKey.isBlank()) {
                 showTestResult(false, "Enter an API key or save one first.");
                 return;
             }
-            new OpenAiCompatibleClient().testConnection(values.toSettingsState(), apiKey);
+            new ModelApiClient().testConnection(values.toSettingsState(), apiKey);
             showTestResult(true, "Connection successful. Click Apply to save new values.");
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
@@ -372,8 +414,9 @@ public final class AiCommitSettingsConfigurable implements Configurable {
 
     /** Parses and validates all fields once so Apply and Test API share exactly the same contract. */
     private FormValues readFormValues() throws ConfigurationException {
+        ModelProvider provider = selectedProvider();
         String endpoint = endpointField.getText().trim();
-        String model = modelField.getText().trim();
+        String model = selectedModel();
         int maxContext = parseBoundedInt(
                 maxContextField.getText(), "Maximum context", MIN_CONTEXT_CHARS, MAX_CONTEXT_CHARS
         );
@@ -384,7 +427,7 @@ public final class AiCommitSettingsConfigurable implements Configurable {
                 messageMaxCharactersField.getText(), "Maximum message characters", 0, MAX_MESSAGE_CHARACTERS
         );
         if (!endpoint.startsWith("http://") && !endpoint.startsWith("https://")) {
-            throw new ConfigurationException("Chat Completions URL must start with http:// or https://");
+            throw new ConfigurationException("API URL must start with http:// or https://");
         }
         if (model.isBlank()) {
             throw new ConfigurationException("Model cannot be empty");
@@ -402,9 +445,51 @@ public final class AiCommitSettingsConfigurable implements Configurable {
         }
         validateFilePolicy(generatedPatterns, sourceGeneratedRules);
         return new FormValues(
-                endpoint, model, outputLanguage, messageMaxCharacters, customPromptArea.getText().trim(),
+                provider, endpoint, model, outputLanguage, messageMaxCharacters, customPromptArea.getText().trim(),
                 generatedPatterns, sourceGeneratedRules, maxContext, timeout, structuredOutputCheckBox.isSelected()
         );
+    }
+
+    /** Applies official presets only for an explicit provider change, never while restoring saved values. */
+    private void applySelectedProviderDefaults() {
+        if (synchronizingProviderControls || endpointField == null || modelComboBox == null) {
+            return;
+        }
+        ModelProvider provider = selectedProvider();
+        endpointField.setText(provider.defaultEndpoint());
+        replaceModelOptions(provider, provider.defaultModel());
+        apiKeyField.setText("");
+        clearApiKeyCheckBox.setSelected(false);
+        testStatusLabel.setForeground(JBColor.GRAY);
+        testStatusLabel.setText("Enter or reuse the API key saved separately for " + provider.displayName() + ".");
+    }
+
+    /** Rebuilds the editable model catalog and preserves a custom persisted model when supplied. */
+    private void replaceModelOptions(ModelProvider provider, String selectedModel) {
+        modelComboBox.removeAllItems();
+        provider.models().forEach(modelComboBox::addItem);
+        modelComboBox.setSelectedItem(selectedModel == null || selectedModel.isBlank()
+                ? provider.defaultModel()
+                : selectedModel);
+    }
+
+    /** Converts the strongly typed provider combo into a non-null persisted selection. */
+    private ModelProvider selectedProvider() {
+        Object selected = providerComboBox.getSelectedItem();
+        return selected instanceof ModelProvider provider ? provider : ModelProvider.OPENAI;
+    }
+
+    /** Reads both a catalog selection and an arbitrary user-entered model through one path. */
+    private String selectedModel() {
+        Object selected = modelComboBox.isEditable()
+                ? modelComboBox.getEditor().getItem()
+                : modelComboBox.getSelectedItem();
+        return selected == null ? "" : selected.toString().trim();
+    }
+
+    /** Resolves the service at use time so IntelliJ controls its lifecycle and tests stay isolated. */
+    private AiCommitSettings settings() {
+        return settingsSupplier.get();
     }
 
     /** Reads the editable combo box so predefined and user-entered languages follow one path. */
@@ -480,12 +565,13 @@ public final class AiCommitSettingsConfigurable implements Configurable {
 
     /** Gives clear-key precedence and wipes the temporary password char array after copying it. */
     private void applyCredentialChange(AiCommitSettings settings) {
+        ModelProvider provider = selectedProvider();
         char[] password = apiKeyField.getPassword();
         try {
             if (clearApiKeyCheckBox.isSelected()) {
-                settings.clearApiKeyAsync();
+                settings.clearApiKeyAsync(provider);
             } else if (password.length > 0) {
-                settings.saveApiKeyAsync(new String(password));
+                settings.saveApiKeyAsync(provider, new String(password));
             }
         } finally {
             Arrays.fill(password, '\0');
@@ -496,6 +582,7 @@ public final class AiCommitSettingsConfigurable implements Configurable {
 
     /** Immutable validated form snapshot used across the UI/background-thread boundary. */
     private record FormValues(
+            ModelProvider provider,
             String endpoint,
             String model,
             String outputLanguage,
@@ -516,6 +603,7 @@ public final class AiCommitSettingsConfigurable implements Configurable {
 
         /** Copies every validated non-secret field to the target persistent or temporary state. */
         private void copyTo(AiCommitSettings.SettingsState state) {
+            state.provider = provider.id();
             state.endpoint = endpoint;
             state.model = model;
             state.outputLanguage = outputLanguage;

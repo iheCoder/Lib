@@ -4,13 +4,13 @@ Every generation sends two messages. The system message contains the selected De
 Prompt plus the explicit language and optional length settings. The user message always starts
 with Limited Dependency Relations, followed by the selected files' complete before/after text.
 
-The example below is shortened only for documentation. The plugin applies the configured global
-context-character budget to the real user message.
+The OpenAI example below is shortened only for documentation. The plugin applies the configured
+global context-character budget to the real user message. DeepSeek uses the same message shape;
+Anthropic moves the system prompt to its top-level `system` field.
 
 ```json
 {
-  "model": "gpt-4.1-mini",
-  "temperature": 0.2,
+  "model": "gpt-5.6-terra",
   "messages": [
     {
       "role": "system",

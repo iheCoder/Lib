@@ -1,6 +1,6 @@
 package com.ihewe.jbgitcommitter.action;
 
-import com.ihewe.jbgitcommitter.api.OpenAiCompatibleClient;
+import com.ihewe.jbgitcommitter.api.ModelApiClient;
 import com.ihewe.jbgitcommitter.context.FileContextPolicy;
 import com.ihewe.jbgitcommitter.context.GoLimitedDependencyAnalyzer;
 import com.ihewe.jbgitcommitter.model.FileChangeSnapshot;
@@ -80,7 +80,7 @@ public final class GenerateCommitMessageAction extends AnAction implements DumbA
                     settings.generatedPatterns,
                     settings.sourceGeneratedRules
             );
-            String apiKey = settingsService.loadApiKey();
+            String apiKey = settingsService.loadApiKey(settings.provider());
             if (apiKey == null || apiKey.isBlank()) {
                 openSettings(project, "Configure an API key before generating a commit message");
                 return;
@@ -97,7 +97,7 @@ public final class GenerateCommitMessageAction extends AnAction implements DumbA
                     dependencyContext,
                     settings.maxContextChars
             );
-            String commitMessage = new OpenAiCompatibleClient().generate(
+            String commitMessage = new ModelApiClient().generate(
                     settings,
                     apiKey,
                     systemPrompt,

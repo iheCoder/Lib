@@ -5,7 +5,7 @@
 
     <description><![CDATA[
         Select changed files in the Project view or Commit tool window and generate a commit
-        message with your own OpenAI-compatible model API.
+        message with your own OpenAI, Anthropic, or DeepSeek API key.
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
