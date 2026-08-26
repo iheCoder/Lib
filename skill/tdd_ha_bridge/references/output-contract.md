@@ -1,107 +1,172 @@
-# Human Review Pack
+# Developer Review Pack
 
-默认使用中文，代码符号、错误名和业务术语保留仓库原样。主视图面向 1–3 分钟审查；只有被追问时再展开 P2/P3 或完整测试代码草案。
+默认使用中文，代码符号、接口名和仓库业务术语保留原样。目标读者是普通后端开发者，不是假设读者熟悉测试理论的测试专家。
 
-本文件用于 Deterministic Software Route。AI agent 使用 [agent-eval-protocol.md](agent-eval-protocol.md) 中的 Agent Eval Human Review Pack。
+本文件用于 Deterministic Software Route。AI agent 路由也遵循相同的“主文档先说人话、技术证据按需展开”原则，并补充 [agent-eval-protocol.md](agent-eval-protocol.md) 的 trial、grader 与安全要求。
 
-## 0. Verdict
+## 总体信息架构
 
-```text
-Status: READY_FOR_HUMAN_REVIEW | REVISION_REQUIRED | BLOCKED_BY_ORACLE_AMBIGUITY | BLOCKED_BY_TESTABILITY_GAP
-Scope: 本次测试设计覆盖的变更边界
-Baseline: 已运行的既有测试与结果；未运行则说明原因
+默认产物分两层：
+
+1. `test-design-*.md`：开发者审批主文档，1–3 分钟内可以找到结论、六类 Lens 缺口和待决策项；
+2. `test-design-*.evidence.md`：可选技术证据，只在用户要求、正式审计或高风险追踪确有必要时生成。
+
+主文档不是内部推理转储。完整 Source Ledger、Behavior/Risk/Fault 映射、验证真实度论证和 blind fault inventory 留在内部；若必须留档，放进第二层。任何关键降级都必须同步回主文档，不能藏在技术证据里。
+
+## 主文档固定结构
+
+### 1. 先看结论
+
+把以下内容放在文档最前面，不要先展示方法、范围长表或机器状态：
+
+- **现在能否批准**：用一句中文说明“可进入测试编写 / 需先补测试条件 / 需先确认业务规则 / 设计仍需修改”；机器状态可在括号中保留。
+- **最危险的 1–3 件事**：描述真实失败后果，不写抽象分类。
+- **当前缺口**：只列会阻止结论成立的缺口。
+- **阅读指引**：告诉读者只需先看“待决定事项”和“Lens 覆盖速查”。
+- **Baseline**：已运行的既有测试与结果；未运行就直说原因。
+
+正例：
+
+> 当前还不能认定事务和并发删除已经测稳。普通业务分流已经覆盖，但“删除发生在发请求前的一瞬间”和“第一张表成功、第二张表失败”仍无法在现有测试环境中真实复现。
+
+反例：
+
+> `BLOCKED_BY_TESTABILITY_GAP`，V3/V4 是 pseudo-killer，M2/M4 survive。
+
+### 2. 需要你决定的事
+
+只有不同答案会改变测试或实现时才提问，默认 0–3 项。每项使用同一张“决策卡”：
+
+```markdown
+### 决定 1：同一轮任务被重试时，能不能给同一用户生成两份结果？
+
+**建议：不能。** 否则用户可能收到两条任务结果和两次通知，而且后续无法判断哪份有效。
+
+- 选“不能”：需要增加本轮执行标识和去重测试。
+- 选“可以偶发重复”：需要在需求中明确接受重复结果和重复通知。
+- 现有证据：当前代码只能防止同一进程同时重入，不能防两台服务或稍后重试。
 ```
 
-## 1. One-minute Summary
+要求：
 
-- 一句话说明要守住的业务结果；
-- P0/P1 风险数量和最危险的 failure boundary；
-- 是否存在 UNKNOWN Oracle；
-- 是否存在 fidelity/control/observability Testability Gap；
-- 工程师此刻需要决定什么。
+- 标题必须是无需解释术语即可回答的完整问题；
+- 先给推荐选项和理由，再给分支影响；
+- 把 `trigger` 翻成“调度再次触发/任务被重试”，把 `cross-instance` 翻成“两台服务同时执行”；
+- 把“当前不知道”具体化为缺少哪条需求、调用方约定或运行证据。
 
-## 2. Behavior Map
+### 3. 六类 Lens 覆盖速查
 
-| ID | Behavioral obligation / invariant | Observable | Source | Confidence |
+Lens 在这里译为“检查角度”。六类必须全部出现，不相关也要给理由。使用下面四个文字状态，不得只用符号：
+
+- `已覆盖`：有可信的正确结果依据，并且已有或已设计出能真实触发和观察的测试；
+- `部分覆盖`：已经检查了一部分，但业务规则、触发手段、真实依赖、观察点或执行结果仍有缺口；
+- `未覆盖`：相关且重要，但还没有有效场景或验证办法；
+- `不适用`：根据本次代码/架构边界确实不存在这类风险，并写明理由。
+
+固定表格：
+
+| 检查角度（Lens） | 它在问什么 | 状态 | 已经覆盖 | 还缺什么 |
 | --- | --- | --- | --- | --- |
-| B1 | ... | 返回值 + 状态 + 非副作用 | REQ | High |
+| 业务规则（Contract） | 输入、结果、副作用和禁止行为是否清楚？ | ... | ... | ... |
+| 状态变化（State） | 删除、停用、重试等前后状态是否正确？ | ... | ... | ... |
+| 输入与边界（Partition） | 不同业务分区和临界值是否选了代表场景？ | ... | ... | ... |
+| 外部依赖（Interaction） | DB、RPC、消息等部分失败时是否留脏数据或误通知？ | ... | ... | ... |
+| 时间与并发（Time/Concurrency） | 同时发生、先后错位、超时或重复执行是否安全？ | ... | ... | ... |
+| 兼容与回归（Regression） | 开关默认值、旧调用方、旧数据和非目标路径是否保持？ | ... | ... | ... |
 
-只写工程师真正需要审批的规则，避免把每个测试步骤变成 behavior。
+规则：
 
-## 3. Risk Map
+- 先根据内部 Behavior/Risk/Fault 分析填表，再压缩文字；不能凭场景标题自评。
+- 如果某条核心行为的正确结果未知，Contract 至少是 `部分覆盖`。
+- 如果某个时序场景写出来但没有可控时点，Time/Concurrency 必须是 `部分覆盖` 或 `未覆盖`。
+- 如果 mock 删除了真实事务、锁、权限或协议语义，Interaction 不能写 `已覆盖`。
+- 表后只补安全、容量、可观测性等横切风险，不另造七八套同级分类。
 
-| Priority | Risk / plausible failure mechanism | Why realistic now | Violates |
-| --- | --- | --- | --- |
-| P0 | ... | 变更触及事务与 publish 边界 | B3 |
+### 4. 高价值场景
 
-P2/P3 默认折叠成一句摘要。
+按业务故事分组，例如“用户分流与权限”“执行中配置变化”“失败、落库与通知”。不要先按 `T1...T10` 罗列一张九列总表。
 
-## 4. Minimal High-value Scenarios
+主表最多保留五列：
 
-| ID | Pri | Scenario intent | Given / Trigger | Expected + forbidden effects | Protects | Exposes | Oracle | Verify |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| T1 | P0 | ... | ... | ... | B1, B3 | M1 | REQ / High | V1 |
+| 优先级 | 要防的真实问题 | 怎样触发 | 正确结果 | 当前验证状态 |
+| --- | --- | --- | --- | --- |
+| 高 | ... | ... | ... | 已跑通 / 可编写 / 部分可测 / 暂时测不了 |
 
-约束：
+要求：
 
-- `Scenario intent` 用业务语言，不用 `TestFooBar`；
-- `Expected` 同时说明关键结果和绝不能发生的副作用；
-- `Protects` 映射 Behavior；
-- `Exposes` 映射 plausible fault；
-- `Oracle` 写来源和置信度，`UNKNOWN` 不得藏在脚注。
-- `Verify` 指向验证策略；不能用测试标题代替真实控制方案。
+- 使用业务语言。允许在场景名末尾保留 `(T3)` 便于证据追踪，但不能只写 ID。
+- “正确结果”同时写必要结果和绝不能发生的副作用。
+- “当前验证状态”区分纸面设计与真实执行；不能把“已设计”写成“已覆盖”。
+- 多个场景共享相同测试办法时，不在每一行重复环境说明；统一放到下一节。
+- P2/P3、重复变体和纯技术细节默认不进入主文档。
 
-## 5. P0/P1 Verification Strategies
+### 5. 还没证明什么
 
-| ID | Level | Target property | Control / injection | Realism requirement | Observable | Repeatability / diagnostic |
-| --- | --- | --- | --- | --- | --- | --- |
-| V1 | integration | commit outcome ambiguity | commit 后断连接 | 真实 DB transaction | durable row + retry effect | deterministic failpoint；定位 commit boundary |
+只解释 Lens 表中的 `部分覆盖/未覆盖`，每项使用下面格式：
 
-若当前无法实现，写 `TESTABILITY_GAP`、缺失 test seam 和最小补强动作。不得用 repository mock 返回 error 冒充真实 commit ambiguity。
+```markdown
+### 删除刚好发生在“最终检查完成、HTTP 还没发出”之间
 
-## 6. Plausible Fault Challenge
-
-| Fault | Plausible wrong implementation | Violates | Witness | Verify | Result |
-| --- | --- | --- | --- | --- | --- |
-| M1 | ... | B3 | T4 | V2 | killed |
-| M2 | ... | B4 | NONE | NONE | survivor |
-| M3 | ... | B5 | T6 | V3 | pseudo-killer: mock 丢失目标语义 |
-
-只展示最有价值的 3–5 个 challenge。若有 P0/P1 survivor 或 pseudo-killer，必须说明补场景、补 test seam、接受风险还是等待业务裁决。
-
-## 7. Coverage Audit
-
-```text
-Behavior coverage: B1 ✓  B2 ✓  B3 △  B4 ?
-Risk coverage:     R1 ✓  R2 ✗  R3 ✓
-Verification:      V1 ✓  V2 ≈  V3 ✗
-Relevant lenses:   Contract ✓ / State ✓ / Interaction △ / Time-Concurrency N/A / Regression ✓
+- 现在为什么测不了：代码没有可暂停这两个时点的测试控制点。
+- 最小补强：增加只用于测试编排的 barrier/hook，再稳定复现删除时序。
+- 不补的后果：只能证明删除发生得更早或更晚，不能证明最危险的窄窗口。
 ```
 
-随后只解释 `△ ≈ ? ✗` 和有争议的 `N/A`。不重复已通过项。
+不要用 `TESTABILITY_GAP`、`test seam`、`fidelity` 代替解释；这些词只能作为括号内技术标签。已经覆盖的内容不在此重复。
 
-## 8. Human Review Required
+### 6. 审批清单与下一步
 
-按优先级只列会改变测试或实现的决定：
+让工程师能直接勾选：
 
-```text
-1. [P0 Oracle] publish 失败后订单应保留并重试，还是整体失败？
-   Evidence: 当前代码保留；需求未定义；调用方会对 5xx 重试。
-   If A: 增加 outbox/retry contract 测试。
-   If B: 增加 rollback/no-residue 测试。
+```markdown
+- [ ] 我确认上面的业务规则和正确结果。
+- [ ] 我已回答“需要你决定的事”。
+- [ ] 我同意先补列出的测试控制点/真实依赖环境。
+- [ ] 批准后先写测试并确认它因目标行为未实现而失败，再改生产代码。
 ```
 
-不要询问可从仓库直接查明的问题。
+根据实际任务删除不适用项，不要制造形式审批。结尾写一个最小下一步，而不是再次复述整篇报告。
 
-Testability Gap 也按决策呈现：缺什么 harness/test seam、为什么当前替身不够、补强成本和若不补强时结论能降到什么程度。
+## 可选技术证据文件
 
-## 9. Approval Handoff
+只有满足输出条件时才生成，建议结构：
 
-结尾明确：
+1. Context Boundary 与 Source Ledger；
+2. Behavior Obligations；
+3. P0/P1 Risk 与 plausible faults；
+4. `Fault → Scenario → Control → Observable` 映射；
+5. 验证层级与 Fidelity Claim；
+6. Blind Fault Inventory 和 survivor/pseudo-killer；
+7. 详细执行命令、测试结果和限制。
 
-- 建议批准的 behavior 与场景；
-- 待裁决项；
-- 需要先补的 test seam、环境和可观测性；
-- 获批后下一步是“写测试并确认 meaningful red”，还是仅归档设计。
+证据文件可以使用 `B/R/T/V/M` ID，但主文档必须独立可读。主文档链接证据文件时写“普通审批无需阅读”，避免制造隐性阅读义务。
 
-Meaningful red 是因目标行为尚未实现而失败；编译错误、fixture 损坏、环境依赖失败不能冒充 TDD Red。
+## 常用术语翻译
+
+| 内部术语 | 主文档优先写法 |
+| --- | --- |
+| Oracle ambiguity | 正确结果还没有业务依据 |
+| Testability gap | 当前测试环境无法稳定制造或观察这个情况 |
+| Linearization point | 系统从哪个准确时点算“已经开始执行” |
+| Trigger replay | 同一轮调度再次触发或被重试 |
+| Cross-instance | 两台或多台服务同时执行 |
+| Idempotency | 重复执行也不会产生重复结果 |
+| Harness | 测试环境或测试装置 |
+| Test seam | 为测试增加的可控时点/注入点 |
+| Survivor | 现有测试仍抓不到的错误实现 |
+| Pseudo-killer | 场景写了，但当前测试办法并不能真实触发那个错误 |
+| Fidelity | 测试是否保留了要验证的真实机制 |
+
+## 交付前可理解性自检
+
+交付前必须从主文档本身回答，不能依赖技术证据：
+
+1. 前 30 秒能否知道“能不能批、最危险什么、要我决定什么”？
+2. 能否在一张表中找到六类 Lens 的所有缺口？
+3. 每个 `部分覆盖/未覆盖` 是否都写了缺什么和不补的后果？
+4. 是否仍要求读者在 `B4 → R2 → T6 → V3 → M2` 之间跳转？若是，继续压缩。
+5. 决策问题能否被不懂 `trigger/instance/idempotency/Oracle` 的开发者直接回答？
+6. 同一事实是否在规则、风险、场景和错误挑战中重复出现？若是，主文档只保留一次。
+7. 技术证据是否意外改变或降级了主文档结论？若是，修正主文档状态。
+
+通过结构检查不等于通过可用性验证。Self-validation 时还要按 [self-eval-protocol.md](self-eval-protocol.md) 做普通开发者盲审或等价的理解任务。

@@ -20,6 +20,16 @@
 
 由工程师盲审 baseline 与 skill 输出，比较关键风险发现率、错误 Oracle、审查耗时和决策负担。Synthetic kill rate 不能替代可读性与工程价值。
 
+这一层必须包含普通后端开发者，而不能只找测试专家。至少给审阅者以下理解任务，不提前解释 skill 术语：
+
+1. 30 秒后说出“当前能不能批”和最危险的一件事；
+2. 90 秒内指出六类 Lens 中哪些不是“已覆盖”；
+3. 用自己的话复述每个待决策问题，并说明两个选择的实际后果；
+4. 区分“已有测试跑通”“场景已设计但未运行”“当前根本测不了”；
+5. 指出批准后的最小下一步。
+
+记录答错、漏读、需要回看术语表和跨表跳转的位置。只问“你觉得清楚吗”不能作为可用性证据。
+
 ## 2. 隔离角色与信息边界
 
 ```text
@@ -99,6 +109,10 @@ Fault 必须现实可信，不允许通过检测测试环境、读取测试源�
 - **Scenario Efficiency**：场景数、重复度和每个场景的 fault/obligation mapping；
 - **Diagnostic Value**：失败能否定位到行为或 failure boundary；
 - **Human Review Cost**：关键信息发现时间与真正需要裁决的问题数量。
+- **Lens Gap Findability**：普通开发者能否从一张表准确找出所有 `部分覆盖/未覆盖` Lens；
+- **Decision Comprehension**：能否不用测试专家解释，复述现实问题、推荐方案和分支后果；
+- **Evidence-layer Independence**：不读技术证据文件时，主文档结论是否仍完整且不误导；
+- **Terminology Burden**：完成审批必须先查多少个内部术语或追踪多少次 `B/R/T/V/M` 映射。
 
 AI agent case 还报告 task/trial/grader coverage、safety violations、outcome/trajectory blind spot、trial isolation 和 grader calibration。
 
@@ -141,3 +155,16 @@ Development regression + untouched validation
 - `INCONCLUSIVE`：harness、grader、样本或隔离不足。
 
 `SMOKE_PASS` 不能升级表述为“skill 已证明有效”。报告必须写清模型、skill commit、case split、上下文隔离、执行命令、mutant 结果和剩余盲区。
+
+## 10. 单份真实产物的回归审核
+
+当用户提供一份“不好读”的真实产物并要求升级 skill 时，在完整独立 A/B 之外，先做可复现的 development regression：
+
+1. 冻结原产物的事实结论，不靠删风险换取短小；
+2. 用新版输出契约重写主文档；
+3. 对照核查所有原 P0/P1 风险、未知业务规则和测不出来的场景是否仍可找到；
+4. 确认六类 Lens 状态与技术证据一致，尤其不能把 paper scenario 当作“已覆盖”；
+5. 对比主文档行数、表格列数、内部术语和跨表 ID 跳转，只把这些作为认知负担的辅助信号；
+6. 执行上面的 30 秒/90 秒理解任务；没有独立工程师时标记 `CONTEXT_CONTAMINATED`，只能给 development-level 结论。
+
+回归审核必须报告事实保留情况和仍然失败的理解任务。不能因为新版更短就自动判定通过。

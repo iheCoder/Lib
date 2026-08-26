@@ -163,18 +163,18 @@ Agent fault → Task(s) → Trial condition → Grader(s) → Observable failure
 
 如果 fault 只在某些 trial 暴露，说明 trial policy 与判定阈值。没有任务、grader 或可观察环境结果的 P0 fault 是 survivor。
 
-## 8. Agent Eval Human Review Pack
+## 8. Agent Eval 开发者审批主文档
 
-主视图保持紧凑：
+同样遵循 [output-contract.md](output-contract.md) 的两层结构。默认主文档先让普通开发者看懂：
 
-1. Agent scope、版本化配置和变更边界；
-2. Behavior/Policy Map：outcome、authority、safety、liveness；
-3. P0/P1 Agent Risk Map；
-4. Task Set：每项的 initial state、输入、outcome/forbidden effects、fault mapping；
-5. Trial Plan：trial 数量依据、baseline、pass@1/pass^k 或 safety metric；
-6. Grader Matrix：grader 类型、观察对象、Oracle 来源、校准状态；
-7. Agent Fault Challenge survivors；
-8. Testability Gaps、grader uncertainty 和 Human Review Required。
+1. agent 要完成什么、绝不能做什么，以及当前能否进入 eval 实施；
+2. 需要人决定的 0–3 个 policy、权限或质量阈值问题；
+3. 六类检查角度的覆盖速查。对 agent 可将“输入与边界”解释为任务分区，将“时间与并发”解释为多轮、重复工具调用和超时恢复；
+4. 高价值任务：初始状态、用户/恶意输入、正确环境结果、禁止动作和当前验证状态；
+5. 还没证明什么：trial 隔离、工具/环境可观察性、grader 校准、多 trial 样本不确定性；
+6. 审批清单与最小下一步。
+
+版本化配置、完整 Behavior/Policy Map、P0/P1 Risk、Trial Plan、Grader Matrix 和 Agent Fault Challenge 放进可选技术证据文件。主文档可保留 `trial`、`grader` 等确属产品实现的词，但第一次出现时必须解释，不要求普通开发者理解 `pass@k/pass^k` 才能做审批决定。
 
 ### Agent Eval 完成条件
 

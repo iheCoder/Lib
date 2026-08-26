@@ -1,6 +1,6 @@
 interface:
   display_name: "TDD Human-Approval Bridge"
-  short_description: "Design reviewable tests and agent evals with fidelity"
-  default_prompt: "Use $tdd-ha-bridge to produce a human-reviewable test or agent-eval design, verification strategy, and adequacy critique before implementation."
+  short_description: "让普通开发者快速看懂测试覆盖、缺口与待决策项"
+  default_prompt: "Use $tdd-ha-bridge to produce a plain-language developer review pack that makes lens coverage, unproven risks, and required decisions obvious before implementation."
 policy:
   allow_implicit_invocation: true

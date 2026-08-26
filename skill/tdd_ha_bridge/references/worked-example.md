@@ -1,82 +1,62 @@
-# Worked Example: CreateOrder
+# Worked Example：CreateOrder 开发者审批主文档
 
-本例仅展示结构和审查密度，不定义任何真实项目的订单语义。
+本例只展示默认主文档的信息层级和语言，不定义任何真实项目的订单语义。内部仍应完成 Behavior/Risk/Fault/Verification 分析，但不把那套结构直接交给普通开发者。
 
-## Verdict
+## 先看结论
 
-```text
-Status: BLOCKED_BY_ORACLE_AMBIGUITY
-Scope: CreateOrder 的库存扣减、订单落库与消息发布
-Baseline: 相关单元测试通过；未发现 publish failure 的契约测试
-Secondary gap: V3 缺少真实 publish failpoint，Oracle 裁决后仍需先补 testability
-```
+当前还不能批准“下单后发消息失败”这条测试，因为需求没有说明订单应该保留、回滚还是转为后台重试。正常下单、库存不足、库存临界值和并发重复请求已经有明确预期与可执行办法。
 
-## One-minute Summary
+最危险的是：订单已经写入数据库，但消息发送失败，客户端随后重试，可能生成第二个订单。
 
-正常创建、库存不足和并发幂等已有清晰 Oracle；最高风险在“订单已提交、消息发布失败”边界。需求没有说明应 rollback、保留并重试还是返回成功，因此不能提前把任一策略写成测试事实。
+你现在只需先回答下面的“决定 1”，再看 Lens 表中两个“部分覆盖”。Baseline：现有单元测试通过；尚未发现真实消息失败测试环境。
 
-## Behavior Map
+## 需要你决定的事
 
-| ID | Obligation | Observable | Source | Confidence |
+### 决定 1：订单已经保存，但消息发送失败时，接口应该告诉客户端成功还是失败？
+
+当前无法推荐唯一答案，因为两种产品语义都可能成立，但必须由订单可靠性要求裁决。
+
+- 选“订单保留，接口返回成功”：需要保证消息最终补发，并测试补发不会重复。
+- 选“订单保留，接口返回失败”：客户端会重试，必须用请求 ID 保证不会再建一单。
+- 选“整体失败”：需要证明订单、库存和消息都没有残留；若数据库和消息不在同一事务里，通常需要额外设计。
+- 现有证据：需求只规定相同请求 ID 不能产生两个订单，没有规定消息失败后的返回和恢复方式。
+
+## 六类 Lens 覆盖速查
+
+| 检查角度（Lens） | 它在问什么 | 状态 | 已经覆盖 | 还缺什么 |
 | --- | --- | --- | --- | --- |
-| B1 | 合法请求只创建一个订单并正确扣减库存 | 订单数、库存、返回 ID | REQ | High |
-| B2 | 库存不足不创建订单且库存不变 | 错误类型、订单数、库存 | DOMAIN | High |
-| B3 | 相同幂等键不产生重复业务效果 | 订单数、库存扣减次数 | API | High |
-| B4 | publish 失败后系统仍保持定义的一致性语义 | 订单、库存、事件、返回值 | UNKNOWN | Low |
-| B5 | 缺省参数保持旧调用方行为 | 返回与副作用 | CALLER + TEST | Medium |
+| 业务规则（Contract） | 正常、拒绝和失败时系统承诺什么？ | 部分覆盖 | 正常下单、库存不足、重复请求明确 | 消息失败后的正确结果待决定 |
+| 状态变化（State） | 订单和库存怎样从旧状态变到新状态？ | 已覆盖 | 成功、库存不足和恰好耗尽都有状态断言 | 无高风险缺口 |
+| 输入与边界（Partition） | 业务分区和临界值是否有代表场景？ | 已覆盖 | `stock < qty`、`stock == qty`、`stock > qty` | 无高风险缺口 |
+| 外部依赖（Interaction） | 数据库或消息部分失败会不会留脏数据？ | 部分覆盖 | 普通错误分支可测 | 缺真实消息失败点；业务结果也待决定 |
+| 时间与并发（Time/Concurrency） | 同一请求同时到达或重试是否只生效一次？ | 已覆盖 | 两个请求可在检查后同时释放，观察真实唯一约束 | 无高风险缺口 |
+| 兼容与回归（Regression） | 旧调用方和缺省参数是否保持？ | 已覆盖 | 既有调用方与测试给出保持依据 | 无高风险缺口 |
 
-## Risk Map
+## 高价值场景
 
-| Pri | Risk | Why realistic now | Violates |
-| --- | --- | --- | --- |
-| P0 | commit 成功、publish 失败后客户端重试造成重复订单 | 调用方会重试 5xx，变更触及 publish | B3, B4 |
-| P0 | 两个同幂等键请求同时穿过 pre-check | 当前唯一约束只在应用层 | B3 |
-| P1 | `quantity == stock` 被误判为不足 | 本次修改了比较条件 | B1 |
-| P1 | context 取消后事务仍提交 | 取消点位于 commit 前后不清晰 | B4 |
+| 优先级 | 要防的真实问题 | 怎样触发 | 正确结果 | 当前验证状态 |
+| --- | --- | --- | --- | --- |
+| 高 | 正常下单写多次或扣错库存 | 库存大于购买量 | 只建一个订单，库存只扣一次 | 可编写 |
+| 高 | 库存不足仍留下订单或发消息 | 库存小于购买量 | 返回明确错误；订单和库存不变；不发消息 | 可编写 |
+| 高 | 两个相同请求同时穿过“先查再写” | 两个事务在检查后同时继续 | 最终只有一个订单和一次扣减 | 可编写；需要真实数据库 |
+| 中 | 把“刚好够”误写成库存不足 | 库存等于购买量 | 下单成功，库存变为 0 | 可编写 |
+| 高 | 订单已保存但消息失败后产生重复订单 | 在数据库提交后让消息发送失败 | 等“决定 1”确认 | 暂时不能定稿 |
 
-## Minimal High-value Scenarios
+## 还没证明什么
 
-| ID | Pri | Intent | Given / Trigger | Expected + forbidden effects | Protects | Exposes | Oracle | Verify |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| T1 | P0 | 正常创建只产生一次效果 | stock > qty | 一个订单；库存扣减一次；一个 ID | B1 | 基线错误 | REQ / High | V1 |
-| T2 | P0 | 库存不足无残留 | stock < qty | 明确错误；无订单；库存不变；不 publish | B2 | 先写后校验 | DOMAIN / High | V1 |
-| T3 | P0 | 并发相同幂等键 | 两请求在幂等检查后由 barrier 同时释放 | 只产生一次订单和一次扣减 | B3 | 应用层 check-then-act race | API / High | V2 |
-| T4 | P1 | 恰好耗尽库存 | stock == qty | 成功；库存为 0 | B1 | `<`/`<=` 错误 | REQ / High | V1 |
-| T5 | P0 | commit 后 publish 失败 | publish 注入失败 | 待裁决 | B4 | ambiguous retry | UNKNOWN / Low | V3 |
+### 数据库已提交、消息随后失败
 
-## Verification Strategies
+- 现在为什么测不了：正确业务结果还没确定，并且测试环境没有能稳定停在“提交后、发消息时”的故障点。
+- 最小补强：先回答“决定 1”，再增加真实消息失败注入和数据库最终状态检查。
+- 不补的后果：即使其他测试全部通过，也抓不到重复订单、丢消息或错误回滚。
 
-| ID | Level | Target property | Control / injection | Realism | Observable | Repeatability / diagnostic |
-| --- | --- | --- | --- | --- | --- | --- |
-| V1 | component | 业务分区与副作用原子边界 | 受控 repository + state spy | 不依赖 DB 隔离语义 | return、订单、库存、publish count | 确定性；定位业务分支 |
-| V2 | integration | 并发幂等与 unique constraint | 真实 DB；两个事务在 pre-check 后 barrier 释放 | 保留事务/唯一约束 | durable order count、stock、两响应 | 确定性；定位 check/commit boundary |
-| V3 | integration/fault injection | DB commit、publish 与 retry 边界 | 真实 DB/MQ；commit/publish 前后 failpoint | 不能用单纯 error mock | durable row、outbox/event、retry effect | Oracle 未裁决；harness 还缺 publish failpoint |
+## 审批清单与下一步
 
-## Fault Challenge
+- [ ] 我确认正常下单、库存不足、库存临界值和重复请求的正确结果。
+- [ ] 我已回答消息发送失败后的业务语义。
+- [ ] 我同意为这条高风险链路增加真实消息失败注入。
+- [ ] 批准后先写测试并确认它因目标行为未实现而失败，再修改实现。
 
-| Fault | Wrong implementation | Violates | Witness | Verify | Result |
-| --- | --- | --- | --- | --- | --- |
-| M1 | 先建订单，再校验库存 | B2 | T2 | V1 | killed |
-| M2 | 幂等只做非原子 pre-check | B3 | T3 | V2 | killed |
-| M3 | `stock <= qty` 一律拒绝 | B1 | T4 | V1 | killed |
-| M4 | publish 失败返回 5xx，但订单已提交且无稳定幂等 | B3, B4 | T5 | V3 | survivor: Oracle unknown + missing failpoint |
+最小下一步：由产品/架构负责人回答“决定 1”；其余四个场景可以先进入测试编写。
 
-## Coverage Audit
-
-```text
-Behavior coverage: B1 ✓  B2 ✓  B3 ✓  B4 ?  B5 △
-Risk coverage:     R1 ?  R2 ✓  R3 ✓  R4 ?
-Verification:      V1 ✓  V2 ✓  V3 ≈
-Relevant lenses:   Contract ✓ / State ✓ / Partition ✓ / Interaction ? / Time-Concurrency △ / Regression △
-```
-
-## Human Review Required
-
-1. publish 失败后的业务语义是什么？
-   - 若订单保留：需要稳定幂等、outbox/retry 可观察性与重试测试。
-   - 若整体失败：需要证明订单、库存和事件均无残留。
-   - 若接口返回成功：需要明确事件最终送达保证和告警语义。
-2. context cancellation 发生在 commit 之后时，API 应返回已成功结果还是取消错误？
-3. 是否批准为 V3 增加真实 publish failpoint？在此之前，普通 mock 只能验证 error branch，不能证明真实 partial-failure 语义。
-
-本例没有为了“全面”加入 max-int、宇宙射线或所有依赖组合；它把人的注意力放在会实质改变实现的两个 Oracle 上。
+如需正式审计，再单独生成 `test-design-create-order.evidence.md` 保存来源、风险、错误实现挑战和验证真实度，不要求普通审批者阅读。

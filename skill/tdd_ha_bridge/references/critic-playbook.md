@@ -135,7 +135,7 @@ Critic 的 blind 阶段不能接收候选场景、Designer 的 Behavior/Risk Map
 
 `N/A` 必须有基于代码/架构边界的理由，不能用于逃避分析。
 
-## Pass 6 — Minimality 与 Reviewability
+## Pass 6 — Minimality、可理解性与信息压缩
 
 删除或降级：
 
@@ -146,6 +146,17 @@ Critic 的 blind 阶段不能接收候选场景、Designer 的 Behavior/Risk Map
 
 只有当另一场景以相同或更高 fidelity 覆盖相同 obligations + faults，并保持相近 Diagnostic Value 时才能删除。如果一个场景同时杀死多个高风险 fault，保留并明确映射；如果它跨越过多 failure boundary 导致失败无法定位，则拆分或补诊断观察点。主审查包应该小而强，完整细节可放附录。
 
+Critic 还必须站在普通后端开发者视角检查默认主文档，而不是只审理论完整性：
+
+1. 不看技术附录，能否在 30 秒内找到当前结论和待决策项？
+2. 六类 Lens 是否全部用 `已覆盖 / 部分覆盖 / 未覆盖 / 不适用` 展示？
+3. 任何 Oracle 不明确、PSEUDO_KILLER 或 TESTABILITY_GAP，是否已经翻译成“正确结果缺依据”或“当前测试环境无法稳定制造/观察”，并同步降低对应 Lens 状态？
+4. 是否要求读者跨 `B/R/T/V/M` 五张表拼出同一个结论？若是，把这些映射移到技术证据层。
+5. 同一风险是否在规则、风险、场景、验证和 fault challenge 中重复解释？主文档只保留一次，并把“怎么触发、正确结果、当前是否真测到”放在同一行或同一卡片。
+6. 决策标题是否描述现实事件和用户后果，而不是用 `trigger`、`instance`、`Oracle`、`linearization`、`idempotency` 充当问题本身？
+
+理论上充分但普通开发者无法定位重点的产物，仍应判为 `REVISION_REQUIRED`。
+
 ## Critic 结论
 
 只能使用以下状态：
@@ -155,7 +166,7 @@ Critic 的 blind 阶段不能接收候选场景、Designer 的 Behavior/Risk Map
 - `BLOCKED_BY_ORACLE_AMBIGUITY`：关键业务语义无法从证据确定，不同答案会实质改变实现。
 - `BLOCKED_BY_TESTABILITY_GAP`：P0/P1 语义无法被现有 harness 足够真实、确定地控制或观察。
 
-结论必须附：
+内部技术证据的结论必须附：
 
 ```text
 Strongest adequacy argument:
@@ -166,3 +177,5 @@ Smallest next action:
 ```
 
 不要输出脱离证据的综合分数。充分性是可审查论证，不是神秘的 87/100。
+
+上述英文键值不是默认主文档结尾。交付时按 [output-contract.md](output-contract.md) 翻译为中文结论、Lens 缺口和最小下一步；只有技术证据文件保留原始键值。
