@@ -1,163 +1,131 @@
-# Risk Trigger Library
+# Core Model Blind-Spot Trigger Library
 
-这个库把 change signal 转成**待验证假设**。使用前先确认现实前提；命中关键词、技术组件或代码形状，不能直接生成 Finding。
+这个库只补 frontier model 在普通 review 中仍容易忽略的盲点：局部代码往往正确，但跨文件、跨状态、跨时间或跨运行环境组合后会越过故障线。
 
-每次只读取与当前 Change Facts 有关的条目。优先组合信号：单个 `retry`、`Redis`、`loop` 或 `API` 通常不足以激活高风险调查。
+Trigger 只能改变检索方向并创建 hypothesis，不能直接生成 Finding。普通 read-modify-write、N+1、API compatibility、IDOR、delete/default/error handling、Kafka duplicate/ordering、goroutine race/deadlock 仍由 Breadth Scan 负责，不占 Core instruction budget。
 
-## 1. Retry / timeout + 外部副作用
+## Trigger 准入标准
 
-**Signals**：retry、timeout retry、付款、发送消息、创建外部资源、发货、扣库存、调用第三方 mutation。
+Core Trigger 至少满足以下 3 项，否则删除或降级：
 
-**Applicable when**：调用可能在副作用已成功但响应丢失后重试，或调用方无法区分“未执行”和“执行结果未知”。
+1. 需要跨文件、跨模块或跨系统推理；
+2. 需要跨时间、失败或恢复过程推理；
+3. 局部代码通常看起来正确；
+4. 存在隐藏运行环境前提；
+5. 普通 frontier-model review 容易低显著性漏掉；
+6. 会明显改变后续检索方向；
+7. 一旦成立影响较高；
+8. lint、compiler 或 static analyzer 不容易直接发现。
 
-**Hypotheses**：重复扣款/发货/创建；本地与外部状态分歧；重试风暴。
+使用时先过 applicability gate，再记录 `Why Activated / Applicable When / Need Evidence / Retrieve or Falsify`。多个 Trigger 指向同一 broken invariant 时合并 hypothesis。
 
-**Retrieve / falsify**：retry boundary、idempotency key 的生成与稳定性、唯一约束、provider dedup contract、状态机、超时后的 reconciliation、调用方是否真的重试。
+## 1. Ambiguous Completion / Hidden Retry
 
-## 2. 多个状态写入或跨系统副作用
+**Blind spot**：副作用结果是 unknown，系统却把 unknown 当成 failure 再次执行。
 
-**Signals**：DB write + publish、两张表更新、local state + remote call、先删后建、transaction callback。
+**Gate**：调用者无法区分“没有执行”和“已经执行但响应丢失”，且某处可能重放。不要只找显式 `retry()`；继续追 SDK、proxy、queue redelivery、workflow engine、Agent recovery、RPC middleware 和 client library。
 
-**Applicable when**：多个动作需要共同满足一个业务不变量，但没有天然原子性。
+**Retrieve / falsify**：所有 retry boundary；idempotency key 的稳定性；唯一约束和 provider dedup；unknown outcome 的 reconciliation；状态机是否把 ambiguous 与 failed 分开。
 
-**Hypotheses**：partial success；commit 成功但 publish 失败；补偿再次破坏数据；rollback 只覆盖部分状态；重试重复前一步。
+## 2. Recovery Asymmetry
 
-**Retrieve / falsify**：transaction boundary、outbox/inbox、执行顺序、failure handling、compensation、reconciliation、可重复恢复语义，以及每个步骤之间 crash 的结果。
+**Blind spot**：crash、retry 或 resume 后，不同状态系统恢复到不同时间点。
 
-## 3. Read-modify-write / check-then-act
+**Concrete path**：DB commit 成功 → Agent checkpoint 尚未写入 → crash → resume 认为 tool 未完成 → 副作用再次执行。反向也可能是 orchestration 标记 completed，但环境事务回滚。
 
-**Signals**：读取后计算再写回；先检查不存在再创建；余额、库存、计数器、版本或状态转换。
+**Retrieve / falsify**：checkpoint、transaction、environment state、commit/ack 顺序、resume 规则、reconciliation，以及每两个持久步骤之间 crash 后的状态。
 
-**Applicable when**：同一实体可能有并发写者，或读取结果到写入之间允许状态变化。
+## 3. Hidden Multi-Writer / Invariant Split
 
-**Hypotheses**：lost update、重复创建、越权状态转换、超卖、陈旧写覆盖新值。
+**Blind spot**：HTTP API、consumer、cron、admin、Agent tool 或 backfill 共同修改同一业务状态，但每个入口都认为自己拥有状态转换权。
 
-**Retrieve / falsify**：事务隔离、CAS/version、条件更新、唯一约束、锁粒度、所有写入入口、冲突重试语义。只有单写者且可由拓扑/ownership 证明时才拒绝并发假设。
+**Gate**：至少两个真实 writer 能触达同一实体或 invariant；不要只因存在多个函数而激活。
 
-## 4. 一对多派生 / 全局模板或配置
+**Retrieve / falsify**：枚举所有 writers；确认 source of authority；比较 validation、versioning、状态转换和副作用规则；检查入口之间是否覆盖、绕过或形成不同 invariant。
 
-**Signals**：一个模板派生多个对象；全局配置变化传播到用户数据；同步 fan-out；批量刷新。
+## 4. Cross-Layer Multiplicative Amplification
 
-**Applicable when**：真实 fan-out 可能大于常数级，或部分传播会留下长期不一致。
+**Blind spot**：每层局部成本都合理，但 `fan-out × nested operation × retry × downstream consumers` 形成乘法放大；这不是普通 N+1。
 
-**Hypotheses**：写放大、超大事务、partial propagation、update storm、重试重复更新、旧派生数据与新模板不兼容。
+**Gate**：至少两层可增长基数或重放因子真实相乘。
 
-**Retrieve / falsify**：最大 cardinality、同步/异步、分页与 batch、事务范围、索引、恢复点、重复执行、速率限制、派生对象是快照还是动态引用。
+**Retrieve / falsify**：建立端到端 work equation，找现实 cardinality、重试次数、事件数量、consumer fan-out、并发上界和容量保护。固定且很小的上界应拒绝该 hypothesis。
 
-## 5. Loop / recursion + DB、RPC 或大对象处理
+## 5. Runtime Reality Mismatch
 
-**Signals**：循环内 query/RPC、递归加载、逐项序列化/复制、无界集合、并发 fan-out。
+**Blind spot**：实现依赖一个 repo 内无法证明的线上前提，例如历史数据已有新字段、base 已部署、flag 必开、scheduler 单实例、consumer 全升级或配置必存在。
 
-**Applicable when**：集合大小可随用户/数据增长，且单项代价并非纯内存常数操作。
+**Gate**：该前提一旦为假会改变 requirement 的正确性或发布安全。
 
-**Hypotheses**：N+1、连接池压力、延迟/内存放大、下游限流、goroutine 爆炸。
+**Retrieve / falsify**：部署资料、配置默认值、migration/backfill、数据分布、拓扑和用户确认。`repo 未找到证据` 只能形成 Open Assumption，不能直接证明现实不存在。
 
-**Retrieve / falsify**：真实上界、batch API、query placement、分页、concurrency limit、timeout、benchmark/query plan。小而固定的集合可以拒绝该风险。
+## 6. Live Backfill / Migration Race
 
-## 6. Schema / migration / 新必填字段
+**Blind spot**：不仅历史数据需要迁移，backfill 还与实时业务写入并发，可能用旧快照覆盖新状态，或旧版本继续生产旧格式数据。
 
-**Signals**：新 non-null/required 字段、默认值语义变化、读取假定历史数据已存在、rename/drop、backfill、索引变化。
+**Concrete path**：backfill 读取旧值 → 用户提交新值 → backfill 按旧快照写回 → 新值被静默覆盖。
 
-**Applicable when**：旧数据、旧代码、旧消息或 mixed-version 实例真实存在。
+**Retrieve / falsify**：snapshot 时点、write ownership、CAS/version、处理顺序、dual-write period、分区游标、resume/retry，以及旧 producer 停止的证据。
 
-**Hypotheses**：历史数据违反新假定；部署顺序导致新旧版本互相不可读；大表锁；backfill 中断或重复；rollback 后旧代码无法读取；默认值悄悄改变业务含义。
+## 7. Mixed-Version Emergent Behavior
 
-**Retrieve / falsify**：migration/backfill 文件、数据分布证据、expand-contract 顺序、null/default handling、旧版本读写、回滚路径、操作耗时与锁行为。没有旧世界时，把它视为 design evolution，不报兼容性回归。
+**Blind spot**：v1 和 v2 独立运行都正确，但 rolling deployment 的组合世界错误。
 
-## 7. API / event / persisted contract change
+**Gate**：新旧 producer/consumer、writer/scheduler 或 reader/schema 会真实并存。
 
-**Signals**：字段删除/改名/改类型、enum 扩展、错误码变化、JSON missing 与 zero/null 语义、消息 schema、持久化格式。
+**Retrieve / falsify**：枚举 `v1→v2` 和 `v2→v1` 的数据与控制流组合；检查 rollout/rollback 顺序、默认值、能力协商和共享状态语义。没有旧世界时记录 design evolution，不制造兼容性 Finding。
 
-**Applicable when**：已有消费者、已发布 SDK、历史消息/数据或旧版本实例可能存在。
+## 8. Multiple Truths / Derived-State Divergence
 
-**Hypotheses**：旧客户端解析失败；旧 consumer 不认识新 enum；缺失值被误解释；rolling rollout 互操作失败；历史数据反序列化失败。
+**Blind spot**：同一业务事实存在 MySQL、Redis、scheduler memory、search index、derived object 或 Agent session 等多个持久/运行时表示。
 
-**Retrieve / falsify**：真实调用方与 consumer、版本策略、schema registry、宽容读取、producer/consumer rollout 顺序、部署历史、branch 状态。开发分支从未部署且无外部消费者时不要制造兼容性 Finding。
+**Gate**：至少两个表示会影响可观察行为或不可逆副作用，而不是纯展示缓存。
 
-## 8. Async / goroutine / worker lifecycle
+**Retrieve / falsify**：确定 source of truth；找每个 representation 的 writer/reader；确认更新和失效链；检查旧 representation 是否仍能驱动副作用，以及 divergence 如何被发现和修复。
 
-**Signals**：goroutine/thread、background task、channel/queue、callback、parallel map、worker pool、shutdown hook。
+## 9. Ownership / Lease / Fencing
 
-**Applicable when**：并发路径可同时运行，或任务生命周期可能超过请求/进程阶段。
-
-**Hypotheses**：race、deadlock、leak、取消/超时丢失、unbounded concurrency、panic 隔离失败、shutdown 丢任务、closure 捕获错误。
-
-**Retrieve / falsify**：ownership、join/wait、context propagation、channel close 责任、共享状态同步、并发上界、panic/error 汇聚、graceful shutdown，并用 deterministic barrier/fake clock/race detector 验证。
-
-## 9. Queue / event delivery
-
-**Signals**：Kafka、stream、queue、consumer retry、ack/commit、DLQ、event handler。
-
-**Applicable when**：broker contract 允许重复、乱序、延迟、批次部分成功，或 consumer 会重平衡。
-
-**Hypotheses**：重复业务效果；ack 与业务提交错序；poison message 阻塞；旧事件覆盖新状态；重平衡期间丢失/重复；schema rollout 不兼容。
-
-**Retrieve / falsify**：delivery guarantee、partition key/order boundary、ack timing、consumer idempotency、offset transaction、DLQ/replay、version handling。不要仅因出现 Kafka 就假设全局乱序。
-
-## 10. Cache / derived index
-
-**Signals**：cache-aside、write-through、失效、TTL、negative cache、搜索索引或读模型。
-
-**Applicable when**：缓存/索引结果会影响正确性或在高并发下放大依赖压力。
-
-**Hypotheses**：stale read 违反业务不变量；更新 DB 后失效失败；stampede；negative cache 隐藏新数据；多 key 更新部分成功。
-
-**Retrieve / falsify**：source of truth、允许的陈旧窗口、写入/失效顺序、singleflight/lock、TTL jitter、fallback、rebuild/reconciliation。只承载可容忍陈旧数据的单实例 Redis cache 不自动产生分布式 ownership 风险。
-
-## 11. Lock / lease / leader / ownership
-
-**Signals**：distributed lock、lease、leader election、fencing token、renewal、ownership transfer。
+**Blind spot**：旧 owner 失去 lease 后仍能继续在最终资源产生副作用；“有 Redis lock”不等于安全。
 
 **Applicability gate**：
 
 ```text
-多个并发执行实体？
-→ 共享状态或竞争同一 ownership？
-→ lease/lock 过期或网络分区时旧 owner 还能继续产生副作用？
+多个执行实体真实存在
+→ 竞争 shared ownership
+→ lease 失效或网络分区后旧 owner 仍可继续
+→ 最终资源可能接受旧 owner 的写入
 ```
 
-任一关键前提不成立时停止。
+**Retrieve / falsify**：lease expiry、renewal failure、GC pause、partition、operation duration、ownership transfer，以及 fencing token 是否由最终资源强制校验。任一关键前提不成立就停止。
 
-**Hypotheses**：双 owner；lease 执行中到期；旧 owner 缺少 fencing 仍写入；ownership 转移期间重复/遗漏执行。
+## 10. Temporal / Ordering Invariant Mismatch
 
-**Retrieve / falsify**：实例拓扑、lease duration vs operation duration、renewal failure、fencing enforcement 在最终资源端是否生效、clock assumptions、partition 行为、幂等/去重。单实例或无共享副作用时不报脑裂。
+**Blind spot**：基础设施保证的顺序单位，与业务真正要求的顺序单位不同。Kafka 按 `order_id` 有序，不等于业务需要的 `user_id` 全局顺序成立。
 
-## 12. Authorization / tenant / secret / privacy boundary
+**Gate**：存在业务顺序 invariant，且多个事件可落入不同基础设施顺序域。
 
-**Signals**：鉴权顺序变化、资源 ID、tenant/user scope、管理员路径、日志/错误输出、token/secret、批量导出。
+**Retrieve / falsify**：明确业务 ordering key、broker/partition/transaction 的保证单位、跨 key 合并、重试/replay 和陈旧事件处理。不要泛泛报告“消息可能乱序”。
 
-**Applicable when**：不可信调用者可控制标识或返回内容跨越权限/租户边界。
+## 11. Repair / Reconciliation Can Destroy Fresh State
 
-**Hypotheses**：IDOR、先读后鉴权泄露、跨租户查询/缓存污染、日志泄密、默认放行、批处理部分越权。
+**Blind spot**：reconcile、repair、periodic sync、cache rebuild、cleanup 或 recovery 根据旧快照，把暂时不一致误判为错误并覆盖/删除最新正确状态。
 
-**Retrieve / falsify**：入口 authn/authz、资源归属条件是否进入 DB query、所有分支与 fallback、缓存 key、错误响应、日志字段、服务间身份。不要仅凭“有用户 ID”报安全问题。
+**Concrete path**：repair 读取旧 snapshot → 正常流更新 → repair 发现“差异” → 用旧值覆盖新值；或 eventual consistency 尚未收敛时把正确资源当 orphan 删除。
 
-## 13. Delete / overwrite / default / error handling change
+**Retrieve / falsify**：读快照时点、freshness/version guard、write authority、delete safety window、eventual-consistency delay、dry-run 和可逆性。
 
-**Signals**：删除 guard、扩大 delete/update 条件、zero/default 行为变化、忽略 error、fallback 从 fail-closed 变 fail-open、defer/cleanup 改动。
+## 12. Configuration Combination / Untested World
 
-**Applicable when**：修改会触达持久状态、权限、外部副作用或核心流程控制。
+**Blind spot**：多个 feature flag、tenant/region config 和 legacy mode 的组合形成单项测试从未覆盖的新控制流。
 
-**Hypotheses**：全表/跨租户修改；静默数据覆盖；错误后继续成功响应；cleanup 删除正确资源；默认值绕过约束；异常被吞掉后触发重试或重复操作。
+**Gate**：至少两个独立配置共同改变同一行为路径，且该组合在线上可达。
 
-**Retrieve / falsify**：where/scope 条件、affected rows、dry-run/backup、error propagation、caller behavior、默认值来源、defer 捕获值与执行顺序、测试是否观测 forbidden effect。
+**Retrieve / falsify**：构造配置矩阵和控制流；确认默认值、override precedence、动态刷新、rollout/rollback 组合以及测试覆盖。单 flag 的普通分支错误不属于这个 Trigger。
 
-## 14. Scheduler / time / natural-language automation
+## Hypothesis Merge
 
-**Signals**：cron/RRULE、时区、自然语言转结构化任务、多轮确认、next-run 计算、重排/去重、任务持久化。
+Trigger 是 supporting signal，不是 investigation 数量。先写 broken invariant，例如“未经用户批准不得产生 destructive side effect”；authorization、approval、retry 和 Agent workflow 可以共同支持它。只有触发条件、执行路径或被破坏状态真正不同才拆成多个 hypotheses。
 
-**Applicable when**：用户输入需要跨层转换并最终产生可执行、持久化的调度副作用。
+## Discovery Re-entry
 
-**Hypotheses**：对话成功但任务未创建；创建了错误时区/频率；DST/月底语义漂移；确认轮次丢字段；回复与真实任务状态不一致；重试创建重复任务；scheduler 未加载新任务。
-
-**Retrieve / falsify**：从输入解析、澄清/确认、tool call、持久化、scheduler reload 到用户回复的端到端链路；时区来源；幂等键；失败状态；实际 next occurrence，而不只检查文本格式。
-
-## 15. AI agent / tool workflow
-
-**Signals**：多轮 LLM、tool calling、审批、环境副作用、模型重试、structured output、恢复会话。
-
-**Applicable when**：成功不仅取决于最终文本，还取决于工具轨迹或环境状态。
-
-**Hypotheses**：声称成功但工具未执行；重复 tool call；审批前产生副作用；恢复后重复提交；格式正确但环境错误；失败后状态被错误标成完成。
-
-**Retrieve / falsify**：trajectory、tool result、state transition、approval boundary、idempotency、retry/recovery、最终环境 state。验证应同时检查 outcome 与副作用，不把单次 happy-path 文本当作完成证据。
+Deep dive 若发现新的 topology、state ownership、side-effect graph、cardinality、lifecycle、external exposure 或 runtime state，必须更新 Implementation Facts，重新执行相关 applicability gate 和 Coverage，再决定是否激活其他 Trigger。Review 不是单向流水线。
