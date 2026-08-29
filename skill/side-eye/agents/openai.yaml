@@ -1,0 +1,4 @@
+interface:
+  display_name: "Side Eye"
+  short_description: "沿变更故障线追踪高代价风险，并用场景与证据主动证伪"
+  default_prompt: "Use $side-eye to review this change for scenario-dependent, change-caused defects and release risks."
