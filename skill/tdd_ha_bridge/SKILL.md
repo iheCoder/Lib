@@ -20,7 +20,7 @@ description: 为普通开发者生成易读、可快速审批的测试或 AI age
 
 ## 六个不可妥协的原则
 
-1. **Behavior first**：先建行为、不变量、状态转换和禁止行为，再列场景。
+1. **Behavior first**：先挑战是否遗漏了重要候选义务，再固化行为、不变量、状态转换和禁止行为，最后才列场景。
 2. **Adaptive risk decomposition**：按当前变更的风险结构选择 Lens，不为凑分类而制造测试。
 3. **Oracle provenance**：关键 Expected 必须有来源；无法确认就写 `UNKNOWN`，不能替业务做决定。
 4. **Fault challenge**：寻找能通过现有场景、但违反契约的 plausible wrong implementation。
@@ -123,6 +123,8 @@ Requirement / Change
         ↓
 Evidence & Context Boundary
         ↓
+Behavior Discovery Challenge
+        ↓
 Behavior Model
         ↓
 Adaptive Risk Model
@@ -142,17 +144,29 @@ Human Approval
 
 输出本次改变什么、不改变什么、相关调用方/状态/外部交互，以及证据缺口。不要在完整理解前生成场景。
 
-### 2. 建立 Behavior Model
+### 2. 执行 Behavior Discovery Challenge
 
-将需求压缩成少量可审查的 Behavioral Obligations：正常义务、不变量、禁止行为、状态转换和 preserved behaviors。每条必须可被一个或多个观察点验证。
+在正式固化 Behavior Model 前，仅针对 P0/P1 风险或高价值用户结果做一次轻量反查：
 
-### 3. 自适应选择 Test Lens
+1. 这个结果要正确成立，过程中哪些条件必须继续成立？
+2. 本次变化明确想改变什么，又可能顺手覆盖、丢失、绕过或使什么仍然重要的条件失效？
+3. 如果最终结果失败，最早在哪个状态变化之后，它已经不可能再正确完成？
+
+这里发现的是待核实的候选义务，不是新契约。用现有 Source Ledger 标记其依据；证据不足时保留 `Candidate Obligation / UNKNOWN`，说明“若应保持”和“若允许改变”分别需要什么验证、恢复、拒绝或业务裁决。不得仅凭必要性推断把候选项升级为正式 Behavior。
+
+这个步骤不是第七个 Lens，也不是固定架构清单。只有当前系统确实存在相关状态、阶段、表示或依赖变化时才展开；简单、单轮、无状态任务应快速结束，不生成额外分析产物。详细建模仍由六个自适应 Lens 完成。
+
+### 3. 建立 Behavior Model
+
+将需求与已核实的候选项压缩成少量可审查的 Behavioral Obligations：正常义务、不变量、禁止行为、状态转换和 preserved behaviors。未核实但会实质改变实现或测试的候选项保留为 Human Review Required，不得混入已确认义务。每条正式义务必须可被一个或多个观察点验证。
+
+### 4. 自适应选择 Test Lens
 
 从 `Contract / State / Partition / Interaction / Time-Concurrency / Regression` 中只展开相关 Lens。详细触发器和建模方法见 [references/design-protocol.md](references/design-protocol.md)。
 
 同时判断是否存在比示例断言更稳定的 property 或 metamorphic relation；适合时优先表达不变量，而不是堆具体 input/output。
 
-### 4. 建立 Risk Map
+### 5. 建立 Risk Map
 
 风险参考 `Impact / Likelihood / Change Proximity / Detectability` 做定性排序，不计算伪精确分数，也不把它们机械相乘。认证授权、租户隔离、资金、不可逆数据、secret 和 destructive operation 等 guardrail 只要变更可触达，就不能被低 likelihood 抵消：
 
@@ -163,13 +177,13 @@ Human Approval
 
 风险必须具体到失效机制，例如“DB commit 成功、publish 失败后重试造成重复业务效果”，不要写“异常情况”。
 
-### 5. 选择最小高价值场景
+### 6. 选择最小高价值场景
 
 场景不是分类清单。优先选择同时验证行为义务、暴露高风险故障、覆盖关键边界的代表性 witness。只在交互风险真实存在时做 pairwise/t-way 组合，不展开笛卡尔积。
 
 每个 P0/P1 场景至少写清：`Given/Trigger`、`Expected + forbidden effects`、`Protects`、`Exposes`、`Oracle Source`、`Confidence` 和验证策略引用。
 
-### 6. 设计 Verification Strategy
+### 7. 设计 Verification Strategy
 
 为每个 P0/P1 fault 建立：
 
@@ -180,7 +194,7 @@ Fault → Witness Scenario → Control / Injection Point
 
 根据被验证语义选择 `unit / component / integration / contract / e2e / property / chaos/eval`，而不是默认 unit test。涉及 concurrency/time/failure ordering 时必须给出确定性 interleaving、fake clock、failpoint、barrier 或等价控制；只能概率触发时标记 `TESTABILITY_GAP`。详细协议见 [references/verification-strategy.md](references/verification-strategy.md)。
 
-### 7. 执行 Adequacy Critic
+### 8. 执行 Adequacy Critic
 
 Critic 不重新生成另一套测试。它先从原始需求和代码边界独立重建行为/风险面，再挑战候选计划：
 
@@ -190,7 +204,7 @@ Critic 不重新生成另一套测试。它先从原始需求和代码边界独�
 
 Critic 必须先在看不到 candidate scenarios 的阶段，从原始证据生成并固化 fault inventory，再 reveal 计划比较。高风险任务优先使用隔离 reviewer context；只有在运行时政策允许且用户已授权委派时才使用 subagent，否则执行同上下文的 blind-first artifact，并降低对“无遗漏”的置信度。
 
-### 8. 交付开发者审批主文档
+### 9. 交付开发者审批主文档
 
 严格使用 [references/output-contract.md](references/output-contract.md) 的信息层级。默认主视图只放：
 
@@ -209,6 +223,7 @@ Source Ledger、Behavior/Risk/Fault 全量表和验证策略明细属于技术�
 
 只有同时满足以下条件，才能给出 `READY_FOR_HUMAN_REVIEW`：
 
+- 对存在关键状态、阶段、表示或依赖变化的 P0/P1 结果，已执行轻量行为发现反查；重要候选义务已有证据状态、影响和处理结论；
 - 每个核心 behavior/invariant 都有验证方式；
 - 所有高风险状态转换均已覆盖或显式接受风险；
 - 相关 partition/boundary 有代表值；

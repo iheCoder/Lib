@@ -19,6 +19,7 @@ Critic 的目标不是“再多想几个测试”，而是找出当前计划中 
 Critic 的 blind 阶段不能接收候选场景、Designer 的 Behavior/Risk Map 或其结论。只给原始需求、diff/change scope、API/policy、关键依赖和调用边界，独立写出：
 
 - 必须成立的 3–7 个 behavior/invariant；
+- 高价值结果依赖但原始需求未必明说的候选条件，以及它们的证据或 `UNKNOWN` 状态；
 - 本次变更最可能出现的 P0/P1 错误实现；
 - 最危险的状态、外部交互、时序和兼容边界；
 - Oracle 可能被当前代码误导的位置。
@@ -51,6 +52,16 @@ Critic 的 blind 阶段不能接收候选场景、Designer 的 Behavior/Risk Map
 - cancel/timeout 后继续提交；
 - 错误被吞、替换或错误重试；
 - 旧调用方或缺省配置被新逻辑污染。
+
+还应把下面这些作为**构造错误实现的方法**，只在当前系统确实存在对应风险时实例化；它们不是每份设计都要机械执行的 testcase checklist：
+
+- **局部变化破坏 preserved state**：目标内容修改正确，却顺手删除、覆盖、绕过或使一个仍应成立的条件失效；
+- **同一事实的表示发生分歧**：两个组件、阶段或存储都表示同一语义，其中一个变旧，系统仍按错误认知继续；
+- **系统认知与现实脱节**：系统认为动作已完成、检查已执行、状态仍有效或操作可执行，但真实环境不是如此；
+- **中间变化绕过约束**：replan、retry、resume、handoff、fallback 或恢复路径绕过权限、审批、状态检查、必要步骤或仍有效的用户限制；
+- **局部成功被当成最终成功**：中间步骤返回成功，但 durable outcome、后续步骤或必要副作用没有完成。
+
+若这些构造暴露出 Designer 根本没有识别的候选义务，先回到 Source Ledger 判断它是 Confirmed、Candidate 还是 `UNKNOWN`；Critic 不能为了杀 mutant 擅自补写业务契约。
 
 建立映射：
 

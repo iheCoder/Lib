@@ -20,6 +20,21 @@
 
 不要从“准备问 agent 哪些问题”开始。先定义：
 
+### 先发现跨变化的候选义务
+
+当 P0/P1 结果需要跨多个 turn、阶段、组件、委派或环境变化才能完成时，先应用主流程的 Behavior Discovery Challenge：哪些条件在变化前成立，并且可能仍是后续正确完成、安全退出或明确 handoff 的必要条件？本次变化会不会只完成局部目标，却无意覆盖、遗忘、绕过或过期这些条件？最终失败之前，哪个最早变化已使目标不可达？
+
+按当前风险选择关键 transition 即可，不要求所有 Agent 建完整逐轮状态表，也不把 Agent correctness 统一抽象成工具或能力集合。可帮助理解但不能当作固定分类的例子包括：
+
+- context compression 后仍有效的用户约束是否保留；
+- replanning、retry、resume 或 fallback 后必要审批是否仍成立；
+- delegation/handoff 后责任、安全条件或必要结果是否丢失；
+- retrieval、profile 或环境更新后，系统的旧表示是否仍被误当成现实；
+- permission、session 或 runtime state 变化后，仍合法的目标是否能够继续、重新建立条件或安全退出；
+- 执行入口变化后，Agent 是否有符合契约的恢复、重新规划、handoff 或失败路径。
+
+这些发现先记录为候选义务，并继续使用 Source Ledger。证据不足时写 `Candidate Obligation / UNKNOWN`，不得把某一种持久化、路由、工具集合或逐轮调用顺序直接升级为产品契约。
+
 ### Task Outcome
 
 - 最终需要完成什么；
