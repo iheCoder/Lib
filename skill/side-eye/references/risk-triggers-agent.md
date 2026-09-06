@@ -2,6 +2,15 @@
 
 只有 Implementation Facts 涉及 LLM、agent、tool call、session、memory、approval、delegation、planner 或 structured tool workflow 时才读取本文件。每条 Trigger 只创建待验证 hypothesis；先过适用性门槛，再沿 Agent state、tool trajectory 和真实环境状态取证。
 
+在沿当前需求审查依赖模型的关键步骤时，先核对模型实际收到什么，再判断它的输出和程序处理：
+
+- 从请求组装代码确认实际提示词、动态输入、历史消息、Schema 或工具说明，以及会影响该步骤的模型配置。有运行记录时对照实际请求；模板存在规则不等于该次调用收到规则，审查者从其他文件获知的信息也不等于模型已知。
+- 对照需求核对完成该判断所需的信息和规则：是否缺失、含糊、互相冲突，或在筛选、摘要、截断、修订与纠正时发生变化。只追与关键判断有关的内容，不对所有提示词做风格改写。
+- 有失败记录时区分输入缺失、指令冲突和已提供规则但输出未遵守。后者不能单凭一次失败归因于模型能力；“换模型更可靠”或“改提示会降低错误率”需要对应比较，静态发现的问题仍可由明确的缺失或冲突成立。
+- 将输出继续追到实际转换、校验和调用方。检查纠正是否覆盖该错误、是否收到修正所需的信息；没有自动纠正是否有问题由需求决定。
+
+按需用局部验证消除会改变结论的不确定性。无需为完成静态审查强制调用真实模型；没有调用或对照数据时，不声称测得了模型可靠性或提示词效果。已有代码或模拟验证可证明确定性处理，不能证明实际模型输出频率。
+
 ## A. Multi-Turn State / Capability Drift
 
 **Blind spot**：跨轮重建、state reducer 或模型切换后，required facts、tool availability、authorization、approval 或 task state 悄悄丢失。

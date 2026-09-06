@@ -66,6 +66,8 @@ Implementation Slice 是从需求输入到最终可观察结果之间，为验�
 
 记录 slice 的入口、关键状态转换、持久状态、外部副作用、异步边界和最终观察点。与该链无实际关系的模块默认不展开。
 
+沿关键数据的产生、转换和使用过程，核对上一步可能输出的内容与下一步实际接受的内容是否一致。正确行为依据需求和已确认的协议判断，不从当前实现反推。涉及模型生成或判断的关键步骤时，按 Agent Pack 检查实际请求。
+
 ### 3. 提取 Implementation Facts 与现实上下文
 
 先写客观事实，不提前产生 Finding：哪些入口、状态、数据转换、工具、副作用、持久状态、异步组件和运行环境前提参与需求。
@@ -136,7 +138,7 @@ Scenario Preconditions
 → User/System Impact
 ```
 
-随后主动寻找 counter-evidence。保护真实存在则把 hypothesis 记为 Rejected，不输出。
+随后主动寻找 counter-evidence。反证只否定它直接覆盖的故障结果；该结果已被排除时将对应 hypothesis 记为 Rejected。保护通过拒绝操作或返回错误实现时，沿与当前需求有关的调用方继续检查，直到能说明任务结果、已有成果和需求涉及的重试或恢复行为。按需求允许的失败停止不自动构成缺陷，不要求所有错误都重试。
 
 - `Introduced`：当前 requirement 的实现直接制造问题；
 - `Exposed`：旧风险原本不进入该行为路径，新 requirement 首次使其可达；
@@ -148,6 +150,8 @@ Scenario Preconditions
 完成 high-risk deep dives 后，暂时放下已有 hypothesis，独立检查是否遗漏：不可逆副作用、核心链无法完成、既有主流程回归、现实数据/发布前提、Implementation Slice 的关键断点，以及未被调查的 High/Unknown 领域。
 
 只有 requirement 和 seeds 明确、slice 已建立、breadth scan 完成、所有 High 领域已调查或明确不可验证、Finding 已找反证并通过因果门槛，才给最终 verdict。
+
+交付前核对“能够完成、可以恢复、不会污染、已经处理”等结论是否有对应执行路径或验证结果。证据只覆盖部分行为时缩小结论；关键部分未查明时说明具体缺口。已有测试通过只支持实际覆盖的场景，不以命令成功替代判断，也不因缺少真实运行记录就否定代码能够直接证明的保护。
 
 复杂 review 可以按 [review-state.md](references/review-state.md) 保存可持久化 checkpoint：
 
