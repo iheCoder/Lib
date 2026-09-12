@@ -1,0 +1,17 @@
+{
+  "run": "c12-r1",
+  "turn": 1,
+  "session_id": "01a093fb-fb5a-7d31-87e9-4bf71e446561",
+  "exit_code": 0,
+  "completed": true,
+  "elapsed_seconds": 49.48,
+  "usage": [
+    {
+      "input_tokens": 28534,
+      "cached_input_tokens": 24576,
+      "cache_write_input_tokens": 0,
+      "output_tokens": 942,
+      "reasoning_output_tokens": 62
+    }
+  ]
+}

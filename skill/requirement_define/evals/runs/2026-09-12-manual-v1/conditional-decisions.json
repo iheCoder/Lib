@@ -1,0 +1,32 @@
+{
+  "c01-r1": {
+    "action": "ANSWER",
+    "basis": "主持人已读首轮完整回复，明确询问原负责人身份/权限",
+    "answer_file": "answer-permission.md"
+  },
+  "c01-r2": {
+    "action": "ANSWER",
+    "basis": "主持人已读首轮完整回复，明确询问原负责人身份/权限",
+    "answer_file": "answer-permission.md"
+  },
+  "c01-r3": {
+    "action": "ANSWER",
+    "basis": "主持人已读首轮完整回复，明确询问原负责人身份/权限",
+    "answer_file": "answer-permission.md"
+  },
+  "c06-r1": {
+    "action": "ANSWER",
+    "basis": "主持人已读首轮完整回复，明确询问隐藏范围并区分已有入口",
+    "answer_file": "answer-scope.md"
+  },
+  "c06-r2": {
+    "action": "ANSWER",
+    "basis": "主持人已读首轮完整回复，明确询问隐藏范围并区分已有入口",
+    "answer_file": "answer-scope.md"
+  },
+  "c06-r3": {
+    "action": "ANSWER",
+    "basis": "首轮明确提出首页隐藏与保留筛选、报表、收藏入口的范围确认问题",
+    "answer_file": "answer-scope.md"
+  }
+}

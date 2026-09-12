@@ -1,0 +1,3 @@
+2026-09-12T05:04:52.914065Z ERROR codex_core::session::session: failed to load skill /Users/ihewe/.codex/skills/open-prose/SKILL.md: missing YAML frontmatter delimited by ---
+2026-09-12T05:04:52.914137Z ERROR codex_core::session::session: failed to load skill /Users/ihewe/.codex/skills/web-access/SKILL.md: invalid YAML: description: invalid type: map, expected a string at line 5 column 3
+2026-09-12T05:05:20.335331Z  WARN codex_analytics::client: failed to send events request: error sending request for url (https://chatgpt.com/backend-api/codex/analytics-events/events)

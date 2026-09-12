@@ -1,0 +1,6 @@
+2026-09-12T05:07:47.799547Z ERROR codex_core::session::session: failed to load skill /Users/ihewe/.codex/skills/open-prose/SKILL.md: missing YAML frontmatter delimited by ---
+2026-09-12T05:07:47.799688Z ERROR codex_core::session::session: failed to load skill /Users/ihewe/.codex/skills/web-access/SKILL.md: invalid YAML: description: invalid type: map, expected a string at line 5 column 3
+2026-09-12T05:07:47.839015Z  WARN codex_rollout::list: state db discrepancy during find_thread_path_by_id_str_in_subdir: falling_back
+2026-09-12T05:07:47.893206Z  WARN codex_rollout::list: state db discrepancy during find_thread_path_by_id_str_in_subdir: falling_back
+2026-09-12T05:07:47.958294Z  WARN codex_rollout::list: state db discrepancy during find_thread_path_by_id_str_in_subdir: falling_back
+2026-09-12T05:08:11.918169Z  WARN codex_core::shell_snapshot: Failed to delete shell snapshot at AbsolutePathBuf("/Users/ihewe/.codex/shell_snapshots/01a09403-bb92-7151-a9fa-8d96fb6519db.1789189667731828000.sh"): Os { code: 2, kind: NotFound, message: "No such file or directory" }

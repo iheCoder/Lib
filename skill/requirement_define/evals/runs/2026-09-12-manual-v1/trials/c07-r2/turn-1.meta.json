@@ -1,0 +1,17 @@
+{
+  "run": "c07-r2",
+  "turn": 1,
+  "session_id": "01a093fe-ab9a-7d33-8f07-93090dbae436",
+  "exit_code": 0,
+  "completed": true,
+  "elapsed_seconds": 45.36,
+  "usage": [
+    {
+      "input_tokens": 42159,
+      "cached_input_tokens": 24320,
+      "cache_write_input_tokens": 0,
+      "output_tokens": 655,
+      "reasoning_output_tokens": 48
+    }
+  ]
+}

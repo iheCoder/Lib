@@ -1,0 +1,7 @@
+2026-09-12T05:07:19.827074Z  WARN codex_core::shell_snapshot: Failed to delete shell snapshot at "/Users/ihewe/.codex/shell_snapshots/01a09403-3ca0-7632-8872-5b49506cdfbe.1789189635233533000.sh": Os { code: 2, kind: NotFound, message: "No such file or directory" }
+2026-09-12T05:07:19.881492Z ERROR codex_core::session::session: failed to load skill /Users/ihewe/.codex/skills/open-prose/SKILL.md: missing YAML frontmatter delimited by ---
+2026-09-12T05:07:19.881594Z ERROR codex_core::session::session: failed to load skill /Users/ihewe/.codex/skills/web-access/SKILL.md: invalid YAML: description: invalid type: map, expected a string at line 5 column 3
+2026-09-12T05:07:20.017931Z  WARN codex_core::shell_snapshot: Failed to delete shell snapshot at "/Users/ihewe/.codex/shell_snapshots/01a09403-3ce8-7cd1-971e-a3fb4f420440.1789189635305108000.sh": Os { code: 2, kind: NotFound, message: "No such file or directory" }
+2026-09-12T05:07:20.113721Z  WARN codex_rollout::list: state db discrepancy during find_thread_path_by_id_str_in_subdir: falling_back
+2026-09-12T05:07:20.171934Z  WARN codex_rollout::list: state db discrepancy during find_thread_path_by_id_str_in_subdir: falling_back
+2026-09-12T05:07:20.205311Z  WARN codex_rollout::list: state db discrepancy during find_thread_path_by_id_str_in_subdir: falling_back
