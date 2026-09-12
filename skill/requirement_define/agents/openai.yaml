@@ -1,0 +1,4 @@
+interface:
+  display_name: "需求定义"
+  short_description: "通过讨论澄清重要业务歧义与冲突，收敛为可供设计开发测试使用的需求"
+  default_prompt: "请使用 $requirement-define 梳理我提供的需求，澄清会影响业务结果的重要不确定性，并在需求足够明确后直接整理最终需求文档。"
