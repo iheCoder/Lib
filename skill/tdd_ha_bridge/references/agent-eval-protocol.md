@@ -180,16 +180,19 @@ Agent fault → Task(s) → Trial condition → Grader(s) → Observable failure
 
 ## 8. Agent Eval 开发者审批主文档
 
-同样遵循 [output-contract.md](output-contract.md) 的两层结构。默认主文档先让普通开发者看懂：
+同样遵循 [output-contract.md](output-contract.md) 的完整主文档契约。主文档让普通开发者独立理解：
 
-1. agent 要完成什么、绝不能做什么，以及当前能否进入 eval 实施；
-2. 需要人决定的 0–3 个 policy、权限或质量阈值问题；
-3. 六类检查角度的覆盖速查。对 agent 可将“输入与边界”解释为任务分区，将“时间与并发”解释为多轮、重复工具调用和超时恢复；
-4. 高价值任务：初始状态、用户/恶意输入、正确环境结果、禁止动作和当前验证状态；
-5. 还没证明什么：trial 隔离、工具/环境可观察性、grader 校准、多 trial 样本不确定性；
-6. 审批清单与最小下一步。
+1. agent 要完成什么、绝不能做什么，被测版本、输入、环境与实际运行情况；
+2. 六类检查角度在当前 agent 中各自检查什么、覆盖到哪里、由哪些任务和评分支撑；对 agent 可将“输入与边界”解释为任务分区，将“时间与并发”解释为多轮、重复工具调用和超时恢复；
+3. 每个高价值任务为什么被选择，初始状态、逐轮输入、正确环境结果、禁止动作、运行办法和当前验证状态是什么；
+4. 已运行时每个重要任务的实际 trajectory、最终环境结果、与 baseline 的差异以及判断理由；
+5. 所有需要人决定的 policy、权限或质量阈值问题及不同选择的后果；
+6. 还没证明什么：trial 隔离、工具/环境可观察性、grader 校准、多 trial 样本不确定性；
+7. 审批事项与下一步。
 
-版本化配置、完整 Behavior/Policy Map、P0/P1 Risk、Trial Plan、Grader Matrix 和 Agent Fault Challenge 放进可选技术证据文件。主文档可保留 `trial`、`grader` 等确属产品实现的词，但第一次出现时必须解释，不要求普通开发者理解 `pass@k/pass^k` 才能做审批决定。
+实际运行后的 eval 报告不能停在 trial 数、PASS/PARTIAL 标签或 grader 引用数量。每个影响结论的重要结果都要在正文讲清：被测 agent 得到了什么上下文，哪一轮新输入触发了判断，冻结预期是什么，agent 实际如何回答或行动，baseline 在同一输入下如何表现，为什么据此判定，以及失败会给用户或系统造成什么影响。表格用于总览，完整证据故事用于理解；原始 trajectory 和评分文件只供复核，不能代替正文解释。
+
+完整原始 trajectory、评分 JSON、配置快照、哈希以及 Behavior/Policy/Fault 全量机器映射可以放进复现附件。任务背景、预期、实际行为、最终状态、评分理由、对照差异和结论限制必须留在主文档。主文档可保留 `trial`、`grader` 等确属产品实现的词，但第一次出现时必须解释，不要求普通开发者理解 `pass@k/pass^k` 才能做审批决定。
 
 ### Agent Eval 完成条件
 

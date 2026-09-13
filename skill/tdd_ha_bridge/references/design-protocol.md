@@ -47,7 +47,7 @@ Incident reproducer → Fault mechanism → Generalized neighbors
 
 ## 2. Behavior Model
 
-不要从 testcase 开始。先产出 3–7 条核心义务为宜；复杂变更可更多，但需要合并重复语义。
+不要从 testcase 开始。核心义务的数量由真实行为边界决定；合并重复语义，但不能为了满足固定数量而遗漏或拆分义务。
 
 每条 obligation 包含：
 
@@ -247,7 +247,7 @@ Partition 只覆盖单因素行为分区。若多个条件共同决定结果，�
 
 这个表达用于比较普通风险，不是纯乘法公式。Guardrail Override 和法规/权限/资金等硬约束优先。
 
-## 6. Minimal High-value Scenarios
+## 6. High-value Scenarios
 
 一个主场景应尽量承担清晰且不冲突的验证职责。合并条件：相同 setup 下可自然同时证明多个义务；拆分条件：失败原因、Oracle 或业务意图会被混淆。
 
@@ -260,7 +260,7 @@ Partition 只覆盖单因素行为分区。若多个条件共同决定结果，�
 3. 关键决策边界的两侧与等值点；
 4. 状态/partial failure/concurrency 中无法被前述覆盖的风险；
 5. 代表性 regression；
-6. P2/P3 仅在成本低或用户要求时进入附录。
+6. P2/P3 若会改变审批、实现选择或当前风险判断，也进入主文档；只与当前变更弱相关且没有决策价值的变体可以不展开，并在范围说明中交代取舍。
 
 若多个参数存在真实交互风险，先列 interaction hypothesis，再用 pairwise 或更高 t-way 压缩组合。不要因为“可能有组合”就覆盖所有参数对。
 
