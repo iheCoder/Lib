@@ -1,0 +1,107 @@
+{
+  "frozen_at": "2026-09-12T16:40:05.757864+00:00",
+  "repository_head": "47a9725f84005f8e8f4cb671885e3c2b34c1d47c",
+  "cases": {
+    "small": 1,
+    "names": 3,
+    "export": 2
+  },
+  "trial_policy": "2 repetitions per case and condition; fixed 12 trials, 24 responses, no rescue turns; report by dimension",
+  "model": "Inherited; exact model/reasoning/sampling metadata UNKNOWN; no override",
+  "isolation": "Fresh context, instruction-level file boundaries, shared filesystem",
+  "reader_selection": "Final answer of repetition 1, each case and condition, fixed before generation",
+  "trials": [
+    {
+      "id": "r01",
+      "case": "small",
+      "condition": "baseline",
+      "repetition": 1
+    },
+    {
+      "id": "r02",
+      "case": "names",
+      "condition": "skill",
+      "repetition": 1
+    },
+    {
+      "id": "r03",
+      "case": "export",
+      "condition": "baseline",
+      "repetition": 1
+    },
+    {
+      "id": "r04",
+      "case": "small",
+      "condition": "skill",
+      "repetition": 1
+    },
+    {
+      "id": "r05",
+      "case": "names",
+      "condition": "baseline",
+      "repetition": 1
+    },
+    {
+      "id": "r06",
+      "case": "export",
+      "condition": "skill",
+      "repetition": 1
+    },
+    {
+      "id": "r07",
+      "case": "small",
+      "condition": "skill",
+      "repetition": 2
+    },
+    {
+      "id": "r08",
+      "case": "names",
+      "condition": "baseline",
+      "repetition": 2
+    },
+    {
+      "id": "r09",
+      "case": "export",
+      "condition": "skill",
+      "repetition": 2
+    },
+    {
+      "id": "r10",
+      "case": "small",
+      "condition": "baseline",
+      "repetition": 2
+    },
+    {
+      "id": "r11",
+      "case": "names",
+      "condition": "skill",
+      "repetition": 2
+    },
+    {
+      "id": "r12",
+      "case": "export",
+      "condition": "baseline",
+      "repetition": 2
+    }
+  ],
+  "frozen_sha256": {
+    "skill.snapshot.md": "4ebf4a718b7579079db20b2932e33355309b6fc64db9b1276aa03500d1c37cce",
+    "test-design.md": "aa6e895e8d62ac7b97816f87c8e3fa12293ea6e617781ab6909f862fa93726ff",
+    "runner-contract.md": "ec958c67ade5e5a25cad5255af2c725d725908461061eb1d74bf4be0d0844458",
+    "blind-fault-inventory.md": "440a02e1ce2e34681eabc4af3b872079ac536c911b6b3e9aec9eb945d7fe6e9d",
+    "inputs/export.turn-1.txt": "23b3f35e5ad901ed17a906f46418b2ed08e0d8f4f20d774e2e7a681f8ccd6bfd",
+    "inputs/export.turn-2.txt": "29212bdd9e70b409c8ee2d0341108665577650db8c032538e93e35b998539a46",
+    "inputs/names.turn-1.txt": "341aed64eb552b6ed1ac61e7115a56706c238eb0a651e3f3a50e4be95f51b498",
+    "inputs/names.turn-2.txt": "c7cbf8c4f0120bcbfe7d265f8f361d9ad6e5b0237b4bbf383a103974602c7c9b",
+    "inputs/names.turn-3.txt": "3afc6c531ccbeffbace5bb371f0697702b9d32f25bab8479f3a9a7501c72909c",
+    "inputs/small.turn-1.txt": "ec7fbc047d2c6267b7ff78bde00afabd79ac11afa0943e2a592d79f7eb7abe5d",
+    "authoring/critic-review.md": "c9613a7ec2715ce823acc4bfe46e8bdae7558ac8cb306e00a53941012fbae274",
+    "authoring/interaction-case.json": "68ce6fc3a59d7d4bf44ccd4a1d74ede6184051f23890105fd760f9ab45c7f4dd",
+    "grading/calibration-1.json": "82b5f811828082482898827e378cb59fab590cd9f38b1e2bbdb6a9571a6339da",
+    "grading/calibration-2.json": "45981b253e9b2c7941e0c2192cebe32f138ee06eb77a400f333911d8e2c78c4f",
+    "grading/calibration-expected.json": "4e43b177d351faeef8d913a6de0994b00d02fe2b513edf5a926acbc3e397e99e",
+    "grading/calibration.json": "7723690a95e063cc95e0004129766440ca3bf720c5a5dce73057e27f43f5d1aa",
+    "grading/reader-instructions.md": "8207fb708009551cc7a699ebd92bb3cd98b0b115bdb99343f823fd2b5706e7cd",
+    "grading/rubric.md": "5e4456c08490e2e707664d73640b880d62c93686651ce2cc2096439901d1fff3"
+  }
+}

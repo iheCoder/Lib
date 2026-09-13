@@ -1,0 +1,2393 @@
+{
+  "counts": [
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "agent_first_boundary",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "agent_first_unknown",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "agent_repair_order",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "alternatives",
+      "counts": {
+        "NA": 4,
+        "PASS": 6
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "approval_first_race",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "approval_first_scope",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "approval_refined_boundary",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "clarity",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "decisions",
+      "counts": {
+        "PASS": 9,
+        "PARTIAL": 1
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "economy",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "events_first_acceptance",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "events_first_identity",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "events_recovery",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "first_turn_discovery",
+      "counts": {
+        "active": 10
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "focus",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "latest_first_backlog",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "latest_first_publish",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "latest_mixed_semantics",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "simple_complete",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "candidate",
+      "item": "simple_proportionate",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "agent_first_boundary",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "agent_first_unknown",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "agent_repair_order",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "alternatives",
+      "counts": {
+        "NA": 4,
+        "PASS": 6
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "approval_first_race",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "approval_first_scope",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "approval_refined_boundary",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "clarity",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "decisions",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "economy",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "events_first_acceptance",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "events_first_identity",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "events_recovery",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "first_turn_discovery",
+      "counts": {
+        "active": 10
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "focus",
+      "counts": {
+        "PARTIAL": 4,
+        "PASS": 6
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "latest_first_backlog",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "latest_first_publish",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "latest_mixed_semantics",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "simple_complete",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "none",
+      "item": "simple_proportionate",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "agent_first_boundary",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "agent_first_unknown",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "agent_repair_order",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "alternatives",
+      "counts": {
+        "NA": 4,
+        "PASS": 6
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "approval_first_race",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "approval_first_scope",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "approval_refined_boundary",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "clarity",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "decisions",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "economy",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "events_first_acceptance",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "events_first_identity",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "events_recovery",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "first_turn_discovery",
+      "counts": {
+        "active": 10
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "focus",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "latest_first_backlog",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "latest_first_publish",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "latest_mixed_semantics",
+      "counts": {
+        "PARTIAL": 1,
+        "PASS": 1
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "simple_complete",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "a",
+      "condition": "old",
+      "item": "simple_proportionate",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "agent_first_boundary",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "agent_first_unknown",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "agent_repair_order",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "alternatives",
+      "counts": {
+        "NA": 4,
+        "PASS": 6
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "approval_first_race",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "approval_first_scope",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "approval_refined_boundary",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "clarity",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "decisions",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "economy",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "events_first_acceptance",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "events_first_identity",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "events_recovery",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "first_turn_discovery",
+      "counts": {
+        "active": 10
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "focus",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "latest_first_backlog",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "latest_first_publish",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "latest_mixed_semantics",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "simple_complete",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "candidate",
+      "item": "simple_proportionate",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "agent_first_boundary",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "agent_first_unknown",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "agent_repair_order",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "alternatives",
+      "counts": {
+        "NA": 4,
+        "PASS": 6
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "approval_first_race",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "approval_first_scope",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "approval_refined_boundary",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "clarity",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "decisions",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "economy",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "events_first_acceptance",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "events_first_identity",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "events_recovery",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "first_turn_discovery",
+      "counts": {
+        "active": 10
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "focus",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "latest_first_backlog",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "latest_first_publish",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "latest_mixed_semantics",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "simple_complete",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "none",
+      "item": "simple_proportionate",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "agent_first_boundary",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "agent_first_unknown",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "agent_repair_order",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "alternatives",
+      "counts": {
+        "NA": 4,
+        "PASS": 6
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "approval_first_race",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "approval_first_scope",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "approval_refined_boundary",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "clarity",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "decisions",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "economy",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "events_first_acceptance",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "events_first_identity",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "events_recovery",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "first_turn_discovery",
+      "counts": {
+        "active": 10
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "focus",
+      "counts": {
+        "PASS": 10
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "latest_first_backlog",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "latest_first_publish",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "latest_mixed_semantics",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "simple_complete",
+      "counts": {
+        "PASS": 2
+      }
+    },
+    {
+      "judge": "b",
+      "condition": "old",
+      "item": "simple_proportionate",
+      "counts": {
+        "PASS": 2
+      }
+    }
+  ],
+  "disagreements": [
+    {
+      "blind_id": "B08",
+      "item": "focus",
+      "verdicts": {
+        "a": "PARTIAL",
+        "b": "PASS"
+      }
+    },
+    {
+      "blind_id": "B20",
+      "item": "focus",
+      "verdicts": {
+        "a": "PARTIAL",
+        "b": "PASS"
+      }
+    },
+    {
+      "blind_id": "B25",
+      "item": "decisions",
+      "verdicts": {
+        "a": "PARTIAL",
+        "b": "PASS"
+      }
+    },
+    {
+      "blind_id": "B05",
+      "item": "latest_mixed_semantics",
+      "verdicts": {
+        "a": "PARTIAL",
+        "b": "PASS"
+      }
+    },
+    {
+      "blind_id": "B18",
+      "item": "focus",
+      "verdicts": {
+        "a": "PARTIAL",
+        "b": "PASS"
+      }
+    },
+    {
+      "blind_id": "B24",
+      "item": "focus",
+      "verdicts": {
+        "a": "PARTIAL",
+        "b": "PASS"
+      }
+    }
+  ],
+  "trials": [
+    {
+      "trial": {
+        "id": "r17",
+        "case": "agent_retry",
+        "condition": "old",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B04"
+      },
+      "judge": "a",
+      "probes": {
+        "agent_first_boundary": "PASS",
+        "agent_first_unknown": "PASS",
+        "agent_repair_order": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r15",
+        "case": "agent_retry",
+        "condition": "none",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B08"
+      },
+      "judge": "a",
+      "probes": {
+        "agent_first_boundary": "PASS",
+        "agent_first_unknown": "PASS",
+        "agent_repair_order": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PARTIAL",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r13",
+        "case": "agent_retry",
+        "condition": "old",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B12"
+      },
+      "judge": "a",
+      "probes": {
+        "agent_first_boundary": "PASS",
+        "agent_first_unknown": "PASS",
+        "agent_repair_order": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r18",
+        "case": "agent_retry",
+        "condition": "candidate",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B17"
+      },
+      "judge": "a",
+      "probes": {
+        "agent_first_boundary": "PASS",
+        "agent_first_unknown": "PASS",
+        "agent_repair_order": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r16",
+        "case": "agent_retry",
+        "condition": "none",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B20"
+      },
+      "judge": "a",
+      "probes": {
+        "agent_first_boundary": "PASS",
+        "agent_first_unknown": "PASS",
+        "agent_repair_order": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PARTIAL",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r14",
+        "case": "agent_retry",
+        "condition": "candidate",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B30"
+      },
+      "judge": "a",
+      "probes": {
+        "agent_first_boundary": "PASS",
+        "agent_first_unknown": "PASS",
+        "agent_repair_order": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r23",
+        "case": "approval",
+        "condition": "old",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B11"
+      },
+      "judge": "a",
+      "probes": {
+        "approval_first_scope": "PASS",
+        "approval_first_race": "PASS",
+        "approval_refined_boundary": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r19",
+        "case": "approval",
+        "condition": "old",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B14"
+      },
+      "judge": "a",
+      "probes": {
+        "approval_first_scope": "PASS",
+        "approval_first_race": "PASS",
+        "approval_refined_boundary": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r20",
+        "case": "approval",
+        "condition": "candidate",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B15"
+      },
+      "judge": "a",
+      "probes": {
+        "approval_first_scope": "PASS",
+        "approval_first_race": "PASS",
+        "approval_refined_boundary": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r24",
+        "case": "approval",
+        "condition": "candidate",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B25"
+      },
+      "judge": "a",
+      "probes": {
+        "approval_first_scope": "PASS",
+        "approval_first_race": "PASS",
+        "approval_refined_boundary": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PARTIAL"
+      }
+    },
+    {
+      "trial": {
+        "id": "r22",
+        "case": "approval",
+        "condition": "none",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B26"
+      },
+      "judge": "a",
+      "probes": {
+        "approval_first_scope": "PASS",
+        "approval_first_race": "PASS",
+        "approval_refined_boundary": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r21",
+        "case": "approval",
+        "condition": "none",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B29"
+      },
+      "judge": "a",
+      "probes": {
+        "approval_first_scope": "PASS",
+        "approval_first_race": "PASS",
+        "approval_refined_boundary": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r04",
+        "case": "events",
+        "condition": "none",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B01"
+      },
+      "judge": "a",
+      "probes": {
+        "events_first_identity": "PASS",
+        "events_first_acceptance": "PASS",
+        "events_recovery": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r01",
+        "case": "events",
+        "condition": "old",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B02"
+      },
+      "judge": "a",
+      "probes": {
+        "events_first_identity": "PASS",
+        "events_first_acceptance": "PASS",
+        "events_recovery": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r03",
+        "case": "events",
+        "condition": "none",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B07"
+      },
+      "judge": "a",
+      "probes": {
+        "events_first_identity": "PASS",
+        "events_first_acceptance": "PASS",
+        "events_recovery": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r02",
+        "case": "events",
+        "condition": "candidate",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B21"
+      },
+      "judge": "a",
+      "probes": {
+        "events_first_identity": "PASS",
+        "events_first_acceptance": "PASS",
+        "events_recovery": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r06",
+        "case": "events",
+        "condition": "candidate",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B22"
+      },
+      "judge": "a",
+      "probes": {
+        "events_first_identity": "PASS",
+        "events_first_acceptance": "PASS",
+        "events_recovery": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r05",
+        "case": "events",
+        "condition": "old",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B28"
+      },
+      "judge": "a",
+      "probes": {
+        "events_first_identity": "PASS",
+        "events_first_acceptance": "PASS",
+        "events_recovery": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r11",
+        "case": "latest",
+        "condition": "old",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B05"
+      },
+      "judge": "a",
+      "probes": {
+        "latest_first_publish": "PASS",
+        "latest_first_backlog": "PASS",
+        "latest_mixed_semantics": "PARTIAL"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r09",
+        "case": "latest",
+        "condition": "none",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B09"
+      },
+      "judge": "a",
+      "probes": {
+        "latest_first_publish": "PASS",
+        "latest_first_backlog": "PASS",
+        "latest_mixed_semantics": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r07",
+        "case": "latest",
+        "condition": "old",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B10"
+      },
+      "judge": "a",
+      "probes": {
+        "latest_first_publish": "PASS",
+        "latest_first_backlog": "PASS",
+        "latest_mixed_semantics": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r10",
+        "case": "latest",
+        "condition": "none",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B18"
+      },
+      "judge": "a",
+      "probes": {
+        "latest_first_publish": "PASS",
+        "latest_first_backlog": "PASS",
+        "latest_mixed_semantics": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PARTIAL",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r08",
+        "case": "latest",
+        "condition": "candidate",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B19"
+      },
+      "judge": "a",
+      "probes": {
+        "latest_first_publish": "PASS",
+        "latest_first_backlog": "PASS",
+        "latest_mixed_semantics": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r12",
+        "case": "latest",
+        "condition": "candidate",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B23"
+      },
+      "judge": "a",
+      "probes": {
+        "latest_first_publish": "PASS",
+        "latest_first_backlog": "PASS",
+        "latest_mixed_semantics": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r26",
+        "case": "simple",
+        "condition": "candidate",
+        "repetition": 1,
+        "turns": 1,
+        "blind_id": "B03"
+      },
+      "judge": "a",
+      "probes": {
+        "simple_complete": "PASS",
+        "simple_proportionate": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r28",
+        "case": "simple",
+        "condition": "none",
+        "repetition": 2,
+        "turns": 1,
+        "blind_id": "B06"
+      },
+      "judge": "a",
+      "probes": {
+        "simple_complete": "PASS",
+        "simple_proportionate": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r29",
+        "case": "simple",
+        "condition": "old",
+        "repetition": 2,
+        "turns": 1,
+        "blind_id": "B13"
+      },
+      "judge": "a",
+      "probes": {
+        "simple_complete": "PASS",
+        "simple_proportionate": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r25",
+        "case": "simple",
+        "condition": "old",
+        "repetition": 1,
+        "turns": 1,
+        "blind_id": "B16"
+      },
+      "judge": "a",
+      "probes": {
+        "simple_complete": "PASS",
+        "simple_proportionate": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r27",
+        "case": "simple",
+        "condition": "none",
+        "repetition": 1,
+        "turns": 1,
+        "blind_id": "B24"
+      },
+      "judge": "a",
+      "probes": {
+        "simple_complete": "PASS",
+        "simple_proportionate": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PARTIAL",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r30",
+        "case": "simple",
+        "condition": "candidate",
+        "repetition": 2,
+        "turns": 1,
+        "blind_id": "B27"
+      },
+      "judge": "a",
+      "probes": {
+        "simple_complete": "PASS",
+        "simple_proportionate": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r17",
+        "case": "agent_retry",
+        "condition": "old",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B04"
+      },
+      "judge": "b",
+      "probes": {
+        "agent_first_boundary": "PASS",
+        "agent_first_unknown": "PASS",
+        "agent_repair_order": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "decisions": "PASS",
+        "alternatives": "NA"
+      }
+    },
+    {
+      "trial": {
+        "id": "r15",
+        "case": "agent_retry",
+        "condition": "none",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B08"
+      },
+      "judge": "b",
+      "probes": {
+        "agent_first_boundary": "PASS",
+        "agent_first_unknown": "PASS",
+        "agent_repair_order": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "decisions": "PASS",
+        "alternatives": "NA"
+      }
+    },
+    {
+      "trial": {
+        "id": "r13",
+        "case": "agent_retry",
+        "condition": "old",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B12"
+      },
+      "judge": "b",
+      "probes": {
+        "agent_first_boundary": "PASS",
+        "agent_first_unknown": "PASS",
+        "agent_repair_order": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "decisions": "PASS",
+        "alternatives": "NA"
+      }
+    },
+    {
+      "trial": {
+        "id": "r18",
+        "case": "agent_retry",
+        "condition": "candidate",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B17"
+      },
+      "judge": "b",
+      "probes": {
+        "agent_first_boundary": "PASS",
+        "agent_first_unknown": "PASS",
+        "agent_repair_order": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "decisions": "PASS",
+        "alternatives": "NA"
+      }
+    },
+    {
+      "trial": {
+        "id": "r16",
+        "case": "agent_retry",
+        "condition": "none",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B20"
+      },
+      "judge": "b",
+      "probes": {
+        "agent_first_boundary": "PASS",
+        "agent_first_unknown": "PASS",
+        "agent_repair_order": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "decisions": "PASS",
+        "alternatives": "NA"
+      }
+    },
+    {
+      "trial": {
+        "id": "r14",
+        "case": "agent_retry",
+        "condition": "candidate",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B30"
+      },
+      "judge": "b",
+      "probes": {
+        "agent_first_boundary": "PASS",
+        "agent_first_unknown": "PASS",
+        "agent_repair_order": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "decisions": "PASS",
+        "alternatives": "NA"
+      }
+    },
+    {
+      "trial": {
+        "id": "r23",
+        "case": "approval",
+        "condition": "old",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B11"
+      },
+      "judge": "b",
+      "probes": {
+        "approval_first_scope": "PASS",
+        "approval_first_race": "PASS",
+        "approval_refined_boundary": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r19",
+        "case": "approval",
+        "condition": "old",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B14"
+      },
+      "judge": "b",
+      "probes": {
+        "approval_first_scope": "PASS",
+        "approval_first_race": "PASS",
+        "approval_refined_boundary": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r20",
+        "case": "approval",
+        "condition": "candidate",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B15"
+      },
+      "judge": "b",
+      "probes": {
+        "approval_first_scope": "PASS",
+        "approval_first_race": "PASS",
+        "approval_refined_boundary": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r24",
+        "case": "approval",
+        "condition": "candidate",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B25"
+      },
+      "judge": "b",
+      "probes": {
+        "approval_first_scope": "PASS",
+        "approval_first_race": "PASS",
+        "approval_refined_boundary": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r22",
+        "case": "approval",
+        "condition": "none",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B26"
+      },
+      "judge": "b",
+      "probes": {
+        "approval_first_scope": "PASS",
+        "approval_first_race": "PASS",
+        "approval_refined_boundary": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r21",
+        "case": "approval",
+        "condition": "none",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B29"
+      },
+      "judge": "b",
+      "probes": {
+        "approval_first_scope": "PASS",
+        "approval_first_race": "PASS",
+        "approval_refined_boundary": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r04",
+        "case": "events",
+        "condition": "none",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B01"
+      },
+      "judge": "b",
+      "probes": {
+        "events_first_identity": "PASS",
+        "events_first_acceptance": "PASS",
+        "events_recovery": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r01",
+        "case": "events",
+        "condition": "old",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B02"
+      },
+      "judge": "b",
+      "probes": {
+        "events_first_identity": "PASS",
+        "events_first_acceptance": "PASS",
+        "events_recovery": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r03",
+        "case": "events",
+        "condition": "none",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B07"
+      },
+      "judge": "b",
+      "probes": {
+        "events_first_identity": "PASS",
+        "events_first_acceptance": "PASS",
+        "events_recovery": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r02",
+        "case": "events",
+        "condition": "candidate",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B21"
+      },
+      "judge": "b",
+      "probes": {
+        "events_first_identity": "PASS",
+        "events_first_acceptance": "PASS",
+        "events_recovery": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r06",
+        "case": "events",
+        "condition": "candidate",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B22"
+      },
+      "judge": "b",
+      "probes": {
+        "events_first_identity": "PASS",
+        "events_first_acceptance": "PASS",
+        "events_recovery": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r05",
+        "case": "events",
+        "condition": "old",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B28"
+      },
+      "judge": "b",
+      "probes": {
+        "events_first_identity": "PASS",
+        "events_first_acceptance": "PASS",
+        "events_recovery": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r11",
+        "case": "latest",
+        "condition": "old",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B05"
+      },
+      "judge": "b",
+      "probes": {
+        "latest_first_publish": "PASS",
+        "latest_first_backlog": "PASS",
+        "latest_mixed_semantics": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r09",
+        "case": "latest",
+        "condition": "none",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B09"
+      },
+      "judge": "b",
+      "probes": {
+        "latest_first_publish": "PASS",
+        "latest_first_backlog": "PASS",
+        "latest_mixed_semantics": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r07",
+        "case": "latest",
+        "condition": "old",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B10"
+      },
+      "judge": "b",
+      "probes": {
+        "latest_first_publish": "PASS",
+        "latest_first_backlog": "PASS",
+        "latest_mixed_semantics": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r10",
+        "case": "latest",
+        "condition": "none",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B18"
+      },
+      "judge": "b",
+      "probes": {
+        "latest_first_publish": "PASS",
+        "latest_first_backlog": "PASS",
+        "latest_mixed_semantics": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r08",
+        "case": "latest",
+        "condition": "candidate",
+        "repetition": 1,
+        "turns": 2,
+        "blind_id": "B19"
+      },
+      "judge": "b",
+      "probes": {
+        "latest_first_publish": "PASS",
+        "latest_first_backlog": "PASS",
+        "latest_mixed_semantics": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r12",
+        "case": "latest",
+        "condition": "candidate",
+        "repetition": 2,
+        "turns": 2,
+        "blind_id": "B23"
+      },
+      "judge": "b",
+      "probes": {
+        "latest_first_publish": "PASS",
+        "latest_first_backlog": "PASS",
+        "latest_mixed_semantics": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r26",
+        "case": "simple",
+        "condition": "candidate",
+        "repetition": 1,
+        "turns": 1,
+        "blind_id": "B03"
+      },
+      "judge": "b",
+      "probes": {
+        "simple_complete": "PASS",
+        "simple_proportionate": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r28",
+        "case": "simple",
+        "condition": "none",
+        "repetition": 2,
+        "turns": 1,
+        "blind_id": "B06"
+      },
+      "judge": "b",
+      "probes": {
+        "simple_complete": "PASS",
+        "simple_proportionate": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r29",
+        "case": "simple",
+        "condition": "old",
+        "repetition": 2,
+        "turns": 1,
+        "blind_id": "B13"
+      },
+      "judge": "b",
+      "probes": {
+        "simple_complete": "PASS",
+        "simple_proportionate": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r25",
+        "case": "simple",
+        "condition": "old",
+        "repetition": 1,
+        "turns": 1,
+        "blind_id": "B16"
+      },
+      "judge": "b",
+      "probes": {
+        "simple_complete": "PASS",
+        "simple_proportionate": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r27",
+        "case": "simple",
+        "condition": "none",
+        "repetition": 1,
+        "turns": 1,
+        "blind_id": "B24"
+      },
+      "judge": "b",
+      "probes": {
+        "simple_complete": "PASS",
+        "simple_proportionate": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    },
+    {
+      "trial": {
+        "id": "r30",
+        "case": "simple",
+        "condition": "candidate",
+        "repetition": 2,
+        "turns": 1,
+        "blind_id": "B27"
+      },
+      "judge": "b",
+      "probes": {
+        "simple_complete": "PASS",
+        "simple_proportionate": "PASS"
+      },
+      "dimensions": {
+        "clarity": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "decisions": "PASS"
+      }
+    }
+  ]
+}

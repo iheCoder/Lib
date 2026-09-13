@@ -1,0 +1,12 @@
+{
+  "created_at": "2026-09-12T11:23:35.009023+00:00",
+  "input_sha256": "8486590694046228b536879229340923f0993fb4343f0ff94539d19ceec45c3f",
+  "applies_to": [
+    "cloud-s1",
+    "cloud-s2",
+    "cloud-b1",
+    "cloud-b2"
+  ],
+  "output_name": "supplement.md",
+  "scope": "post-observation development follow-up; do not rescore primary"
+}

@@ -1,0 +1,272 @@
+{
+  "trials": [
+    {
+      "id": "r01",
+      "case": "events",
+      "condition": "old",
+      "repetition": 1,
+      "turns": 2,
+      "blind_id": "B02"
+    },
+    {
+      "id": "r02",
+      "case": "events",
+      "condition": "candidate",
+      "repetition": 1,
+      "turns": 2,
+      "blind_id": "B21"
+    },
+    {
+      "id": "r03",
+      "case": "events",
+      "condition": "none",
+      "repetition": 1,
+      "turns": 2,
+      "blind_id": "B07"
+    },
+    {
+      "id": "r04",
+      "case": "events",
+      "condition": "none",
+      "repetition": 2,
+      "turns": 2,
+      "blind_id": "B01"
+    },
+    {
+      "id": "r05",
+      "case": "events",
+      "condition": "old",
+      "repetition": 2,
+      "turns": 2,
+      "blind_id": "B28"
+    },
+    {
+      "id": "r06",
+      "case": "events",
+      "condition": "candidate",
+      "repetition": 2,
+      "turns": 2,
+      "blind_id": "B22"
+    },
+    {
+      "id": "r07",
+      "case": "latest",
+      "condition": "old",
+      "repetition": 1,
+      "turns": 2,
+      "blind_id": "B10"
+    },
+    {
+      "id": "r08",
+      "case": "latest",
+      "condition": "candidate",
+      "repetition": 1,
+      "turns": 2,
+      "blind_id": "B19"
+    },
+    {
+      "id": "r09",
+      "case": "latest",
+      "condition": "none",
+      "repetition": 1,
+      "turns": 2,
+      "blind_id": "B09"
+    },
+    {
+      "id": "r10",
+      "case": "latest",
+      "condition": "none",
+      "repetition": 2,
+      "turns": 2,
+      "blind_id": "B18"
+    },
+    {
+      "id": "r11",
+      "case": "latest",
+      "condition": "old",
+      "repetition": 2,
+      "turns": 2,
+      "blind_id": "B05"
+    },
+    {
+      "id": "r12",
+      "case": "latest",
+      "condition": "candidate",
+      "repetition": 2,
+      "turns": 2,
+      "blind_id": "B23"
+    },
+    {
+      "id": "r13",
+      "case": "agent_retry",
+      "condition": "old",
+      "repetition": 1,
+      "turns": 2,
+      "blind_id": "B12"
+    },
+    {
+      "id": "r14",
+      "case": "agent_retry",
+      "condition": "candidate",
+      "repetition": 1,
+      "turns": 2,
+      "blind_id": "B30"
+    },
+    {
+      "id": "r15",
+      "case": "agent_retry",
+      "condition": "none",
+      "repetition": 1,
+      "turns": 2,
+      "blind_id": "B08"
+    },
+    {
+      "id": "r16",
+      "case": "agent_retry",
+      "condition": "none",
+      "repetition": 2,
+      "turns": 2,
+      "blind_id": "B20"
+    },
+    {
+      "id": "r17",
+      "case": "agent_retry",
+      "condition": "old",
+      "repetition": 2,
+      "turns": 2,
+      "blind_id": "B04"
+    },
+    {
+      "id": "r18",
+      "case": "agent_retry",
+      "condition": "candidate",
+      "repetition": 2,
+      "turns": 2,
+      "blind_id": "B17"
+    },
+    {
+      "id": "r19",
+      "case": "approval",
+      "condition": "old",
+      "repetition": 1,
+      "turns": 2,
+      "blind_id": "B14"
+    },
+    {
+      "id": "r20",
+      "case": "approval",
+      "condition": "candidate",
+      "repetition": 1,
+      "turns": 2,
+      "blind_id": "B15"
+    },
+    {
+      "id": "r21",
+      "case": "approval",
+      "condition": "none",
+      "repetition": 1,
+      "turns": 2,
+      "blind_id": "B29"
+    },
+    {
+      "id": "r22",
+      "case": "approval",
+      "condition": "none",
+      "repetition": 2,
+      "turns": 2,
+      "blind_id": "B26"
+    },
+    {
+      "id": "r23",
+      "case": "approval",
+      "condition": "old",
+      "repetition": 2,
+      "turns": 2,
+      "blind_id": "B11"
+    },
+    {
+      "id": "r24",
+      "case": "approval",
+      "condition": "candidate",
+      "repetition": 2,
+      "turns": 2,
+      "blind_id": "B25"
+    },
+    {
+      "id": "r25",
+      "case": "simple",
+      "condition": "old",
+      "repetition": 1,
+      "turns": 1,
+      "blind_id": "B16"
+    },
+    {
+      "id": "r26",
+      "case": "simple",
+      "condition": "candidate",
+      "repetition": 1,
+      "turns": 1,
+      "blind_id": "B03"
+    },
+    {
+      "id": "r27",
+      "case": "simple",
+      "condition": "none",
+      "repetition": 1,
+      "turns": 1,
+      "blind_id": "B24"
+    },
+    {
+      "id": "r28",
+      "case": "simple",
+      "condition": "none",
+      "repetition": 2,
+      "turns": 1,
+      "blind_id": "B06"
+    },
+    {
+      "id": "r29",
+      "case": "simple",
+      "condition": "old",
+      "repetition": 2,
+      "turns": 1,
+      "blind_id": "B13"
+    },
+    {
+      "id": "r30",
+      "case": "simple",
+      "condition": "candidate",
+      "repetition": 2,
+      "turns": 1,
+      "blind_id": "B27"
+    }
+  ],
+  "temp_root": "/var/folders/vq/x5tzf0hs591_gh2c6tzkvnkm0000gn/T/tech-design-v2-ecnzz8e7",
+  "hashes": {
+    "old.snapshot.md": "4ebf4a718b7579079db20b2932e33355309b6fc64db9b1276aa03500d1c37cce",
+    "candidate.snapshot.md": "6a1469df73a67ba9a2b3fd4f4a8e78b96c973f2a14a02aed1351c15aa81691fb",
+    "authoring/cases.json": "b4201a83f213ba5f351d88d510d92f4eec7ab16b4a87f2ff8cafeefc33a7e100",
+    "authoring/blind-risk.md": "e972c46d53ac3237600ba0f5b0f1df4587483010a4ae9312b51cb4f53072888e",
+    "authoring/review.md": "783976828faadb85ea393212d497655e91d28727b6d46591ad89fa5ae469f1b2",
+    "grading/rubric.md": "cbc4998520f7b6f3c5aa3d0ded425199c35a17d85e1b0010b47eff44f945d1cc",
+    "grading/calibration.json": "4935723469577015b0311994a66c095677e508c7afc380ed9cbca2b2a0cf329c",
+    "grading/calibration-expected.json": "1bbef7663f9cf55a6b8417b59e7e29cef81d91c2b08b5e35f48de3e2f6500021",
+    "grading/calibration-a.json": "9a13c2c46c84fd585e7e07c676fe8e93aaae45d9be53aeb0c3b4ed5c7aa32559",
+    "grading/calibration-b.json": "8e172fe57a6c3cea0db9b5a13c974cc75b046f4eced3910f008f58f689a12212",
+    "test-design.md": "143b768e31277c4c29feac773e87fd9daf9719adfa75d3c4d3b5ab020119fd85",
+    "inputs/agent_retry/turn-1.md": "a3579a03fb3532a9aa70e0a3c55ec0a527afa0fa7825efc78d34bf37655a544f",
+    "inputs/agent_retry/turn-2.md": "e39b0f531007091eb4fbf5407c61acd4e8cdc00b5228ac7c6f24d69e97013b4e",
+    "inputs/approval/turn-1.md": "9bc407542c60c0cf891669280062fcb27b1698ea683f6a8b87a3f05d50c6f696",
+    "inputs/approval/turn-2.md": "218abfd859776f6a5bf199dc986ced8ba332b42a7727b3dd78af04b7b0263b2e",
+    "inputs/events/turn-1.md": "69f416cfc4f182e52a454b032f731609e4266781e6403995d0d59b952883386f",
+    "inputs/events/turn-2.md": "7840e7599fe13691ea0bc172a8eafb7cf80ebb2e4020d1c4f5480cdf91c9e062",
+    "inputs/latest/turn-1.md": "7ac4f831905be423f743333645467980fafcefdb47ec1206da19eb56e6d33b91",
+    "inputs/latest/turn-2.md": "c4a29bf89ba49cfb5b3f5576ad479f05627814f4a3e456ba2eaee599c4b318a6",
+    "inputs/simple/turn-1.md": "fbda0a36d8222bbcb44fc995ff59f076c495391208b738ca1f1a43b38a170ab3"
+  },
+  "isolation": "fresh fork_turns=none; instruction-level shared filesystem; no model override",
+  "model": "inherited, exact runtime model and sampling metadata unavailable",
+  "evidence": "design conversation only; model judges, no human comprehension or real side effects",
+  "planned_trials": 30,
+  "planned_responses": 54
+}

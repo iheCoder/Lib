@@ -1,0 +1,11 @@
+{
+  "instructions": "这是判据理解校准，非实际被测输出；每段独立，仅判目标维度 PASS/PARTIAL/FAIL，并给理由。只评给出的局部要求，不能因为片段不含整份文档而扣其他分。",
+  "items": [
+    {"id":"C1","dimension":"readability","context":"异步导出，需要说明重复执行后如何发布一个稳定文件。","response":"采用 fencing token + CAS 实现幂等发布，文件使用 immutable object，最后提交 terminal state。","expected_hidden_elsewhere":true},
+    {"id":"C2","dimension":"readability","context":"异步导出，需要说明重复执行后如何发布一个稳定文件。","response":"每次执行先把 CSV 写到自己的新文件地址，不覆盖其他执行的文件。写完后尝试在数据库把任务从未完成改成完成，同时填入这个文件地址；只有第一次修改成功的执行能成为正式结果。其他执行即使后来完成，也只能留下未被采用的文件，不能替换页面已经看到的结果。","expected_hidden_elsewhere":true},
+    {"id":"C3","dimension":"focus","context":"只要求个人收藏报表的技术设计；已有认证和设置保存能力。","response":"实施还需要完整单元测试矩阵、GitHub Actions YAML、Kubernetes 部署、灰度发布步骤、Prometheus 告警规则、两周排期。下面逐一提供各文件的具体配置。","expected_hidden_elsewhere":true},
+    {"id":"C4","dimension":"economy","context":"后台任务至少一次投递，已完成结果必须稳定。","response":"旧执行可能停顿到消息重投后才恢复，因此仅有开始时抢锁还不够。发布结果时必须检查自己是否仍有资格，失败处理也不能无条件改写已经完成的任务。不同执行写各自的临时文件，避免旧执行绕过数据库直接覆盖已发布文件。","expected_hidden_elsewhere":true},
+    {"id":"C5","dimension":"alternatives","context":"题目允许访问时一次批查，也允许提前维护名称；两者都可以满足当前时延与新鲜度。","response":"三个方案：推荐一次批查；也可以每行同步查一次，显然很慢；或者把批查叫聚合查询。这说明我们已经做了充分选型。","expected_hidden_elsewhere":true},
+    {"id":"C6","dimension":"focus","context":"只要求名称展示的技术设计；给定时延是通常值。","response":"以上时延只说明目前方案有余量，不代表尾延迟已经验证。若接口实际变慢，需要重新选择刷新方式。","expected_hidden_elsewhere":true}
+  ]
+}

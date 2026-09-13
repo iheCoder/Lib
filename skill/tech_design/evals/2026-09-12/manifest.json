@@ -1,0 +1,32 @@
+{
+  "created_at": "2026-09-12T11:13:59.039299+00:00",
+  "skill_sha256": "4ebf4a718b7579079db20b2932e33355309b6fc64db9b1276aa03500d1c37cce",
+  "repository_head": "47a9725f84005f8e8f4cb671885e3c2b34c1d47c",
+  "conditions": [
+    "skill",
+    "baseline"
+  ],
+  "trials_per_condition_per_task": 2,
+  "cases": {
+    "cloud": 3,
+    "finance": 4,
+    "simple": 1
+  },
+  "policy": "固定每题两次、两个条件；不是显著性检验。无采样参数覆盖。每 trial 独立新 agent，只在同一题内延续上下文。最多到固定末轮；超限判未收敛，不增加引导问题救分。",
+  "model": "Inherited from parent runtime; exact returned metadata unavailable until runtime inspection",
+  "isolation": "fork_turns=none; instruction-level input boundary; shared filesystem, not OS sandbox isolation",
+  "change_policy": "本轮冻结 skill，不根据观察到的输出修改；仅报告结果和有证据的建议",
+  "input_sha256": {
+    "cloud.json": "7ad03bc813592e28e221a8f90b7952d41841bd0733638ec635305d63e766ffc4",
+    "cloud.turn-1.txt": "2a87e8edf7901d3ecd2025bd0c91d3eb6b9d9615414bf701bc6e1a4e3fafc069",
+    "cloud.turn-2.txt": "86f8ea54b5e9ce82e6a127f52934a64430c83935e64c2bd5dd73aff51789850b",
+    "cloud.turn-3.txt": "d11d4d4d7260dfa4a0b933cf118349bbfa9a0587a0245d218794067e86a197f8",
+    "finance.json": "629062d0e05c986c735f5f733fc81d4d2c48b6ef067032c44a6e4aab3cad7ca1",
+    "finance.turn-1.txt": "e7d5a2ad01b640072fd48275d8fee44dce8b24210588d92677c9c0cab7f918aa",
+    "finance.turn-2.txt": "65cefbf70e99f4a2e04f7dbb2f8391e124e32fe99218c070c71170f8b03c4386",
+    "finance.turn-3.txt": "64ab05f58950d26328b29f13c6bcc9b6551c61c2232bfda9c586a97608c45450",
+    "finance.turn-4.txt": "ccc8214c5d91c7960d2ae349c9a6553b14785a740657a5e6705cc9678879884d",
+    "simple.json": "b0910a20d1d3987c5556262ce5d73aa83fcba009d584239fae657051ee3c2bd3",
+    "simple.turn-1.txt": "037c5b9609b26274597f50667d9a1e42f768a08c0670805f32fc1d72c9201095"
+  }
+}

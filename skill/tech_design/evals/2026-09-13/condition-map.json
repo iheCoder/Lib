@@ -1,0 +1,74 @@
+{
+  "D01": {
+    "id": "r10",
+    "case": "small",
+    "condition": "baseline",
+    "repetition": 2
+  },
+  "D02": {
+    "id": "r05",
+    "case": "names",
+    "condition": "baseline",
+    "repetition": 1
+  },
+  "D03": {
+    "id": "r11",
+    "case": "names",
+    "condition": "skill",
+    "repetition": 2
+  },
+  "D04": {
+    "id": "r03",
+    "case": "export",
+    "condition": "baseline",
+    "repetition": 1
+  },
+  "D05": {
+    "id": "r12",
+    "case": "export",
+    "condition": "baseline",
+    "repetition": 2
+  },
+  "D06": {
+    "id": "r07",
+    "case": "small",
+    "condition": "skill",
+    "repetition": 2
+  },
+  "D07": {
+    "id": "r04",
+    "case": "small",
+    "condition": "skill",
+    "repetition": 1
+  },
+  "D08": {
+    "id": "r09",
+    "case": "export",
+    "condition": "skill",
+    "repetition": 2
+  },
+  "D09": {
+    "id": "r06",
+    "case": "export",
+    "condition": "skill",
+    "repetition": 1
+  },
+  "D10": {
+    "id": "r08",
+    "case": "names",
+    "condition": "baseline",
+    "repetition": 2
+  },
+  "D11": {
+    "id": "r01",
+    "case": "small",
+    "condition": "baseline",
+    "repetition": 1
+  },
+  "D12": {
+    "id": "r02",
+    "case": "names",
+    "condition": "skill",
+    "repetition": 1
+  }
+}

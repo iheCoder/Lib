@@ -1,0 +1,220 @@
+{
+  "checks": "PASS",
+  "trials": [
+    {
+      "trial": "finance-b2",
+      "anonymous_id": "Q01",
+      "full_pass": true,
+      "ratings": {
+        "interaction": "PASS",
+        "models": "PASS",
+        "process": "PASS",
+        "boundary": "PASS",
+        "revision": "PASS",
+        "convergence": "PASS"
+      }
+    },
+    {
+      "trial": "cloud-b1",
+      "anonymous_id": "Q02",
+      "full_pass": false,
+      "ratings": {
+        "interaction": "PASS",
+        "models": "PASS",
+        "process": "PASS",
+        "boundary": "PASS",
+        "revision": "PASS",
+        "convergence": "PARTIAL"
+      }
+    },
+    {
+      "trial": "simple-s2",
+      "anonymous_id": "Q03",
+      "full_pass": true,
+      "ratings": {
+        "interaction": "NA",
+        "models": "PASS",
+        "process": "PASS",
+        "boundary": "PASS",
+        "revision": "NA",
+        "convergence": "PASS"
+      }
+    },
+    {
+      "trial": "simple-s1",
+      "anonymous_id": "Q04",
+      "full_pass": true,
+      "ratings": {
+        "interaction": "NA",
+        "models": "PASS",
+        "process": "PASS",
+        "boundary": "PASS",
+        "revision": "NA",
+        "convergence": "PASS"
+      }
+    },
+    {
+      "trial": "finance-s2",
+      "anonymous_id": "Q05",
+      "full_pass": true,
+      "ratings": {
+        "interaction": "PASS",
+        "models": "PASS",
+        "process": "PASS",
+        "boundary": "PASS",
+        "revision": "PASS",
+        "convergence": "PASS"
+      }
+    },
+    {
+      "trial": "finance-s1",
+      "anonymous_id": "Q06",
+      "full_pass": true,
+      "ratings": {
+        "interaction": "PASS",
+        "models": "PASS",
+        "process": "PASS",
+        "boundary": "PASS",
+        "revision": "PASS",
+        "convergence": "PASS"
+      }
+    },
+    {
+      "trial": "simple-b2",
+      "anonymous_id": "Q07",
+      "full_pass": true,
+      "ratings": {
+        "interaction": "NA",
+        "models": "PASS",
+        "process": "PASS",
+        "boundary": "PASS",
+        "revision": "NA",
+        "convergence": "PASS"
+      }
+    },
+    {
+      "trial": "cloud-s2",
+      "anonymous_id": "Q08",
+      "full_pass": false,
+      "ratings": {
+        "interaction": "FAIL",
+        "models": "PASS",
+        "process": "PASS",
+        "boundary": "PASS",
+        "revision": "PASS",
+        "convergence": "PASS"
+      }
+    },
+    {
+      "trial": "cloud-b2",
+      "anonymous_id": "Q09",
+      "full_pass": true,
+      "ratings": {
+        "interaction": "PASS",
+        "models": "PASS",
+        "process": "PASS",
+        "boundary": "PASS",
+        "revision": "PASS",
+        "convergence": "PASS"
+      }
+    },
+    {
+      "trial": "finance-b1",
+      "anonymous_id": "Q10",
+      "full_pass": true,
+      "ratings": {
+        "interaction": "PASS",
+        "models": "PASS",
+        "process": "PASS",
+        "boundary": "PASS",
+        "revision": "PASS",
+        "convergence": "PASS"
+      }
+    },
+    {
+      "trial": "simple-b1",
+      "anonymous_id": "Q11",
+      "full_pass": true,
+      "ratings": {
+        "interaction": "NA",
+        "models": "PASS",
+        "process": "PASS",
+        "boundary": "PASS",
+        "revision": "NA",
+        "convergence": "PASS"
+      }
+    },
+    {
+      "trial": "cloud-s1",
+      "anonymous_id": "Q12",
+      "full_pass": false,
+      "ratings": {
+        "interaction": "PASS",
+        "models": "PASS",
+        "process": "PASS",
+        "boundary": "PASS",
+        "revision": "PASS",
+        "convergence": "PARTIAL"
+      }
+    }
+  ],
+  "observed_counts": {
+    "skill": {
+      "complete": 4,
+      "total": 6
+    },
+    "baseline": {
+      "complete": 5,
+      "total": 6
+    }
+  },
+  "scope": "固定题目中的模型评分计数；无真人校准，不是生产可靠性或因果提升估计",
+  "calibration": {
+    "1": {
+      "matched": 5,
+      "total": 5
+    },
+    "2": {
+      "matched": 5,
+      "total": 5
+    }
+  },
+  "supplement": [
+    {
+      "trial": "cloud-b1",
+      "status": "PASS"
+    },
+    {
+      "trial": "cloud-s2",
+      "status": "PASS"
+    },
+    {
+      "trial": "cloud-b2",
+      "status": "PARTIAL"
+    },
+    {
+      "trial": "cloud-s1",
+      "status": "PASS"
+    }
+  ],
+  "review_disagreements": [
+    {
+      "trial": "cloud-s2",
+      "dimension": "convergence",
+      "primary": "PASS",
+      "review": "FAIL"
+    },
+    {
+      "trial": "cloud-b2",
+      "dimension": "interaction",
+      "primary": "PASS",
+      "review": "PARTIAL"
+    },
+    {
+      "trial": "cloud-b2",
+      "dimension": "convergence",
+      "primary": "PASS",
+      "review": "PARTIAL"
+    }
+  ]
+}

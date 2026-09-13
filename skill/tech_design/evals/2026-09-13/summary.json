@@ -1,0 +1,450 @@
+{
+  "dimensions": {
+    "readability": {
+      "baseline": {
+        "PASS": 6
+      },
+      "skill": {
+        "PASS": 6
+      }
+    },
+    "focus": {
+      "baseline": {
+        "FAIL": 2,
+        "PARTIAL": 4
+      },
+      "skill": {
+        "PASS": 6
+      }
+    },
+    "economy": {
+      "baseline": {
+        "PASS": 6
+      },
+      "skill": {
+        "PASS": 6
+      }
+    },
+    "alternatives": {
+      "baseline": {
+        "PASS": 2,
+        "NA": 4
+      },
+      "skill": {
+        "NA": 4,
+        "PASS": 2
+      }
+    },
+    "adaptation": {
+      "baseline": {
+        "PASS": 2,
+        "NA": 4
+      },
+      "skill": {
+        "NA": 4,
+        "PASS": 2
+      }
+    },
+    "proactive_interaction": {
+      "baseline": {
+        "NA": 4,
+        "PASS": 1,
+        "PARTIAL": 1
+      },
+      "skill": {
+        "NA": 4,
+        "PASS": 1,
+        "PARTIAL": 1
+      }
+    },
+    "probed_interaction": {
+      "baseline": {
+        "NA": 4,
+        "PASS": 2
+      },
+      "skill": {
+        "NA": 4,
+        "PASS": 2
+      }
+    },
+    "collaboration": {
+      "baseline": {
+        "PASS": 5,
+        "PARTIAL": 1
+      },
+      "skill": {
+        "PASS": 6
+      }
+    }
+  },
+  "first_turn_interactions": {
+    "version_survives_publish_and_retry": {
+      "baseline": {
+        "active": 2
+      },
+      "skill": {
+        "active": 2
+      }
+    },
+    "published_result_survives_late_attempt": {
+      "baseline": {
+        "active": 2
+      },
+      "skill": {
+        "active": 2
+      }
+    },
+    "download_uses_current_authorization": {
+      "baseline": {
+        "active": 1,
+        "mechanism_only": 1
+      },
+      "skill": {
+        "active": 1,
+        "mechanism_only": 1
+      }
+    }
+  },
+  "trials": [
+    {
+      "id": "r01",
+      "case": "small",
+      "condition": "baseline",
+      "repetition": 1,
+      "blind_id": "D11",
+      "dimensions": {
+        "readability": "PASS",
+        "focus": "PARTIAL",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "adaptation": "NA",
+        "proactive_interaction": "NA",
+        "probed_interaction": "NA",
+        "collaboration": "PASS"
+      }
+    },
+    {
+      "id": "r02",
+      "case": "names",
+      "condition": "skill",
+      "repetition": 1,
+      "blind_id": "D12",
+      "dimensions": {
+        "readability": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "adaptation": "PASS",
+        "proactive_interaction": "NA",
+        "probed_interaction": "NA",
+        "collaboration": "PASS"
+      }
+    },
+    {
+      "id": "r03",
+      "case": "export",
+      "condition": "baseline",
+      "repetition": 1,
+      "blind_id": "D04",
+      "dimensions": {
+        "readability": "PASS",
+        "focus": "FAIL",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "adaptation": "NA",
+        "proactive_interaction": "PASS",
+        "probed_interaction": "PASS",
+        "collaboration": "PASS"
+      }
+    },
+    {
+      "id": "r04",
+      "case": "small",
+      "condition": "skill",
+      "repetition": 1,
+      "blind_id": "D07",
+      "dimensions": {
+        "readability": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "adaptation": "NA",
+        "proactive_interaction": "NA",
+        "probed_interaction": "NA",
+        "collaboration": "PASS"
+      }
+    },
+    {
+      "id": "r05",
+      "case": "names",
+      "condition": "baseline",
+      "repetition": 1,
+      "blind_id": "D02",
+      "dimensions": {
+        "readability": "PASS",
+        "focus": "FAIL",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "adaptation": "PASS",
+        "proactive_interaction": "NA",
+        "probed_interaction": "NA",
+        "collaboration": "PASS"
+      }
+    },
+    {
+      "id": "r06",
+      "case": "export",
+      "condition": "skill",
+      "repetition": 1,
+      "blind_id": "D09",
+      "dimensions": {
+        "readability": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "adaptation": "NA",
+        "proactive_interaction": "PASS",
+        "probed_interaction": "PASS",
+        "collaboration": "PASS"
+      }
+    },
+    {
+      "id": "r07",
+      "case": "small",
+      "condition": "skill",
+      "repetition": 2,
+      "blind_id": "D06",
+      "dimensions": {
+        "readability": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "adaptation": "NA",
+        "proactive_interaction": "NA",
+        "probed_interaction": "NA",
+        "collaboration": "PASS"
+      }
+    },
+    {
+      "id": "r08",
+      "case": "names",
+      "condition": "baseline",
+      "repetition": 2,
+      "blind_id": "D10",
+      "dimensions": {
+        "readability": "PASS",
+        "focus": "PARTIAL",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "adaptation": "PASS",
+        "proactive_interaction": "NA",
+        "probed_interaction": "NA",
+        "collaboration": "PARTIAL"
+      }
+    },
+    {
+      "id": "r09",
+      "case": "export",
+      "condition": "skill",
+      "repetition": 2,
+      "blind_id": "D08",
+      "dimensions": {
+        "readability": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "adaptation": "NA",
+        "proactive_interaction": "PARTIAL",
+        "probed_interaction": "PASS",
+        "collaboration": "PASS"
+      }
+    },
+    {
+      "id": "r10",
+      "case": "small",
+      "condition": "baseline",
+      "repetition": 2,
+      "blind_id": "D01",
+      "dimensions": {
+        "readability": "PASS",
+        "focus": "PARTIAL",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "adaptation": "NA",
+        "proactive_interaction": "NA",
+        "probed_interaction": "NA",
+        "collaboration": "PASS"
+      }
+    },
+    {
+      "id": "r11",
+      "case": "names",
+      "condition": "skill",
+      "repetition": 2,
+      "blind_id": "D03",
+      "dimensions": {
+        "readability": "PASS",
+        "focus": "PASS",
+        "economy": "PASS",
+        "alternatives": "PASS",
+        "adaptation": "PASS",
+        "proactive_interaction": "NA",
+        "probed_interaction": "NA",
+        "collaboration": "PASS"
+      }
+    },
+    {
+      "id": "r12",
+      "case": "export",
+      "condition": "baseline",
+      "repetition": 2,
+      "blind_id": "D05",
+      "dimensions": {
+        "readability": "PASS",
+        "focus": "PARTIAL",
+        "economy": "PASS",
+        "alternatives": "NA",
+        "adaptation": "NA",
+        "proactive_interaction": "PARTIAL",
+        "probed_interaction": "PASS",
+        "collaboration": "PASS"
+      }
+    }
+  ],
+  "lengths": [
+    {
+      "id": "r01",
+      "case": "small",
+      "condition": "baseline",
+      "repetition": 1,
+      "characters_per_turn": [
+        1197
+      ],
+      "total_characters": 1197
+    },
+    {
+      "id": "r02",
+      "case": "names",
+      "condition": "skill",
+      "repetition": 1,
+      "characters_per_turn": [
+        1354,
+        1889,
+        434
+      ],
+      "total_characters": 3677
+    },
+    {
+      "id": "r03",
+      "case": "export",
+      "condition": "baseline",
+      "repetition": 1,
+      "characters_per_turn": [
+        4941,
+        1412
+      ],
+      "total_characters": 6353
+    },
+    {
+      "id": "r04",
+      "case": "small",
+      "condition": "skill",
+      "repetition": 1,
+      "characters_per_turn": [
+        1150
+      ],
+      "total_characters": 1150
+    },
+    {
+      "id": "r05",
+      "case": "names",
+      "condition": "baseline",
+      "repetition": 1,
+      "characters_per_turn": [
+        1192,
+        1532,
+        3533
+      ],
+      "total_characters": 6257
+    },
+    {
+      "id": "r06",
+      "case": "export",
+      "condition": "skill",
+      "repetition": 1,
+      "characters_per_turn": [
+        1857,
+        1634
+      ],
+      "total_characters": 3491
+    },
+    {
+      "id": "r07",
+      "case": "small",
+      "condition": "skill",
+      "repetition": 2,
+      "characters_per_turn": [
+        1131
+      ],
+      "total_characters": 1131
+    },
+    {
+      "id": "r08",
+      "case": "names",
+      "condition": "baseline",
+      "repetition": 2,
+      "characters_per_turn": [
+        1136,
+        1523,
+        2884
+      ],
+      "total_characters": 5543
+    },
+    {
+      "id": "r09",
+      "case": "export",
+      "condition": "skill",
+      "repetition": 2,
+      "characters_per_turn": [
+        2045,
+        1626
+      ],
+      "total_characters": 3671
+    },
+    {
+      "id": "r10",
+      "case": "small",
+      "condition": "baseline",
+      "repetition": 2,
+      "characters_per_turn": [
+        1602
+      ],
+      "total_characters": 1602
+    },
+    {
+      "id": "r11",
+      "case": "names",
+      "condition": "skill",
+      "repetition": 2,
+      "characters_per_turn": [
+        1707,
+        1845,
+        3870
+      ],
+      "total_characters": 7422
+    },
+    {
+      "id": "r12",
+      "case": "export",
+      "condition": "baseline",
+      "repetition": 2,
+      "characters_per_turn": [
+        5021,
+        1947
+      ],
+      "total_characters": 6968
+    }
+  ],
+  "verified_quotes": 421,
+  "note": "Per-dimension descriptive observations only; no aggregate winner or human comprehension claim"
+}

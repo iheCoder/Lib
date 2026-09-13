@@ -1,0 +1,50 @@
+{
+  "cloud": {
+    "s": {
+      "trial_chars": [
+        6715,
+        9447
+      ],
+      "mean_chars": 8081.0
+    },
+    "b": {
+      "trial_chars": [
+        7749,
+        8078
+      ],
+      "mean_chars": 7913.5
+    }
+  },
+  "finance": {
+    "s": {
+      "trial_chars": [
+        8228,
+        10277
+      ],
+      "mean_chars": 9252.5
+    },
+    "b": {
+      "trial_chars": [
+        4717,
+        5442
+      ],
+      "mean_chars": 5079.5
+    }
+  },
+  "simple": {
+    "s": {
+      "trial_chars": [
+        2057,
+        2618
+      ],
+      "mean_chars": 2337.5
+    },
+    "b": {
+      "trial_chars": [
+        1476,
+        1372
+      ],
+      "mean_chars": 1424.0
+    }
+  }
+}

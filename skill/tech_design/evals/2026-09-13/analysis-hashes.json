@@ -1,0 +1,15 @@
+{
+  "anonymization.json": "c8d8c800efd8a0d4bdd7c19afa3a18b071d6b61fd35fc17f0a0bc451da760d51",
+  "condition-map.json": "c654043dbe0894c8bd0efed964af7eb62cb1a47033be36134f04b596640aed84",
+  "reader-map.json": "a1ef6822da4cc83d93c9c49a50ab8c2584333a9ab640658dfb6c87f0036fadfe",
+  "trace-hashes.json": "2aad3c33d37ee9d68363c81865082239e846ad71f4acea50bd2049be5802d9b5",
+  "grading/instructions.md": "41e829669d482ac9b7d3e0cd99270bcba97844a494644825e41054164a09e2c0",
+  "grading/packet-1.json": "0aaa44fc12b4a78a34ce31f80589b436437062759b48d39cc9ef33a6df013e60",
+  "grading/packet-2.json": "5b2d5c1353cbf5c80fccb273ad69dcc094121bc6de1c51a3e9bde83bbd3d9f2a",
+  "reading/R01.input.json": "75491db01cacd6c79a55801d391f52d082fb3097eba7d6f78d496a33ec091c6a",
+  "reading/R02.input.json": "d168d7c910f89d51f50b09975ab5b6cf520ee4df9855e2a6a9378e076fe21f6c",
+  "reading/R03.input.json": "07f5b4bbf135d456dd624f248de060014ec6252e68baa5259c680e413e956982",
+  "reading/R04.input.json": "bfe853e9b5513d56ee8ae76a25a3ee827dd0e51cc1d960fd36df780a20ae54ae",
+  "reading/R05.input.json": "f0e33af06a331e473fce5988d40232e73e8e02a78e28cfc87b0a31f6f883bfa3",
+  "reading/R06.input.json": "4fbfd8de1e63d57c11d4547fc6bea227af6e20b5820da48cba6ee58464816e9a"
+}

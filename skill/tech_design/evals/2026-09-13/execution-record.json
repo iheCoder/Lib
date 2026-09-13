@@ -1,0 +1,200 @@
+{
+  "method": "native collaboration.spawn_agent and followup_task",
+  "model_override": null,
+  "exact_model_metadata": "UNKNOWN",
+  "trials": [
+    {
+      "trial_id": "r01",
+      "agent_task": "/root/q_r01",
+      "fork_turns": "none",
+      "user_message_files": [
+        "inputs/small.turn-1.txt"
+      ],
+      "skill_input": null,
+      "outputs": [
+        "runs/r01/turn-1.md"
+      ],
+      "stop": "completed fixed final turn"
+    },
+    {
+      "trial_id": "r02",
+      "agent_task": "/root/q_r02",
+      "fork_turns": "none",
+      "user_message_files": [
+        "inputs/names.turn-1.txt",
+        "inputs/names.turn-2.txt",
+        "inputs/names.turn-3.txt"
+      ],
+      "skill_input": "skill.snapshot.md",
+      "outputs": [
+        "runs/r02/turn-1.md",
+        "runs/r02/turn-2.md",
+        "runs/r02/turn-3.md"
+      ],
+      "stop": "completed fixed final turn"
+    },
+    {
+      "trial_id": "r03",
+      "agent_task": "/root/q_r03",
+      "fork_turns": "none",
+      "user_message_files": [
+        "inputs/export.turn-1.txt",
+        "inputs/export.turn-2.txt"
+      ],
+      "skill_input": null,
+      "outputs": [
+        "runs/r03/turn-1.md",
+        "runs/r03/turn-2.md"
+      ],
+      "stop": "completed fixed final turn"
+    },
+    {
+      "trial_id": "r04",
+      "agent_task": "/root/q_r04",
+      "fork_turns": "none",
+      "user_message_files": [
+        "inputs/small.turn-1.txt"
+      ],
+      "skill_input": "skill.snapshot.md",
+      "outputs": [
+        "runs/r04/turn-1.md"
+      ],
+      "stop": "completed fixed final turn"
+    },
+    {
+      "trial_id": "r05",
+      "agent_task": "/root/q_r05",
+      "fork_turns": "none",
+      "user_message_files": [
+        "inputs/names.turn-1.txt",
+        "inputs/names.turn-2.txt",
+        "inputs/names.turn-3.txt"
+      ],
+      "skill_input": null,
+      "outputs": [
+        "runs/r05/turn-1.md",
+        "runs/r05/turn-2.md",
+        "runs/r05/turn-3.md"
+      ],
+      "stop": "completed fixed final turn"
+    },
+    {
+      "trial_id": "r06",
+      "agent_task": "/root/q_r06",
+      "fork_turns": "none",
+      "user_message_files": [
+        "inputs/export.turn-1.txt",
+        "inputs/export.turn-2.txt"
+      ],
+      "skill_input": "skill.snapshot.md",
+      "outputs": [
+        "runs/r06/turn-1.md",
+        "runs/r06/turn-2.md"
+      ],
+      "stop": "completed fixed final turn"
+    },
+    {
+      "trial_id": "r07",
+      "agent_task": "/root/q_r07",
+      "fork_turns": "none",
+      "user_message_files": [
+        "inputs/small.turn-1.txt"
+      ],
+      "skill_input": "skill.snapshot.md",
+      "outputs": [
+        "runs/r07/turn-1.md"
+      ],
+      "stop": "completed fixed final turn"
+    },
+    {
+      "trial_id": "r08",
+      "agent_task": "/root/q_r08",
+      "fork_turns": "none",
+      "user_message_files": [
+        "inputs/names.turn-1.txt",
+        "inputs/names.turn-2.txt",
+        "inputs/names.turn-3.txt"
+      ],
+      "skill_input": null,
+      "outputs": [
+        "runs/r08/turn-1.md",
+        "runs/r08/turn-2.md",
+        "runs/r08/turn-3.md"
+      ],
+      "stop": "completed fixed final turn"
+    },
+    {
+      "trial_id": "r09",
+      "agent_task": "/root/q_r09",
+      "fork_turns": "none",
+      "user_message_files": [
+        "inputs/export.turn-1.txt",
+        "inputs/export.turn-2.txt"
+      ],
+      "skill_input": "skill.snapshot.md",
+      "outputs": [
+        "runs/r09/turn-1.md",
+        "runs/r09/turn-2.md"
+      ],
+      "stop": "completed fixed final turn"
+    },
+    {
+      "trial_id": "r10",
+      "agent_task": "/root/q_r10",
+      "fork_turns": "none",
+      "user_message_files": [
+        "inputs/small.turn-1.txt"
+      ],
+      "skill_input": null,
+      "outputs": [
+        "runs/r10/turn-1.md"
+      ],
+      "stop": "completed fixed final turn"
+    },
+    {
+      "trial_id": "r11",
+      "agent_task": "/root/q_r11",
+      "fork_turns": "none",
+      "user_message_files": [
+        "inputs/names.turn-1.txt",
+        "inputs/names.turn-2.txt",
+        "inputs/names.turn-3.txt"
+      ],
+      "skill_input": "skill.snapshot.md",
+      "outputs": [
+        "runs/r11/turn-1.md",
+        "runs/r11/turn-2.md",
+        "runs/r11/turn-3.md"
+      ],
+      "stop": "completed fixed final turn"
+    },
+    {
+      "trial_id": "r12",
+      "agent_task": "/root/q_r12",
+      "fork_turns": "none",
+      "user_message_files": [
+        "inputs/export.turn-1.txt",
+        "inputs/export.turn-2.txt"
+      ],
+      "skill_input": null,
+      "outputs": [
+        "runs/r12/turn-1.md",
+        "runs/r12/turn-2.md"
+      ],
+      "stop": "completed fixed final turn"
+    }
+  ],
+  "graders": [
+    "/root/quality_judge_1",
+    "/root/quality_judge_2"
+  ],
+  "reader_agents": [
+    "/root/reader_r01",
+    "/root/reader_r02",
+    "/root/reader_r03",
+    "/root/reader_r04",
+    "/root/reader_r05",
+    "/root/reader_r06"
+  ],
+  "full_tool_traces": "UNKNOWN / not captured; paths document intended allowed file boundary"
+}

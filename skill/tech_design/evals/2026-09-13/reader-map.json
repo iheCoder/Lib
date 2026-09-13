@@ -1,0 +1,38 @@
+[
+  {
+    "reader_id": "R01",
+    "blind_id": "D02",
+    "trial_id": "r05",
+    "turn": 3
+  },
+  {
+    "reader_id": "R02",
+    "blind_id": "D04",
+    "trial_id": "r03",
+    "turn": 2
+  },
+  {
+    "reader_id": "R03",
+    "blind_id": "D07",
+    "trial_id": "r04",
+    "turn": 1
+  },
+  {
+    "reader_id": "R04",
+    "blind_id": "D09",
+    "trial_id": "r06",
+    "turn": 2
+  },
+  {
+    "reader_id": "R05",
+    "blind_id": "D11",
+    "trial_id": "r01",
+    "turn": 1
+  },
+  {
+    "reader_id": "R06",
+    "blind_id": "D12",
+    "trial_id": "r02",
+    "turn": 3
+  }
+]
