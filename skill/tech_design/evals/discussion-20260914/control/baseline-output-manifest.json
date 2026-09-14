@@ -1,0 +1,60 @@
+[
+  {
+    "run": "r01",
+    "turns": [
+      {
+        "turn": 1,
+        "path": "runs\\r01\\turn-1.md",
+        "characters": 1886,
+        "sha256": "e6c4c5b99b0725f03dbe618339f28391cb4fda619f0f9e0ddf50d10b9b05826f"
+      },
+      {
+        "turn": 2,
+        "path": "runs\\r01\\turn-2.md",
+        "characters": 1737,
+        "sha256": "e8817b78acbf772a0280876930bdf73b972c01e74f732a25a8ee2ccd0c06c7a6"
+      },
+      {
+        "turn": 3,
+        "path": "runs\\r01\\turn-3.md",
+        "characters": 2447,
+        "sha256": "4d49cb5199a64bd86b64c4d6417540a8c1e9cc1d371dc1edd42414f98eb612f8"
+      },
+      {
+        "turn": 4,
+        "path": "runs\\r01\\turn-4.md",
+        "characters": 2744,
+        "sha256": "a085780ec5d5f6923526228481a8f708ba02ef640d06c370281b7925a645b53a"
+      }
+    ]
+  },
+  {
+    "run": "r02",
+    "turns": [
+      {
+        "turn": 1,
+        "path": "runs\\r02\\turn-1.md",
+        "characters": 1694,
+        "sha256": "ba8703b0df00a04dc8c8a34ab39fcc01801c629395fda93b2f130a034e6e1327"
+      },
+      {
+        "turn": 2,
+        "path": "runs\\r02\\turn-2.md",
+        "characters": 2138,
+        "sha256": "0271338df21720d13c370e88fcd342ce53978fe39fb4f2a45298fca1365e35b2"
+      },
+      {
+        "turn": 3,
+        "path": "runs\\r02\\turn-3.md",
+        "characters": 2329,
+        "sha256": "2518a48c4d0151d0dd451ecbf208165fcaf973f35b3b02477d6d08983eba9647"
+      },
+      {
+        "turn": 4,
+        "path": "runs\\r02\\turn-4.md",
+        "characters": 2493,
+        "sha256": "eff02ef1b2a422dab55c820157aaf2375ba5d186d9f23cb32ed01c52497b79aa"
+      }
+    ]
+  }
+]

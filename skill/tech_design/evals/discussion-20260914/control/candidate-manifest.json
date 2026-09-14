@@ -1,0 +1,15 @@
+{
+  "frozen_at_utc": "2026-09-14T10:45:52.994023+00:00",
+  "baseline_turns_read": [
+    "r01/turn-1.md",
+    "r01/turn-2.md",
+    "r01/turn-3.md",
+    "r01/turn-4.md",
+    "r02/turn-1.md",
+    "r02/turn-2.md",
+    "r02/turn-3.md",
+    "r02/turn-4.md"
+  ],
+  "candidate_sha256": "0ed40f5256d780bc4c4f293e190a220a2c05a16d7b2d75632d7a76fdf3a80808",
+  "added_characters": 101
+}

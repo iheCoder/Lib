@@ -1,0 +1,125 @@
+{
+  "captured_at_utc": "2026-09-14T10:58:02.241893+00:00",
+  "runs": {
+    "r01": {
+      "condition": "current",
+      "agent": "discussion_r01",
+      "turns": [
+        {
+          "turn": 1,
+          "path": "runs/r01/turn-1.md",
+          "sha256": "e6c4c5b99b0725f03dbe618339f28391cb4fda619f0f9e0ddf50d10b9b05826f",
+          "characters": 1886
+        },
+        {
+          "turn": 2,
+          "path": "runs/r01/turn-2.md",
+          "sha256": "e8817b78acbf772a0280876930bdf73b972c01e74f732a25a8ee2ccd0c06c7a6",
+          "characters": 1737
+        },
+        {
+          "turn": 3,
+          "path": "runs/r01/turn-3.md",
+          "sha256": "4d49cb5199a64bd86b64c4d6417540a8c1e9cc1d371dc1edd42414f98eb612f8",
+          "characters": 2447
+        },
+        {
+          "turn": 4,
+          "path": "runs/r01/turn-4.md",
+          "sha256": "a085780ec5d5f6923526228481a8f708ba02ef640d06c370281b7925a645b53a",
+          "characters": 2744
+        }
+      ]
+    },
+    "r02": {
+      "condition": "current",
+      "agent": "discussion_r02",
+      "turns": [
+        {
+          "turn": 1,
+          "path": "runs/r02/turn-1.md",
+          "sha256": "ba8703b0df00a04dc8c8a34ab39fcc01801c629395fda93b2f130a034e6e1327",
+          "characters": 1694
+        },
+        {
+          "turn": 2,
+          "path": "runs/r02/turn-2.md",
+          "sha256": "0271338df21720d13c370e88fcd342ce53978fe39fb4f2a45298fca1365e35b2",
+          "characters": 2138
+        },
+        {
+          "turn": 3,
+          "path": "runs/r02/turn-3.md",
+          "sha256": "2518a48c4d0151d0dd451ecbf208165fcaf973f35b3b02477d6d08983eba9647",
+          "characters": 2329
+        },
+        {
+          "turn": 4,
+          "path": "runs/r02/turn-4.md",
+          "sha256": "eff02ef1b2a422dab55c820157aaf2375ba5d186d9f23cb32ed01c52497b79aa",
+          "characters": 2493
+        }
+      ]
+    },
+    "r03": {
+      "condition": "candidate",
+      "agent": "discussion_r03",
+      "turns": [
+        {
+          "turn": 1,
+          "path": "runs/r03/turn-1.md",
+          "sha256": "b006d92b00d1453a09101591c80abe586b720339403def5d0a3be72beebab68c",
+          "characters": 1918
+        },
+        {
+          "turn": 2,
+          "path": "runs/r03/turn-2.md",
+          "sha256": "7978d27578300e40a50d47e85666514ab6d9e9fa36ef94d0d1d1da7e9c6c0b61",
+          "characters": 1886
+        },
+        {
+          "turn": 3,
+          "path": "runs/r03/turn-3.md",
+          "sha256": "042fd3d91310d0dcd06c4c8f57ab64a1f8049b345956e9200d6af45e53f8b6d7",
+          "characters": 2322
+        },
+        {
+          "turn": 4,
+          "path": "runs/r03/turn-4.md",
+          "sha256": "1859a6244945bf3e567d1635884ce91105fac79fae17fcacccf8706da2ba9d09",
+          "characters": 2447
+        }
+      ]
+    },
+    "r04": {
+      "condition": "candidate",
+      "agent": "discussion_r04",
+      "turns": [
+        {
+          "turn": 1,
+          "path": "runs/r04/turn-1.md",
+          "sha256": "8004dc19b656243364d4170627b4859df623e61772e8fca82d1ad2ad955eb90d",
+          "characters": 1991
+        },
+        {
+          "turn": 2,
+          "path": "runs/r04/turn-2.md",
+          "sha256": "4b0d813031507d0555ff452474d9bb00db2bac8d270d1d502a87133b1ba37d34",
+          "characters": 2184
+        },
+        {
+          "turn": 3,
+          "path": "runs/r04/turn-3.md",
+          "sha256": "2a9854df3596f351089d93d9576793eb7671749fdf6e982306781bc5d50d4cb7",
+          "characters": 2469
+        },
+        {
+          "turn": 4,
+          "path": "runs/r04/turn-4.md",
+          "sha256": "8fc76a51ff9b691a973289d9c23c047e4cc40cfbe8a65c98a917e75562b5e00b",
+          "characters": 2946
+        }
+      ]
+    }
+  }
+}

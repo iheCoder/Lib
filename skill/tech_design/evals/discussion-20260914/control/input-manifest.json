@@ -1,0 +1,43 @@
+{
+  "created_at_utc": "2026-09-14T10:36:40.426900+00:00",
+  "source_thread_id": "01a09f6f-33ba-7d52-b260-d606b46562d1",
+  "source_host": "local",
+  "execution": "collaboration.spawn_agent fork_turns=none; model/reasoning overrides omitted",
+  "baseline_agents": [
+    "discussion_r01",
+    "discussion_r02"
+  ],
+  "observations_per_run": 4,
+  "files": {
+    "input\\admin.html": {
+      "sha256": "c106a960f7407e2b0b129278d021ae276f0f564d000e781932a7bb929081042d",
+      "bytes": 129861
+    },
+    "input\\home.html": {
+      "sha256": "89066e88f7879d73222cf207a4fab12e862f01b77f08e5675125ae8d74b03ab4",
+      "bytes": 132682
+    },
+    "input\\request.md": {
+      "sha256": "209b2c567212366652674df59ffade477acf4b07836fc9281b7149c32679decf",
+      "bytes": 1864
+    },
+    "input\\requirements.md": {
+      "sha256": "310a05d5dee4849e6062d4c7e770483d2ce0102c54468c4e235eab06c864cc8c",
+      "bytes": 19430
+    },
+    "skills\\a\\SKILL.md": {
+      "sha256": "09bb170848f20719e1d6da2763618802b2134cf8236685295e8cc0f9542d7247",
+      "bytes": 8306
+    },
+    "control\\protocol.md": {
+      "sha256": "16dfaa3a5c1c8bd58ddacdf8ed0c672d484d9449990e20bf1993d54dbd4d2341",
+      "bytes": 3205
+    }
+  },
+  "source_paths": {
+    "input/requirements.md": "D:/work/超级助手推荐指令与管理_需求定义_V2.md",
+    "input/home.html": "D:/work/超级助手首页指令推荐_交互原型.html",
+    "input/admin.html": "D:/work/任务模版管理后台_独立交互原型.html",
+    "skills/a/SKILL.md": "D:/golandProjects/Lib/skill/tech_design/SKILL.md"
+  }
+}
