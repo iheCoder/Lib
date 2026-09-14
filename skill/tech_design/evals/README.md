@@ -5,6 +5,7 @@
 | 2026-09-12 | 设计正确性、重要决定确认、随新信息修正与收敛 | [报告](2026-09-12/report.md) |
 | 2026-09-13 | 解释是否可复述、无关扩写、必要复杂度、真实候选方案、约束调整及多参与方交错 | [报告](2026-09-13/report.md)、[评估设计](2026-09-13/test-design.md)、[评分规则](2026-09-13/grading/rubric.md)、[运行方式](2026-09-13/runner-contract.md) |
 | design-v2-20260913 | 旧版／候选／无 Skill：可靠受理、任务积压与取代、Agent 工具恢复、审批执行边界及简单题回归 | [报告](design-v2-20260913/report.md)、[评估设计](design-v2-20260913/test-design.md)、[运行记录](design-v2-20260913/runtime.md)、[冻结快照](design-v2-20260913/manifest.json) |
+| discussion-20260914 | 提示词模板实际需求：常用读写链、正文内参数、排序写入与等待；现版及短补丁各两段四轮对话 | [报告](discussion-20260914/report.md)、[实验协议](discussion-20260914/control/protocol.md)、[方法审计](discussion-20260914/control/method-audit.md)、[匿名评估](discussion-20260914/review/assessment.md)、[核验记录](discussion-20260914/control/verification.md) |
 
 每轮保留输入、冻结 Skill、真实独立代理回答、匿名评分与证据哈希。`audit.py` 只整理和核对已运行的记录，不会调用模型；重跑需按对应运行方式建立新上下文、新输出目录。不能把旧样本重新评分描述成新实验，也不能用模型盲读代替真人理解测试。
 
