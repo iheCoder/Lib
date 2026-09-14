@@ -1,4 +1,4 @@
 interface:
   display_name: "技术设计"
-  short_description: "围绕明确需求进行多轮技术推演，产出可落地的技术设计文档"
-  default_prompt: "请使用 $tech-design 辅助我完成技术方案的分步推演，并在关键机制与边界确认后直接输出可执行的技术设计文档。"
+  short_description: "共同讨论关键设计与取舍，形成共识后整理技术设计文档"
+  default_prompt: "请使用 $tech-design 先说明你认为的重难点、整体流程和核心设想，再与我逐步讨论重要设计及其保障目标和代价，在形成共识后整理技术设计文档。"
