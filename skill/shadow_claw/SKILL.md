@@ -344,5 +344,6 @@ Level 2 调查时，沉淀到 `project-cognition/investigations/active/investiga
 
 ## 参考
 
+- 调查循环与五视角检查点：[references/investigation-loop-protocol.md](references/investigation-loop-protocol.md)
 - 经典案例：[references/classic-cases.md](references/classic-cases.md)
 - 能力池（进入各世界的工具）：[references/capability-pool.md](references/capability-pool.md)

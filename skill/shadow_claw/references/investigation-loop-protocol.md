@@ -3,6 +3,13 @@
 This document defines the detailed protocol for the Shadow Claw investigation loop,
 including state transitions, world expansion rules, and convergence criteria.
 
+## Level 2 五视角检查点
+
+首轮深挖前，逐项展示执行路径、时间/变更、资源/竞争、反馈/放大、数据流的初步判断与依据。暂不深查或无法验证的视角，说明原因和未确认边界；不必为了覆盖而对每项调用工具。可以按证据价值决定深挖顺序，但五项未交代完毕，不得收敛为唯一结论。最终报告保留未验证项及其对结论的限制。
+
+| 视角 | 初步判断或候选问题 | 依据 | 状态及未深查原因 |
+|------|--------------------|------|------------------|
+
 ---
 
 ## 1. State Machine
@@ -30,7 +37,7 @@ INTAKE -> OBSERVING -> HYPOTHESIZING -> VALIDATING -> DECIDING
 | INTAKE | Extracting entities, time window, symptoms from user input |
 | OBSERVING | Evidence Builder is collecting data (via Capability Pool) |
 | HYPOTHESIZING | Generating candidate hypotheses from current evidence |
-| VALIDATING | Hypothesis Validator is running 4-layer checks |
+| VALIDATING | Hypothesis Validator is running the five checks defined in `SKILL.md` |
 | DECIDING | Evaluating validation results to determine next action |
 | EXPANDING | Evidence Builder is collecting data from new worlds (via Capability Pool) |
 | CONVERGED | Investigation complete, generating report |
@@ -206,7 +213,7 @@ PROPOSED -> VALIDATING -> REJECTED | RETAINED | PROMOTED
 1. **REJECTED** hypotheses are never re-validated (but their rejection is recorded)
 2. **RETAINED** hypotheses are re-validated in the next round with new evidence
 3. **INSUFFICIENT** hypotheses wait for world expansion, then re-validate
-4. **PROMOTED** hypotheses trigger convergence
+4. **PROMOTED** hypotheses trigger convergence only after the five-view checkpoint and five-layer validation in `SKILL.md`
 
 ### 3.3 New Hypothesis Generation
 
@@ -225,7 +232,7 @@ When new evidence arrives, the engine should:
 Requirements:
 - composite_score >= 0.7
 - No other hypothesis with score within 0.15 of the top
-- At least 2 layers (temporal + one other) with fit >= 0.6
+- All five validation layers in `SKILL.md` pass
 
 ### 4.2 Moderate Confidence Convergence
 
@@ -233,8 +240,8 @@ When the top hypothesis has:
 - composite_score >= 0.6 but < 0.7
 - OR another hypothesis within 0.15 score distance
 
-Action: Converge but explicitly label "moderate confidence" and include
-the competing hypothesis in the report.
+Action: Report "moderate confidence" and include the competing hypothesis;
+do not present a unique root cause while the five-layer check or five-view checkpoint is incomplete.
 
 ### 4.3 Timeout Convergence (max_rounds_reached)
 
@@ -322,8 +329,8 @@ When all hypotheses are rejected and no new ones can be generated:
 **Why it is wrong**: Initial evidence is almost always incomplete. The first
 plausible explanation is often wrong.
 
-**Rule**: Never promote in round 1 unless composite_score >= 0.85 AND
-all 4 validation layers have score >= 0.7.
+**Rule**: Do not promote in round 1. Seek competing evidence and complete
+the five-view checkpoint and five-layer validation before convergence.
 
 ### 6.2 Hypothesis Fixation
 
