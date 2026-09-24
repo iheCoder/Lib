@@ -1,0 +1,6 @@
+# 为每个实例配置一个 source。建议使用目标数据库的只读账号。
+# 可以不设置 default_database，此时在工具调用中传 database。
+sources:
+  main:
+    uri: mongodb://reader:password@127.0.0.1:27017
+    # default_database: example
